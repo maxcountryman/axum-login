@@ -1,6 +1,6 @@
 [package]
 name = "axum-login"
-version = "0.1.0"
+version = "0.2.0"
 description = "🪪 Session-based user authentication for Axum."
 edition = "2021"
 homepage = "https://github.com/maxcountryman/axum-login"
@@ -29,7 +29,6 @@ sqlx = ["sqlx/runtime-tokio-rustls"]
 [dependencies]
 async-trait = "0.1.57"
 axum = "0.5.15"
-axum-extra = { version = "0.3.7", features = ["cookie"] }
 axum-sessions = "0.3.1"
 base64 = "0.13.0"
 eyre = "0.6.8"
