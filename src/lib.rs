@@ -46,7 +46,7 @@
 //! use std::{collections::HashMap, sync::Arc};
 //!
 //! use axum::{response::IntoResponse, routing::get, Extension, Router};
-//! use axum_session_auth::{
+//! use axum_login::{
 //!     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
 //!     extractors::AuthContext,
 //!     memory_store::MemoryStore as AuthMemoryStore,
@@ -66,7 +66,7 @@
 //!     fn get_rusty_user() -> Self {
 //!         Self {
 //!             id: 1,
-//!             name: "Ferris the Crab",
+//!             name: "Ferris the Crab".to_string(),
 //!             ..Default::default()
 //!         }
 //!     }

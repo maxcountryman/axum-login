@@ -6,7 +6,12 @@ edition = "2021"
 homepage = "https://github.com/maxcountryman/axum-login"
 license = "MIT"
 keywords = ["sessions", "authentication", "authorization", "login", "axum"]
-categories = ["web-programming::http-server", "web-programming", "database", "asynchronous"]
+categories = [
+  "web-programming::http-server",
+  "web-programming",
+  "database",
+  "asynchronous",
+]
 repository = "https://github.com/maxcountryman/axum-login"
 
 [package.metadata.docs.rs]
@@ -36,3 +41,12 @@ tokio = { version = "1.20.1", features = ["sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = ["auth"] }
 tracing = "0.1.36"
+
+[dev-dependencies.rand]
+version = "0.8.5"
+features = ["min_const_gen"]
+
+[dev-dependencies.tokio]
+version = "1.20.1"
+default-features = false
+features = ["macros", "rt-multi-thread"]
