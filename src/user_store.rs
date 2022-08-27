@@ -2,7 +2,8 @@ use async_trait::async_trait;
 
 use crate::{AuthUser, Result};
 
-/// A trait which defines a method that allows retrieval of users from an arbitrary backend.
+/// A trait which defines a method that allows retrieval of users from an
+/// arbitrary backend.
 #[async_trait]
 pub trait UserStore: std::fmt::Debug + Clone + Send + Sync + 'static {
     type User: AuthUser;
