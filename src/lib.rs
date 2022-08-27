@@ -127,6 +127,8 @@
 //! }
 //! ```
 
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 mod auth;
 mod auth_user;
 pub mod extractors;

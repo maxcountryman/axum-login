@@ -10,7 +10,8 @@ categories = ["web-programming::http-server", "web-programming", "database", "as
 repository = "https://github.com/maxcountryman/axum-login"
 
 [package.metadata.docs.rs]
-features = ["postgres", "sqlite", "mssql", "mysql"]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
