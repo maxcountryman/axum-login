@@ -1,0 +1,33 @@
+[package]
+name = "axum-login"
+version = "0.1.0"
+edition = "2021"
+keywords = ["sessions", "authentication", "authorization", "login", "signin"]
+categories = ["web-programming::http-server", "web-programming", "database"]
+
+[package.metadata.docs.rs]
+features = ["postgres", "sqlite", "mssql", "mysql"]
+
+[features]
+default = []
+mssql = ["sqlx/mssql"]
+mysql = ["sqlx/mysql"]
+postgres = ["sqlx/postgres"]
+sqlite = ["sqlx/sqlite"]
+sqlx = ["sqlx/runtime-tokio-rustls"]
+
+[dependencies]
+async-trait = "0.1.57"
+axum = "0.5.15"
+axum-extra = { version = "0.3.7", features = ["cookie"] }
+axum-sessions = "0.3.1"
+base64 = "0.13.0"
+eyre = "0.6.8"
+futures = "0.3.21"
+ring = "0.16.20"
+serde_json = "1.0.83"
+sqlx = { version = "0.6.1", optional = true }
+tokio = { version = "1.20.1", features = ["sync"] }
+tower = "0.4.13"
+tower-http = { version = "0.3.4", features = ["auth"] }
+tracing = "0.1.36"
