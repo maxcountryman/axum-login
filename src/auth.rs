@@ -136,14 +136,17 @@ impl<User, ResBody> Clone for Login<User, ResBody> {
     }
 }
 
-impl<User, B, ResBody> AuthorizeRequest<B> for Login<User, ResBody>
+impl<User, ReqBody, ResBody> AuthorizeRequest<ReqBody> for Login<User, ResBody>
 where
     User: AuthUser,
     ResBody: HttpBody + Default,
 {
     type ResponseBody = ResBody;
 
-    fn authorize(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+    fn authorize(
+        &mut self,
+        request: &mut Request<ReqBody>,
+    ) -> Result<(), Response<Self::ResponseBody>> {
         let user = request
             .extensions()
             .get::<Option<User>>()
@@ -166,17 +169,16 @@ where
 
 /// A wrapper around [`tower_http::auth::RequireAuthorizationLayer`] which
 /// provides login authorization.
-pub struct RequireAuthorizationLayer<ResBody>(ResBody);
+pub struct RequireAuthorizationLayer<User>(User);
 
-impl<ResBody> RequireAuthorizationLayer<ResBody>
+impl<User> RequireAuthorizationLayer<User>
 where
-    ResBody: HttpBody + Default,
+    User: AuthUser,
 {
     /// Authorizes requests by requiring a logged in user, otherwise it rejects
     /// with [`http::StatusCode::UNAUTHORIZED`].
-    pub fn login<User>() -> tower_http::auth::RequireAuthorizationLayer<Login<User, ResBody>>
+    pub fn login<ResBody>() -> tower_http::auth::RequireAuthorizationLayer<Login<User, ResBody>>
     where
-        User: AuthUser,
         ResBody: HttpBody + Default,
     {
         tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _> {

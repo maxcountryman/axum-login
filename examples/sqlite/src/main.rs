@@ -64,7 +64,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/protected", get(protected_handler))
-        .route_layer(RequireAuthorizationLayer::login::<User>())
+        .route_layer(RequireAuthorizationLayer::<User>::login())
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
         .layer(auth_layer)
