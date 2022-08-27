@@ -127,6 +127,6 @@ You can find this [example][sqlite-example] as well as other example projects in
 
 See the [crate documentation][docs] for more usage information.
 
-[signin-example]: https://github.com/maxcountryman/axum-login/tree/main/examples/sqlite
+[sqlite-example]: https://github.com/maxcountryman/axum-login/tree/main/examples/sqlite
 [examples]: https://github.com/maxcountryman/axum-login/tree/main/examples
 [docs]: https://docs.rs/axum-login
