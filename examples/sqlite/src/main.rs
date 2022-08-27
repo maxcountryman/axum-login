@@ -40,7 +40,7 @@ async fn main() {
     let user_store = SqliteStore::<User>::new(pool);
     let auth_layer = AuthLayer::new(user_store, &secret);
 
-    async fn login_handler(mut auth: Auth) {
+    async fn login_handler(mut auth: AuthContext) {
         let pool = SqlitePoolOptions::new()
             .connect("user_store.db")
             .await
@@ -53,7 +53,7 @@ async fn main() {
         auth.login(&user).await.unwrap();
     }
 
-    async fn logout_handler(mut auth: Auth) {
+    async fn logout_handler(mut auth: AuthContext) {
         dbg!("Logging out user: {}", &auth.current_user);
         auth.logout().await;
     }
