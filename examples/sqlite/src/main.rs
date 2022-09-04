@@ -1,3 +1,9 @@
+//! Run with
+//!
+//! ```not_rust
+//! cd examples && cargo run -p example-sqlite
+//! ```
+
 use axum::{response::IntoResponse, routing::get, Extension, Router};
 use axum_login::{
     axum_sessions::{async_session::MemoryStore, SessionLayer},
@@ -33,7 +39,7 @@ async fn main() {
     let session_layer = SessionLayer::new(session_store, &secret).with_secure(false);
 
     let pool = SqlitePoolOptions::new()
-        .connect("user_store.db")
+        .connect("sqlite/user_store.db")
         .await
         .unwrap();
 
@@ -42,7 +48,7 @@ async fn main() {
 
     async fn login_handler(mut auth: AuthContext) {
         let pool = SqlitePoolOptions::new()
-            .connect("user_store.db")
+            .connect("sqlite/user_store.db")
             .await
             .unwrap();
         let mut conn = pool.acquire().await.unwrap();

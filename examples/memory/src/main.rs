@@ -1,3 +1,9 @@
+//! Run with
+//!
+//! ```not_rust
+//! cd examples && cargo run -p example-memory
+//! ```
+
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{response::IntoResponse, routing::get, Extension, Router};
