@@ -6,6 +6,7 @@ use crate::{AuthUser, Result};
 /// arbitrary backend.
 #[async_trait]
 pub trait UserStore: std::fmt::Debug + Clone + Send + Sync + 'static {
+    /// An associated user type which will be loaded from the store.
     type User: AuthUser;
 
     /// Load and return a user.

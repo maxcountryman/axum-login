@@ -1,3 +1,5 @@
+//! Axum extractors providing authentication methods.
+
 use async_trait::async_trait;
 use axum::{
     extract::{FromRequest, RequestParts},

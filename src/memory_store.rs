@@ -1,3 +1,5 @@
+//! An in-memory implementation of `UserStore`.
+
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -12,6 +14,16 @@ pub struct MemoryStore<User> {
 }
 
 impl<User> MemoryStore<User> {
+    /// Creates a new memory store.
+    ///
+    /// ```rust
+    /// use std::{collections::HashMap, sync::Arc};
+    /// use tokio::sync::RwLock;
+    /// use axum_login::memory_store::MemoryStore;
+    ///
+    /// let inner = Arc::new(RwLock::new(HashMap::<String, ()>::new()));
+    /// let memory_store = MemoryStore::new(&inner);
+    /// ```
     pub fn new(inner: &Arc<RwLock<HashMap<String, User>>>) -> Self {
         Self {
             inner: inner.clone(),
