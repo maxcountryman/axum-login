@@ -18,8 +18,9 @@ impl<User> MemoryStore<User> {
     ///
     /// ```rust
     /// use std::{collections::HashMap, sync::Arc};
-    /// use tokio::sync::RwLock;
+    ///
     /// use axum_login::memory_store::MemoryStore;
+    /// use tokio::sync::RwLock;
     ///
     /// let inner = Arc::new(RwLock::new(HashMap::<String, ()>::new()));
     /// let memory_store = MemoryStore::new(&inner);
