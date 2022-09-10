@@ -28,7 +28,7 @@ axum-login
 - Wraps `axum-sessions` to provide flexible sessions
 - Leverages `tower_http::auth::RequireAuthorizationLayer` to protect routes
 
-> 💡`axum-login` implements a fundamental pattern for user authentication, however some features may be missing. Folks are encouraged to make suggestions for extensions to the library.
+> **Note** `axum-login` implements a fundamental pattern for user authentication, however some features may be missing. Folks are encouraged to make suggestions for extensions to the library.
 
 ## 📦 Install
 
