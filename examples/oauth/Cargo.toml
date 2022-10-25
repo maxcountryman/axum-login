@@ -1,0 +1,28 @@
+[package]
+name = "example-oauth"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = "0.5.13"
+dotenvy = "0.15.6"
+oauth2 = "4.2.3"
+serde = { version = "1.0.147", features = ["derive"] }
+
+[dependencies.axum-login]
+path = "../../"
+features = ["sqlite"]
+
+[dependencies.rand]
+version = "0.8.5"
+features = ["min_const_gen"]
+
+[dependencies.sqlx]
+version = "0.6.1"
+default-features = false
+features = ["runtime-tokio-rustls", "sqlite"]
+
+[dependencies.tokio]
+version = "1.0"
+features = ["full"]
