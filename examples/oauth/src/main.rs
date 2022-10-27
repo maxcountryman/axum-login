@@ -20,7 +20,11 @@ use axum::{
     Extension, Router,
 };
 use axum_login::{
-    axum_sessions::{async_session::MemoryStore, SessionLayer},
+    axum_sessions::{
+        async_session::MemoryStore,
+        extractors::{ReadableSession, WritableSession},
+        SameSite, SessionLayer,
+    },
     AuthLayer, AuthUser, RequireAuthorizationLayer, SqliteStore,
 };
 use oauth2::{
@@ -56,7 +60,9 @@ async fn main() {
     let secret = rand::thread_rng().gen::<[u8; 64]>();
 
     let session_store = MemoryStore::new();
-    let session_layer = SessionLayer::new(session_store, &secret).with_secure(false);
+    let session_layer = SessionLayer::new(session_store, &secret)
+        .with_secure(false)
+        .with_same_site_policy(SameSite::Lax);
 
     let db_url = env::var("DATABASE_URL").unwrap_or("oauth/user_store.db".to_string());
 
@@ -87,7 +93,7 @@ async fn main() {
 #[derive(Debug, Deserialize)]
 struct AuthRequest {
     code: String,
-    state: String,
+    state: CsrfToken,
 }
 
 async fn oauth_callback_handler(
@@ -95,9 +101,22 @@ async fn oauth_callback_handler(
     Query(query): Query<AuthRequest>,
     Extension(pool): Extension<SqlitePool>,
     Extension(oauth_client): Extension<BasicClient>,
+    session: ReadableSession,
 ) -> impl IntoResponse {
-    // TODO: compare the crsf token generated before the request to the query.state
+    println!("Running oauth callback {query:?}");
+    // Compare the csrf state in the callback with the state generated before the request
+    let original_csrf_state: CsrfToken = session.get("csrf_state").unwrap();
+    let query_csrf_state = query.state.secret();
+    let csrf_state_equal = original_csrf_state.secret() != query_csrf_state;
 
+    if !csrf_state_equal {
+        println!("csrf state is invalid, cannot login",);
+
+        // Return to some error
+        return Redirect::to("/protected");
+    }
+
+    println!("Getting oauth token");
     // Get an auth token
     let _token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code))
@@ -107,13 +126,16 @@ async fn oauth_callback_handler(
 
     // Do something with the token
     // ...
+    println!("Getting db connection");
 
     // Fetch the user and log them in
     let mut conn = pool.acquire().await.unwrap();
+    println!("Getting user");
     let user: User = sqlx::query_as("select * from users where id = 1")
         .fetch_one(&mut conn)
         .await
         .unwrap();
+    println!("Got user {user:?}. Logging in.");
     auth.login(&user).await.unwrap();
 
     println!("Logged in the user: {user:?}");
@@ -121,13 +143,20 @@ async fn oauth_callback_handler(
     Redirect::to("/protected")
 }
 
-async fn login_handler(Extension(client): Extension<BasicClient>) -> impl IntoResponse {
+async fn login_handler(
+    Extension(client): Extension<BasicClient>,
+    mut session: WritableSession,
+) -> impl IntoResponse {
     // Generate the authorization URL to which we'll redirect the user.
-    // TODO: we should store the csrf_state in the session so we can assert equality in the callback
-    let (auth_url, _csrf_state) = client
+    let (auth_url, csrf_state) = client
         .authorize_url(CsrfToken::new_random)
-        .add_scope(Scope::new("profile".to_string()))
+        .add_scope(Scope::new(
+            "https://www.googleapis.com/auth/userinfo.profile".to_string(),
+        ))
         .url();
+
+    // Store the csrf_state in the session so we can assert equality in the callback
+    session.insert("csrf_state", csrf_state).unwrap();
 
     // Redirect to your oauth service
     Redirect::to(auth_url.as_ref())
