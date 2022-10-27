@@ -107,7 +107,9 @@ async fn oauth_callback_handler(
     // Compare the csrf state in the callback with the state generated before the request
     let original_csrf_state: CsrfToken = session.get("csrf_state").unwrap();
     let query_csrf_state = query.state.secret();
-    let csrf_state_equal = original_csrf_state.secret() != query_csrf_state;
+    let csrf_state_equal = original_csrf_state.secret() == query_csrf_state;
+
+    drop(session);
 
     if !csrf_state_equal {
         println!("csrf state is invalid, cannot login",);
