@@ -1,6 +1,6 @@
 //! To run this example you need to create your own Google OAuth2 credentials https://support.google.com/cloud/answer/6158849?hl=en
-//! Copy the .env.example to a .env file and fill in the CLIENT_ID and CLIENT_SECRET
-//! Run with
+//! Copy the .env.example to a .env file and fill in the CLIENT_ID and
+//! CLIENT_SECRET Run with
 //!
 //! ```not_rust
 //! cd examples/oauth && cargo run example-oauth
@@ -104,7 +104,8 @@ async fn oauth_callback_handler(
     session: ReadableSession,
 ) -> impl IntoResponse {
     println!("Running oauth callback {query:?}");
-    // Compare the csrf state in the callback with the state generated before the request
+    // Compare the csrf state in the callback with the state generated before the
+    // request
     let original_csrf_state: CsrfToken = session.get("csrf_state").unwrap();
     let query_csrf_state = query.state.secret();
     let csrf_state_equal = original_csrf_state.secret() == query_csrf_state;
