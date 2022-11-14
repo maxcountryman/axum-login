@@ -38,7 +38,7 @@
 /// assert_eq!(user.get_password_hash(), "hunter42".to_string());
 /// # }
 /// ```
-pub trait AuthUser: std::fmt::Debug + Clone + Send + Sync + 'static {
+pub trait AuthUser: Clone + Send + Sync + 'static {
     /// Returns the ID of the user.
     ///
     /// This is used to generate the user ID for the session. We assume this
