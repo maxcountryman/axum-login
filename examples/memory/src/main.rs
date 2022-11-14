@@ -6,7 +6,14 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use axum::{response::IntoResponse, routing::get, Extension, Router};
+use async_trait::async_trait;
+use axum::{
+    extract::{FromRequest, RequestParts},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+    Extension, Router,
+};
 use axum_login::{
     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
     memory_store::MemoryStore as AuthMemoryStore,
@@ -19,6 +26,7 @@ use tokio::sync::RwLock;
 struct User {
     id: usize,
     password_hash: String,
+    is_admin: bool,
     name: String,
 }
 
@@ -39,6 +47,30 @@ impl AuthUser for User {
 
     fn get_password_hash(&self) -> String {
         self.password_hash.clone()
+    }
+}
+
+/// Example how to create an Admin user guard
+/// Can be modified to support any type of permission
+struct RequireAdmin(User);
+
+#[async_trait]
+impl<B> FromRequest<B> for RequireAdmin
+where
+    B: Send + 'static,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        let Extension(user): Extension<User> = Extension::from_request(req)
+            .await
+            .map_err(|_err| StatusCode::FORBIDDEN)?;
+
+        if !user.is_admin {
+            Err(StatusCode::FORBIDDEN)
+        } else {
+            Ok(RequireAdmin(user))
+        }
     }
 }
 
@@ -72,8 +104,13 @@ async fn main() {
         format!("Logged in as: {}", user.name)
     }
 
+    async fn admin_handler(RequireAdmin(user): RequireAdmin) -> impl IntoResponse {
+        format!("Admin logged in as: {}", user.name)
+    }
+
     let app = Router::new()
         .route("/protected", get(protected_handler))
+        .route("/protected_admin", get(admin_handler))
         .route_layer(RequireAuthorizationLayer::<User>::login())
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
