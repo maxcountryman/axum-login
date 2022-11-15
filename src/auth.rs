@@ -4,7 +4,7 @@ use std::{
 };
 
 use axum::{
-    body::{BoxBody, HttpBody},
+    body::HttpBody,
     extract::{FromRequest, RequestParts},
     http::{self, Request},
     response::Response,
@@ -70,16 +70,18 @@ pub struct Auth<User, Store, Inner, Role = ()> {
     layer: AuthLayer<User, Store, Role>,
 }
 
-impl<User, Store, Inner, ReqBody, Role> Service<Request<ReqBody>> for Auth<User, Store, Inner, Role>
+impl<User, Store, Role, Inner, ReqBody, ResBody> Service<Request<ReqBody>>
+    for Auth<User, Store, Inner, Role>
 where
-    Role: Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
+    Role: Clone + Send + Sync + 'static,
     Store: UserStore<Role, User = User>,
-    Inner: Service<Request<ReqBody>, Response = Response> + Clone + Send + 'static,
+    Inner: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    ResBody: Default + Send + 'static,
     ReqBody: Send + 'static,
     Inner::Future: Send + 'static,
 {
-    type Response = Response<BoxBody>;
+    type Response = Inner::Response;
     type Error = Inner::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -197,5 +199,122 @@ where
             _role_type: PhantomData,
             _body_type: PhantomData,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use axum::http::{Request, Response};
+    use http::{
+        header::{COOKIE, SET_COOKIE},
+        StatusCode,
+    };
+    use hyper::Body;
+    use rand::Rng;
+    use tokio::sync::RwLock;
+    use tower::{BoxError, Service, ServiceBuilder, ServiceExt};
+
+    use crate::{
+        axum_sessions::{async_session::MemoryStore, SessionLayer},
+        extractors::AuthContext,
+        memory_store::MemoryStore as AuthMemoryStore,
+        AuthLayer, AuthUser,
+    };
+
+    #[derive(Debug, Default, Clone)]
+    struct User {
+        id: usize,
+        password_hash: String,
+    }
+
+    impl User {
+        fn get_rusty_user() -> Self {
+            Self {
+                id: 1,
+                ..Default::default()
+            }
+        }
+    }
+
+    impl AuthUser for User {
+        fn get_id(&self) -> String {
+            format!("{}", self.id)
+        }
+
+        fn get_password_hash(&self) -> String {
+            self.password_hash.clone()
+        }
+    }
+
+    type Auth = AuthContext<User, AuthMemoryStore<User>>;
+
+    #[tokio::test]
+    async fn logs_user_in() {
+        let secret = rand::thread_rng().gen::<[u8; 64]>();
+
+        let store = MemoryStore::new();
+        let session_layer = SessionLayer::new(store, &secret);
+
+        let store = Arc::new(RwLock::new(HashMap::default()));
+        let user = User::get_rusty_user();
+        store.write().await.insert(user.get_id(), user);
+
+        let user_store = AuthMemoryStore::new(&store);
+        let auth_layer = AuthLayer::new(user_store, &secret);
+
+        let mut service = ServiceBuilder::new()
+            .layer(session_layer)
+            .layer(auth_layer)
+            .service_fn(login);
+
+        let request = Request::get("/protected").body(Body::empty()).unwrap();
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let session_cookie = res.headers().get(SET_COOKIE).unwrap().clone();
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let mut request = Request::get("/login").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    async fn login(mut req: Request<Body>) -> Result<Response<Body>, BoxError> {
+        if req.uri() == "/login" {
+            let auth = req.extensions_mut().get_mut::<Auth>();
+            let user = &User::get_rusty_user();
+            auth.unwrap().login(user).await.unwrap();
+        }
+
+        if req.uri() == "/protected" {
+            let auth = req.extensions().get::<Auth>();
+            let auth_user = auth.unwrap().current_user.clone();
+            if auth_user.is_none() {
+                return Ok(Response::builder()
+                    .status(StatusCode::FORBIDDEN)
+                    .body(Default::default())
+                    .unwrap());
+            }
+        }
+
+        Ok(Response::new(req.into_body()))
     }
 }

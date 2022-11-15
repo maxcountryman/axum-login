@@ -7,10 +7,10 @@ homepage = "https://github.com/maxcountryman/axum-login"
 license = "MIT"
 keywords = ["sessions", "authentication", "authorization", "login", "axum"]
 categories = [
-  "web-programming::http-server",
-  "web-programming",
-  "database",
-  "asynchronous",
+    "web-programming::http-server",
+    "web-programming",
+    "database",
+    "asynchronous",
 ]
 repository = "https://github.com/maxcountryman/axum-login"
 
@@ -40,6 +40,10 @@ tokio = { version = "1.20.1", features = ["sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = ["auth"] }
 tracing = "0.1.36"
+
+[dev-dependencies]
+http = "0.2.8"
+hyper = "0.14.23"
 
 [dev-dependencies.rand]
 version = "0.8.5"
