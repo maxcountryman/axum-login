@@ -33,9 +33,10 @@ impl<User> MemoryStore<User> {
 }
 
 #[async_trait]
-impl<User> UserStore for MemoryStore<User>
+impl<User, Role> UserStore<Role> for MemoryStore<User>
 where
-    User: AuthUser,
+    Role: Clone + Send + Sync + 'static,
+    User: AuthUser<Role>,
 {
     type User = User;
 

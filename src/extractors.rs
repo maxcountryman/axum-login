@@ -1,5 +1,7 @@
 //! Axum extractors providing authentication methods.
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
 use axum::{
     extract::{FromRequest, RequestParts},
@@ -33,18 +35,20 @@ const SESSION_USER_ID_KEY: &str = "_user_id";
 ///
 /// Assumes the extractor is used only after the auth layer has been installed.
 #[derive(Debug, Clone)]
-pub struct AuthContext<User, Store> {
+pub struct AuthContext<User, Store, Role = ()> {
     /// The currently logged in user for the session, if any.
     pub current_user: Option<User>,
     session_handle: SessionHandle,
     store: Store,
     key: Key,
+    _role: PhantomData<Role>,
 }
 
-impl<User, Store> AuthContext<User, Store>
+impl<User, Store, Role> AuthContext<User, Store, Role>
 where
-    User: AuthUser,
-    Store: UserStore<User = User>,
+    User: AuthUser<Role>,
+    Store: UserStore<Role, User = User>,
+    Role: Clone + Send + Sync + 'static,
 {
     fn get_session_auth_id(&self, password_hash: &str) -> String {
         let tag = hmac::sign(&self.key, password_hash.as_bytes());
@@ -57,6 +61,7 @@ where
             session_handle,
             store,
             key,
+            _role: PhantomData,
         }
     }
 
@@ -119,16 +124,17 @@ where
 }
 
 #[async_trait]
-impl<Body, User, Store> FromRequest<Body> for AuthContext<User, Store>
+impl<Body, User, Store, Role> FromRequest<Body> for AuthContext<User, Store, Role>
 where
+    Role: Clone + Send + Sync + 'static,
     Body: Send,
-    User: AuthUser,
-    Store: UserStore<User = User>,
+    User: AuthUser<Role>,
+    Store: UserStore<Role, User = User>,
 {
     type Rejection = std::convert::Infallible;
 
     async fn from_request(request: &mut RequestParts<Body>) -> Result<Self, Self::Rejection> {
-        let Extension(auth_cx): Extension<AuthContext<_, _>> = Extension::from_request(request)
+        let Extension(auth_cx): Extension<AuthContext<_, _, _>> = Extension::from_request(request)
             .await
             .expect("Auth extension missing. Is the auth layer installed?");
 

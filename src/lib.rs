@@ -55,11 +55,18 @@
 //! use rand::Rng;
 //! use tokio::sync::RwLock;
 //!
-//! #[derive(Debug, Default, Clone)]
+//! #[derive(Debug, Clone)]
 //! struct User {
 //!     id: usize,
 //!     name: String,
 //!     password_hash: String,
+//!     role: Role
+//! }
+//!
+//! #[derive(Debug, Clone)]
+//! enum Role {
+//!     User,
+//!     Admin,
 //! }
 //!
 //! impl User {
@@ -67,12 +74,13 @@
 //!         Self {
 //!             id: 1,
 //!             name: "Ferris the Crab".to_string(),
-//!             ..Default::default()
+//!             password_hash: "password".to_string(),
+//!             role: Role::Admin,
 //!         }
 //!     }
 //! }
 //!
-//! impl AuthUser for User {
+//! impl AuthUser<Role> for User {
 //!     fn get_id(&self) -> String {
 //!         format!("{}", self.id)
 //!     }
@@ -80,9 +88,13 @@
 //!     fn get_password_hash(&self) -> String {
 //!         self.password_hash.clone()
 //!     }
+//!
+//!     fn get_role(&self) -> Option<Role> {
+//!         Some(self.role.clone())
+//!     }
 //! }
 //!
-//! type Auth = AuthContext<User, AuthMemoryStore<User>>;
+//! type Auth = AuthContext<User, AuthMemoryStore<User>, Role>;
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -114,7 +126,7 @@
 //!
 //!     let app = Router::new()
 //!         .route("/", get(protected_handler))
-//!         .route_layer(RequireAuthorizationLayer::<User>::login())
+//!         .route_layer(RequireAuthorizationLayer::<User, Role>::login())
 //!         .route("/login", get(login_handler))
 //!         .route("/logout", get(logout_handler))
 //!         .layer(auth_layer)

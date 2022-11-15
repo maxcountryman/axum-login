@@ -17,7 +17,13 @@
 ///     password_hash: String,
 /// }
 ///
-/// impl AuthUser for MyUser {
+/// #[derive(Debug, Clone)]
+/// enum Role {
+///     User,
+///     Admin,
+/// }
+///
+/// impl AuthUser<Role> for MyUser {
 ///     fn get_id(&self) -> String {
 ///         format!("{}", self.id)
 ///     }
@@ -38,7 +44,10 @@
 /// assert_eq!(user.get_password_hash(), "hunter42".to_string());
 /// # }
 /// ```
-pub trait AuthUser: Clone + Send + Sync + 'static {
+pub trait AuthUser<Role = ()>: Clone + Send + Sync + 'static
+where
+    Role: Clone + Send + Sync + 'static,
+{
     /// Returns the ID of the user.
     ///
     /// This is used to generate the user ID for the session. We assume this
@@ -50,4 +59,11 @@ pub trait AuthUser: Clone + Send + Sync + 'static {
     /// This is used to generate a unique auth ID for the session. Note that a
     /// password hash changing will cause the session to become invalidated.
     fn get_password_hash(&self) -> String;
+
+    /// Returns the role assigned to the given user.
+    ///
+    /// This is used when specifying role requirements for handlers.
+    fn get_role(&self) -> Option<Role> {
+        None
+    }
 }
