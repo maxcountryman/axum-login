@@ -5,9 +5,12 @@ use crate::{AuthUser, Result};
 /// A trait which defines a method that allows retrieval of users from an
 /// arbitrary backend.
 #[async_trait]
-pub trait UserStore: Clone + Send + Sync + 'static {
+pub trait UserStore<Role>: Clone + Send + Sync + 'static
+where
+    Role: Clone + Send + Sync + 'static,
+{
     /// An associated user type which will be loaded from the store.
-    type User: AuthUser;
+    type User: AuthUser<Role>;
 
     /// Load and return a user.
     ///

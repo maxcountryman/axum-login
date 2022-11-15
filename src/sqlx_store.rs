@@ -16,18 +16,20 @@ use crate::{user_store::UserStore, AuthUser};
 const TABLE_NAME_TEMPLATE: &str = "{{table_name}}";
 
 #[derive(Clone, Debug)]
-pub struct SqlxStore<Pool, User> {
+pub struct SqlxStore<Pool, User, Role = ()> {
     pool: Pool,
     table_name: String,
     _user_type: PhantomData<User>,
+    _role_type: PhantomData<Role>,
 }
 
-impl<Pool, User> SqlxStore<Pool, User> {
+impl<Pool, User, Role> SqlxStore<Pool, User, Role> {
     pub fn new(pool: Pool) -> Self {
         Self {
             pool,
             table_name: "users".into(),
             _user_type: Default::default(),
+            _role_type: Default::default(),
         }
     }
 
@@ -41,9 +43,10 @@ impl<Pool, User> SqlxStore<Pool, User> {
 macro_rules! impl_user_store {
     ( $store:ident, $row:ident ) => {
         #[async_trait]
-        impl<User> UserStore for $store<User>
+        impl<User, Role> UserStore<Role> for $store<User, Role>
         where
-            User: AuthUser + Unpin + for<'r> FromRow<'r, $row>,
+            Role: Clone + Send + Sync + 'static,
+            User: AuthUser<Role> + Unpin + for<'r> FromRow<'r, $row>,
         {
             type User = User;
 
@@ -65,19 +68,19 @@ macro_rules! impl_user_store {
 
 /// A Mssql user store via sqlx.
 #[cfg(feature = "mssql")]
-pub type MssqlStore<User> = SqlxStore<MssqlPool, User>;
+pub type MssqlStore<User, Role = ()> = SqlxStore<MssqlPool, User, Role>;
 
 /// A MySql user store via sqlx.
 #[cfg(feature = "mysql")]
-pub type MySqlStore<User> = SqlxStore<MySqlPool, User>;
+pub type MySqlStore<User, Role = ()> = SqlxStore<MySqlPool, User, Role>;
 
 /// A Postgres user store via sqlx.
 #[cfg(feature = "postgres")]
-pub type PostgresStore<User> = SqlxStore<PgPool, User>;
+pub type PostgresStore<User, Role = ()> = SqlxStore<PgPool, User, Role>;
 
 /// A Sqlite user store via sqlx.
 #[cfg(feature = "sqlite")]
-pub type SqliteStore<User> = SqlxStore<SqlitePool, User>;
+pub type SqliteStore<User, Role = ()> = SqlxStore<SqlitePool, User, Role>;
 
 #[cfg(feature = "mssql")]
 impl_user_store!(MssqlStore, MssqlRow);

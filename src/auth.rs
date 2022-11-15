@@ -20,16 +20,18 @@ use crate::{extractors::AuthContext, user_store::UserStore, AuthUser};
 
 /// Layer that provides session-based authentication via [`AuthContext`].
 #[derive(Debug, Clone)]
-pub struct AuthLayer<User, Store> {
+pub struct AuthLayer<User, Store, Role = ()> {
     store: Store,
     key: Key,
     _user_type: PhantomData<User>,
+    _role_type: PhantomData<Role>,
 }
 
-impl<User, Store> AuthLayer<User, Store>
+impl<User, Store, Role> AuthLayer<User, Store, Role>
 where
-    User: AuthUser,
-    Store: UserStore<User = User>,
+    User: AuthUser<Role>,
+    Role: Clone + Send + Sync + 'static,
+    Store: UserStore<Role, User = User>,
 {
     /// Creates a layer which will attach the [`AuthContext`] and `User` to
     /// requests via extensions.
@@ -41,16 +43,18 @@ where
             store,
             key: Key::new(HMAC_SHA512, secret),
             _user_type: PhantomData,
+            _role_type: PhantomData,
         }
     }
 }
 
-impl<User, Store, Inner> Layer<Inner> for AuthLayer<User, Store>
+impl<User, Store, Inner, Role> Layer<Inner> for AuthLayer<User, Store, Role>
 where
-    User: AuthUser,
-    Store: UserStore,
+    Role: Clone + Send + Sync + 'static,
+    User: AuthUser<Role>,
+    Store: UserStore<Role>,
 {
-    type Service = Auth<User, Store, Inner>;
+    type Service = Auth<User, Store, Inner, Role>;
 
     fn layer(&self, inner: Inner) -> Self::Service {
         Auth {
@@ -61,15 +65,16 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct Auth<User, Store, Inner> {
+pub struct Auth<User, Store, Inner, Role = ()> {
     inner: Inner,
-    layer: AuthLayer<User, Store>,
+    layer: AuthLayer<User, Store, Role>,
 }
 
-impl<User, Store, Inner, ReqBody> Service<Request<ReqBody>> for Auth<User, Store, Inner>
+impl<User, Store, Inner, ReqBody, Role> Service<Request<ReqBody>> for Auth<User, Store, Inner, Role>
 where
-    User: AuthUser,
-    Store: UserStore<User = User>,
+    Role: Clone + Send + Sync + 'static,
+    User: AuthUser<Role>,
+    Store: UserStore<Role, User = User>,
     Inner: Service<Request<ReqBody>, Response = Response> + Clone + Send + 'static,
     ReqBody: Send + 'static,
     Inner::Future: Send + 'static,
@@ -123,23 +128,26 @@ where
 /// Type that performs login authorization.
 ///
 /// See [`RequireAuthorizationLayer::login`] for more details.
-pub struct Login<User, ResBody> {
+pub struct Login<User, ResBody, Role = ()> {
     _user_type: PhantomData<User>,
+    _role_type: PhantomData<Role>,
     _body_type: PhantomData<fn() -> ResBody>,
 }
 
-impl<User, ResBody> Clone for Login<User, ResBody> {
+impl<User, ResBody, Role> Clone for Login<User, ResBody, Role> {
     fn clone(&self) -> Self {
         Self {
             _user_type: PhantomData,
+            _role_type: PhantomData,
             _body_type: PhantomData,
         }
     }
 }
 
-impl<User, ReqBody, ResBody> AuthorizeRequest<ReqBody> for Login<User, ResBody>
+impl<User, ReqBody, ResBody, Role> AuthorizeRequest<ReqBody> for Login<User, ResBody, Role>
 where
-    User: AuthUser,
+    Role: Clone + Send + Sync + 'static,
+    User: AuthUser<Role>,
     ResBody: HttpBody + Default,
 {
     type ResponseBody = ResBody;
@@ -170,20 +178,23 @@ where
 
 /// A wrapper around [`tower_http::auth::RequireAuthorizationLayer`] which
 /// provides login authorization.
-pub struct RequireAuthorizationLayer<User>(User);
+pub struct RequireAuthorizationLayer<User, Role = ()>(User, Role);
 
-impl<User> RequireAuthorizationLayer<User>
+impl<User, Role> RequireAuthorizationLayer<User, Role>
 where
-    User: AuthUser,
+    Role: Clone + Send + Sync + 'static,
+    User: AuthUser<Role>,
 {
     /// Authorizes requests by requiring a logged in user, otherwise it rejects
     /// with [`http::StatusCode::UNAUTHORIZED`].
-    pub fn login<ResBody>() -> tower_http::auth::RequireAuthorizationLayer<Login<User, ResBody>>
+    pub fn login<ResBody>(
+    ) -> tower_http::auth::RequireAuthorizationLayer<Login<User, ResBody, Role>>
     where
         ResBody: HttpBody + Default,
     {
-        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _> {
+        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _> {
             _user_type: PhantomData,
+            _role_type: PhantomData,
             _body_type: PhantomData,
         })
     }
