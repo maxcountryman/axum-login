@@ -39,6 +39,7 @@ jobs:
         working-directory: ${{ matrix.pwd }}
         run: |
           cargo fmt --all -- --check
+
   check-docs:
     runs-on: ubuntu-latest
 
@@ -67,12 +68,24 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
+      - name: Install Tarpaulin
+        uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-tarpaulin
+          version: 0.14.2
+          use-tool-cache: true
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all --all-features --all-targets
+      - name: Coverage
+        run: cargo tarpaulin -o Lcov --output-dir ./coverage
+      - name: Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   test-docs:
     needs: check
