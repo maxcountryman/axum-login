@@ -16,6 +16,9 @@ axum-login
 <a href="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml">
 <img src="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml/badge.svg" />
 </a>
+<a href='https://coveralls.io/github/maxcountryman/axum-login?branch=main'>
+<img src='https://coveralls.io/repos/github/maxcountryman/axum-login/badge.svg?branch=main' alt='Coverage Status' />
+</a>
 </div>
 
 ## 🎨 Overview
