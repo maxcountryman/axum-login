@@ -39,6 +39,7 @@ jobs:
         working-directory: ${{ matrix.pwd }}
         run: |
           cargo fmt --all -- --check
+
   check-docs:
     runs-on: ubuntu-latest
 
@@ -73,6 +74,12 @@ jobs:
         with:
           command: test
           args: --all --all-features --all-targets
+      - name: Coverage
+        run: cargo tarpaulin -o Lcov --output-dir ./coverage
+      - name: Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   test-docs:
     needs: check
