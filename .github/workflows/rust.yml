@@ -68,6 +68,12 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
+      - name: Install Tarpaulin
+        uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-tarpaulin
+          version: 0.14.2
+          use-tool-cache: true
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         uses: actions-rs/cargo@v1
