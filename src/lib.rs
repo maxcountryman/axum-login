@@ -60,7 +60,7 @@
 //!     id: usize,
 //!     name: String,
 //!     password_hash: String,
-//!     role: Role
+//!     role: Role,
 //! }
 //!
 //! #[derive(Debug, Clone)]
