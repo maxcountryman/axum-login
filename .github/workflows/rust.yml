@@ -72,7 +72,7 @@ jobs:
         uses: actions-rs/install@v0.1
         with:
           crate: cargo-tarpaulin
-          version: 0.14.2
+          version: 0.22.0
           use-tool-cache: true
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
