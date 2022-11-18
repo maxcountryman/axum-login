@@ -63,7 +63,7 @@
 //!     role: Role,
 //! }
 //!
-//! #[derive(Debug, Clone)]
+//! #[derive(Debug, Clone, PartialEq)]
 //! enum Role {
 //!     User,
 //!     Admin,

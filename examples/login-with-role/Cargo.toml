@@ -1,0 +1,18 @@
+[package]
+name = "example-login-with-role"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = "0.5.13"
+axum-login = { path = "../../" }
+async-trait = "0.1.58"
+
+[dependencies.rand]
+version = "0.8.5"
+features = ["min_const_gen"]
+
+[dependencies.tokio]
+version = "1.0"
+features = ["full"]
