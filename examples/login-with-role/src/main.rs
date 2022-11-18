@@ -1,7 +1,7 @@
 //! Run with
 //!
 //! ```not_rust
-//! cd examples && cargo run -p example-memory
+//! cd examples && cargo run -p example-login-with-role
 //! ```
 
 use std::{collections::HashMap, sync::Arc};
@@ -22,10 +22,17 @@ use axum_login::{
 use rand::Rng;
 use tokio::sync::RwLock;
 
+#[derive(Debug, Clone, PartialEq)]
+enum Role {
+    User,
+    Admin,
+}
+
 #[derive(Debug, Clone)]
 struct User {
     id: usize,
     password_hash: String,
+    role: Role,
     name: String,
 }
 
@@ -35,11 +42,12 @@ impl User {
             id: 1,
             name: "Ferris the Crab".to_string(),
             password_hash: "password".to_string(),
+            role: Role::Admin,
         }
     }
 }
 
-impl AuthUser for User {
+impl AuthUser<Role> for User {
     fn get_id(&self) -> String {
         format!("{}", self.id)
     }
@@ -47,9 +55,13 @@ impl AuthUser for User {
     fn get_password_hash(&self) -> String {
         self.password_hash.clone()
     }
+
+    fn get_role(&self) -> Option<Role> {
+        Some(self.role.clone())
+    }
 }
 
-type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>>;
+type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>, Role>;
 
 #[tokio::main]
 async fn main() {
@@ -79,9 +91,31 @@ async fn main() {
         format!("Logged in as: {}", user.name)
     }
 
+    async fn admin_handler(Extension(user): Extension<User>) -> impl IntoResponse {
+        format!("Admin logged in as: {}", user.name)
+    }
+
+    async fn user_handler(Extension(user): Extension<User>) -> impl IntoResponse {
+        format!("User logged in as: {}", user.name)
+    }
+
     let app = Router::new()
-        .route("/protected", get(protected_handler))
-        .route_layer(RequireAuthorizationLayer::<User>::login())
+        .route(
+            "/protected",
+            get(protected_handler).layer(RequireAuthorizationLayer::<User, Role>::login()),
+        )
+        .route(
+            "/protected_admin",
+            get(admin_handler).layer(RequireAuthorizationLayer::<User, Role>::login_with_role(
+                Role::Admin,
+            )),
+        )
+        .route(
+            "/protected_user",
+            get(user_handler).layer(RequireAuthorizationLayer::<User, Role>::login_with_role(
+                Role::User,
+            )),
+        )
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
         .layer(auth_layer)

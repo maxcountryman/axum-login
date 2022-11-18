@@ -17,7 +17,7 @@
 ///     password_hash: String,
 /// }
 ///
-/// #[derive(Debug, Clone)]
+/// #[derive(Debug, Clone, PartialEq)]
 /// enum Role {
 ///     User,
 ///     Admin,
@@ -46,7 +46,7 @@
 /// ```
 pub trait AuthUser<Role = ()>: Clone + Send + Sync + 'static
 where
-    Role: Clone + Send + Sync + 'static,
+    Role: PartialEq + Clone + Send + Sync + 'static,
 {
     /// Returns the ID of the user.
     ///

@@ -48,7 +48,7 @@ impl<User, Store, Role> AuthContext<User, Store, Role>
 where
     User: AuthUser<Role>,
     Store: UserStore<Role, User = User>,
-    Role: Clone + Send + Sync + 'static,
+    Role: PartialEq + Clone + Send + Sync + 'static,
 {
     fn get_session_auth_id(&self, password_hash: &str) -> String {
         let tag = hmac::sign(&self.key, password_hash.as_bytes());
@@ -126,7 +126,7 @@ where
 #[async_trait]
 impl<Body, User, Store, Role> FromRequest<Body> for AuthContext<User, Store, Role>
 where
-    Role: Clone + Send + Sync + 'static,
+    Role: PartialEq + Clone + Send + Sync + 'static,
     Body: Send,
     User: AuthUser<Role>,
     Store: UserStore<Role, User = User>,

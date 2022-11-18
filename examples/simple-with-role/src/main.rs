@@ -1,7 +1,7 @@
 //! Run with
 //!
 //! ```not_rust
-//! cd examples && cargo run -p example-memory
+//! cd examples && cargo run -p example-simple-with-role
 //! ```
 
 use std::{collections::HashMap, sync::Arc};
@@ -22,10 +22,17 @@ use axum_login::{
 use rand::Rng;
 use tokio::sync::RwLock;
 
+#[derive(Debug, Clone, PartialEq)]
+enum Role {
+    User,
+    Admin,
+}
+
 #[derive(Debug, Clone)]
 struct User {
     id: usize,
     password_hash: String,
+    role: Role,
     name: String,
 }
 
@@ -35,11 +42,12 @@ impl User {
             id: 1,
             name: "Ferris the Crab".to_string(),
             password_hash: "password".to_string(),
+            role: Role::Admin,
         }
     }
 }
 
-impl AuthUser for User {
+impl AuthUser<Role> for User {
     fn get_id(&self) -> String {
         format!("{}", self.id)
     }
@@ -47,9 +55,64 @@ impl AuthUser for User {
     fn get_password_hash(&self) -> String {
         self.password_hash.clone()
     }
+
+    fn get_role(&self) -> Option<Role> {
+        Some(self.role.clone())
+    }
 }
 
-type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>>;
+/// Example how to create an Admin user guard
+/// Can be modified to support any type of permission
+struct RequireAdmin(User);
+struct RequireUser(User);
+
+#[async_trait]
+impl<B> FromRequest<B> for RequireAdmin
+where
+    B: Send + 'static,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        let Extension(user): Extension<User> = Extension::from_request(req)
+            .await
+            .map_err(|_err| StatusCode::FORBIDDEN)?;
+
+        if user
+            .get_role()
+            .map_or(false, |role| matches!(role, Role::Admin))
+        {
+            Ok(RequireAdmin(user))
+        } else {
+            Err(StatusCode::FORBIDDEN)
+        }
+    }
+}
+
+#[async_trait]
+impl<B> FromRequest<B> for RequireUser
+where
+    B: Send + 'static,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        let Extension(user): Extension<User> = Extension::from_request(req)
+            .await
+            .map_err(|_err| StatusCode::FORBIDDEN)?;
+
+        if user
+            .get_role()
+            .map_or(false, |role| matches!(role, Role::User))
+        {
+            Ok(RequireUser(user))
+        } else {
+            Err(StatusCode::FORBIDDEN)
+        }
+    }
+}
+
+type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>, Role>;
 
 #[tokio::main]
 async fn main() {
@@ -79,9 +142,19 @@ async fn main() {
         format!("Logged in as: {}", user.name)
     }
 
+    async fn admin_handler(RequireAdmin(user): RequireAdmin) -> impl IntoResponse {
+        format!("Admin logged in as: {}", user.name)
+    }
+
+    async fn user_handler(RequireUser(user): RequireUser) -> impl IntoResponse {
+        format!("User logged in as: {}", user.name)
+    }
+
     let app = Router::new()
         .route("/protected", get(protected_handler))
-        .route_layer(RequireAuthorizationLayer::<User>::login())
+        .route("/protected_admin", get(admin_handler))
+        .route("/protected_user", get(user_handler))
+        .route_layer(RequireAuthorizationLayer::<User, Role>::login())
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
         .layer(auth_layer)
