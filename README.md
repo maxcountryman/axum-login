@@ -28,6 +28,7 @@ axum-login
 - Decouples user storage from authentication
 - Supports arbitrary user types and arbitrary storage backends
 - Provides methods for: logging in, logging out, and accessing current user
+- Optional role-based access controls via an arbitrary role type
 - Wraps `axum-sessions` to provide flexible sessions
 - Leverages `tower_http::auth::RequireAuthorizationLayer` to protect routes
 
