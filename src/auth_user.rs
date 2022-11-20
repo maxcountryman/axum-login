@@ -46,7 +46,7 @@
 /// ```
 pub trait AuthUser<Role = ()>: Clone + Send + Sync + 'static
 where
-    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialEq + Clone + Send + Sync + 'static,
 {
     /// Returns the ID of the user.
     ///
