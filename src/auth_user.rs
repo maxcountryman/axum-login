@@ -9,6 +9,7 @@
 ///
 /// ```rust
 /// use axum_login::AuthUser;
+/// use secrecy::{ExposeSecret, SecretVec};
 ///
 /// #[derive(Debug, Clone)]
 /// struct MyUser {
@@ -28,8 +29,8 @@
 ///         format!("{}", self.id)
 ///     }
 ///
-///     fn get_password_hash(&self) -> String {
-///         self.password_hash.clone()
+///     fn get_password_hash(&self) -> SecretVec<u8> {
+///         SecretVec::new(self.password_hash.clone().into())
 ///     }
 /// }
 ///
@@ -41,7 +42,10 @@
 /// };
 ///
 /// assert_eq!(user.get_id(), "1".to_string());
-/// assert_eq!(user.get_password_hash(), "hunter42".to_string());
+/// assert_eq!(
+///     user.get_password_hash().expose_secret(),
+///     SecretVec::new("hunter42".into()).expose_secret()
+/// );
 /// # }
 /// ```
 pub trait AuthUser<Role = ()>: Clone + Send + Sync + 'static
@@ -58,7 +62,7 @@ where
     ///
     /// This is used to generate a unique auth ID for the session. Note that a
     /// password hash changing will cause the session to become invalidated.
-    fn get_password_hash(&self) -> String;
+    fn get_password_hash(&self) -> secrecy::SecretVec<u8>;
 
     /// Returns the role assigned to the given user.
     ///

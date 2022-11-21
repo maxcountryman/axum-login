@@ -17,6 +17,7 @@ use axum::{
 use axum_login::{
     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
     memory_store::MemoryStore as AuthMemoryStore,
+    secrecy::SecretVec,
     AuthLayer, AuthUser, RequireAuthorizationLayer,
 };
 use rand::Rng;
@@ -53,8 +54,8 @@ impl AuthUser<Role> for User {
         format!("{}", self.id)
     }
 
-    fn get_password_hash(&self) -> String {
-        self.password_hash.clone()
+    fn get_password_hash(&self) -> SecretVec<u8> {
+        SecretVec::new(self.password_hash.clone().into())
     }
 
     fn get_role(&self) -> Option<Role> {

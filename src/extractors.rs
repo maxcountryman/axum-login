@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts, Extension};
 use axum_sessions::SessionHandle;
 use ring::hmac::{self, Key};
+use secrecy::ExposeSecret;
 
 use crate::{user_store::UserStore, AuthUser};
 
@@ -46,8 +47,8 @@ where
     Store: UserStore<Role, User = User>,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
-    fn get_session_auth_id(&self, password_hash: &str) -> String {
-        let tag = hmac::sign(&self.key, password_hash.as_bytes());
+    fn get_session_auth_id(&self, password_hash: &[u8]) -> String {
+        let tag = hmac::sign(&self.key, password_hash);
         base64::encode(tag.as_ref())
     }
 
@@ -72,13 +73,10 @@ where
                     .unwrap_or_default();
                 drop(session);
 
-                if hmac::verify(
-                    &self.key,
-                    user.get_password_hash().as_bytes(),
-                    &session_auth_id,
-                )
-                .is_ok()
-                {
+                let password_hash = user.get_password_hash();
+                let data = password_hash.expose_secret();
+
+                if hmac::verify(&self.key, data, &session_auth_id).is_ok() {
                     return Ok(Some(user));
                 } else {
                     self.logout().await;
@@ -97,7 +95,7 @@ where
     /// to identify the user on future requests. Once the session has been
     /// updated, the `current_user` will be set to provided user.
     pub async fn login(&mut self, user: &User) -> crate::Result<()> {
-        let auth_id = self.get_session_auth_id(&user.get_password_hash());
+        let auth_id = self.get_session_auth_id(user.get_password_hash().expose_secret());
         let user_id = user.get_id();
 
         let mut session = self.session_handle.write().await;

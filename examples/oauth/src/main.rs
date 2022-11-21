@@ -25,6 +25,7 @@ use axum_login::{
         extractors::{ReadableSession, WritableSession},
         SameSite, SessionLayer,
     },
+    secrecy::SecretVec,
     AuthLayer, AuthUser, RequireAuthorizationLayer, SqliteStore,
 };
 use oauth2::{
@@ -47,8 +48,8 @@ impl AuthUser for User {
         format!("{}", self.id)
     }
 
-    fn get_password_hash(&self) -> String {
-        self.password_hash.clone()
+    fn get_password_hash(&self) -> SecretVec<u8> {
+        SecretVec::new(self.password_hash.clone().into())
     }
 }
 

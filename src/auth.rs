@@ -288,8 +288,8 @@ mod tests {
             format!("{}", self.id)
         }
 
-        fn get_password_hash(&self) -> String {
-            self.password_hash.clone()
+        fn get_password_hash(&self) -> secrecy::SecretVec<u8> {
+            secrecy::SecretVec::new(self.password_hash.clone().into())
         }
     }
 
