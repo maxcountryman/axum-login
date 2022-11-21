@@ -30,7 +30,7 @@ pub struct AuthLayer<User, Store, Role = ()> {
 impl<User, Store, Role> AuthLayer<User, Store, Role>
 where
     User: AuthUser<Role>,
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     Store: UserStore<Role, User = User>,
 {
     /// Creates a layer which will attach the [`AuthContext`] and `User` to
@@ -50,7 +50,7 @@ where
 
 impl<User, Store, Inner, Role> Layer<Inner> for AuthLayer<User, Store, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
     Store: UserStore<Role>,
 {
@@ -74,7 +74,7 @@ impl<User, Store, Role, Inner, ReqBody, ResBody> Service<Request<ReqBody>>
     for Auth<User, Store, Inner, Role>
 where
     User: AuthUser<Role>,
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     Store: UserStore<Role, User = User>,
     Inner: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     ResBody: Default + Send + 'static,
@@ -132,7 +132,7 @@ where
 /// See [`RequireAuthorizationLayer::login`] for more details.
 pub struct Login<User, ResBody, Role = ()>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
     role: Option<Role>,
     _user_type: PhantomData<User>,
@@ -141,7 +141,7 @@ where
 
 impl<User, ResBody, Role> Clone for Login<User, ResBody, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -154,7 +154,7 @@ where
 
 impl<User, ReqBody, ResBody, Role> AuthorizeRequest<ReqBody> for Login<User, ResBody, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
     ResBody: HttpBody + Default,
 {
@@ -180,7 +180,7 @@ where
                 Ok(())
             }
             (Some(expected_role), Some(user), Some(actual_role))
-                if expected_role == actual_role =>
+                if expected_role <= actual_role =>
             {
                 let user = user.clone();
                 request.extensions_mut().insert(user);
@@ -205,7 +205,7 @@ pub struct RequireAuthorizationLayer<User, Role = ()>(User, Role);
 
 impl<User, Role> RequireAuthorizationLayer<User, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
 {
     /// Authorizes requests by requiring a logged in user, otherwise it rejects

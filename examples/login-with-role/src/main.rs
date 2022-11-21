@@ -22,7 +22,7 @@ use axum_login::{
 use rand::Rng;
 use tokio::sync::RwLock;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 enum Role {
     User,
     Admin,
@@ -96,7 +96,7 @@ async fn main() {
     }
 
     async fn user_handler(Extension(user): Extension<User>) -> impl IntoResponse {
-        format!("User logged in as: {}", user.name)
+        format!("Admin or user logged in as: {}", user.name)
     }
 
     let app = Router::new()
