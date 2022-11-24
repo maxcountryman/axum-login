@@ -34,7 +34,7 @@ jobs:
       - name: clippy
         working-directory: ${{ matrix.pwd }}
         run: |
-          cargo clippy --all --all-targets --all-features
+          cargo clippy --all --all-targets --all-features -- -Dwarnings
       - name: rustfmt
         working-directory: ${{ matrix.pwd }}
         run: |
