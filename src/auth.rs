@@ -233,8 +233,8 @@ where
     }
 
     /// Authorizes requests by requiring a logged in user to have a specific
-    /// role, otherwise it rejects
-    /// with [`http::StatusCode::UNAUTHORIZED`].
+    /// range of roles, otherwise it rejects with
+    /// [`http::StatusCode::UNAUTHORIZED`].
     pub fn login_with_role<ResBody>(
         role_bounds: impl RangeBounds<Role> + Clone + Send + Sync + 'static,
     ) -> tower_http::auth::RequireAuthorizationLayer<Login<User, ResBody, Role>>

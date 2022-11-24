@@ -27,6 +27,16 @@
 //! re-authentication can be controlled: if this value changes, then the session
 //! becomes invalidate and the user must re-authenticate.
 //!
+//! ## Roles
+//!
+//! Optionally an arbitrary `Role` type may be provided. This allows
+//! applications to restrict route access based on a role a given user may
+//! have. Roles may be any type so long as they implement `PartialOrd` and
+//! `PartialEq`. The [`get_role`](AuthUser::get_role) method should be
+//! used for retrieving the current role of a given user. See
+//! [`login_with_role`](RequireAuthorizationLayer::login_with_role) for
+//! role-based route protection.
+//!
 //! # Stores
 //!
 //! User stores for sqlx are provided when the requisite feature flag is given.
@@ -124,7 +134,15 @@
 //!         format!("Logged in as: {}", user.name)
 //!     }
 //!
+//!     async fn admin_handler(Extension(user): Extension<User>) -> impl IntoResponse {
+//!         format!("Logged in as admin: {}", user.name)
+//!     }
+//!
 //!     let app = Router::new()
+//!         .route("/admin", get(admin_handler))
+//!         .route_layer(RequireAuthorizationLayer::<User, Role>::login_with_role(
+//!             Role::Admin..,
+//!         ))
 //!         .route("/", get(protected_handler))
 //!         .route_layer(RequireAuthorizationLayer::<User, Role>::login())
 //!         .route("/login", get(login_handler))
