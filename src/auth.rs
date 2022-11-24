@@ -1,6 +1,6 @@
 use std::{
     marker::PhantomData,
-    ops::{RangeBounds, RangeFull},
+    ops::RangeBounds,
     task::{Context, Poll},
 };
 
