@@ -6,14 +6,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use async_trait::async_trait;
-use axum::{
-    extract::{FromRequest, RequestParts},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Extension, Router,
-};
+use axum::{response::IntoResponse, routing::get, Extension, Router};
 use axum_login::{
     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
     memory_store::MemoryStore as AuthMemoryStore,
@@ -22,7 +15,7 @@ use axum_login::{
 use rand::Rng;
 use tokio::sync::RwLock;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 enum Role {
     User,
     Admin,
@@ -63,6 +56,8 @@ impl AuthUser<Role> for User {
 
 type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>, Role>;
 
+type RequireAuth = RequireAuthorizationLayer<User, Role>;
+
 #[tokio::main]
 async fn main() {
     let secret = rand::thread_rng().gen::<[u8; 64]>();
@@ -96,25 +91,21 @@ async fn main() {
     }
 
     async fn user_handler(Extension(user): Extension<User>) -> impl IntoResponse {
-        format!("User logged in as: {}", user.name)
+        format!("Admin or user logged in as: {}", user.name)
     }
 
     let app = Router::new()
         .route(
             "/protected",
-            get(protected_handler).layer(RequireAuthorizationLayer::<User, Role>::login()),
+            get(protected_handler).layer(RequireAuth::login()),
         )
         .route(
             "/protected_admin",
-            get(admin_handler).layer(RequireAuthorizationLayer::<User, Role>::login_with_role(
-                Role::Admin,
-            )),
+            get(admin_handler).layer(RequireAuth::login_with_role(Role::Admin..)), // At least `Admin`.
         )
         .route(
             "/protected_user",
-            get(user_handler).layer(RequireAuthorizationLayer::<User, Role>::login_with_role(
-                Role::User,
-            )),
+            get(user_handler).layer(RequireAuth::login_with_role(Role::User..)), // At least `User`.
         )
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))

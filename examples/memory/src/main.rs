@@ -6,14 +6,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use async_trait::async_trait;
-use axum::{
-    extract::{FromRequest, RequestParts},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Extension, Router,
-};
+use axum::{response::IntoResponse, routing::get, Extension, Router};
 use axum_login::{
     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
     memory_store::MemoryStore as AuthMemoryStore,

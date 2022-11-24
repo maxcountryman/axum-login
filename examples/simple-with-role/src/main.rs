@@ -22,7 +22,7 @@ use axum_login::{
 use rand::Rng;
 use tokio::sync::RwLock;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 enum Role {
     User,
     Admin,

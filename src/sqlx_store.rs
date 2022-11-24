@@ -45,7 +45,7 @@ macro_rules! impl_user_store {
         #[async_trait]
         impl<User, Role> UserStore<Role> for $store<User, Role>
         where
-            Role: PartialEq + Clone + Send + Sync + 'static,
+            Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
             User: AuthUser<Role> + Unpin + for<'r> FromRow<'r, $row>,
         {
             type User = User;

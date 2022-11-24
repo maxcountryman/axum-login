@@ -35,7 +35,7 @@ impl<User> MemoryStore<User> {
 #[async_trait]
 impl<User, Role> UserStore<Role> for MemoryStore<User>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
 {
     type User = User;

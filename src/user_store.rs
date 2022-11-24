@@ -7,7 +7,7 @@ use crate::{AuthUser, Result};
 #[async_trait]
 pub trait UserStore<Role>: Clone + Send + Sync + 'static
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
     /// An associated user type which will be loaded from the store.
     type User: AuthUser<Role>;

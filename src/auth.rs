@@ -1,5 +1,6 @@
 use std::{
     marker::PhantomData,
+    ops::{RangeBounds, RangeFull},
     task::{Context, Poll},
 };
 
@@ -11,6 +12,7 @@ use axum::{
     Extension,
 };
 use axum_sessions::SessionHandle;
+use dyn_clone::DynClone;
 use futures::future::BoxFuture;
 use ring::hmac::{Key, HMAC_SHA512};
 use tower::{Layer, Service};
@@ -30,7 +32,7 @@ pub struct AuthLayer<User, Store, Role = ()> {
 impl<User, Store, Role> AuthLayer<User, Store, Role>
 where
     User: AuthUser<Role>,
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     Store: UserStore<Role, User = User>,
 {
     /// Creates a layer which will attach the [`AuthContext`] and `User` to
@@ -50,7 +52,7 @@ where
 
 impl<User, Store, Inner, Role> Layer<Inner> for AuthLayer<User, Store, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
     Store: UserStore<Role>,
 {
@@ -74,7 +76,7 @@ impl<User, Store, Role, Inner, ReqBody, ResBody> Service<Request<ReqBody>>
     for Auth<User, Store, Inner, Role>
 where
     User: AuthUser<Role>,
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     Store: UserStore<Role, User = User>,
     Inner: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     ResBody: Default + Send + 'static,
@@ -127,25 +129,43 @@ where
     }
 }
 
+trait RoleBounds<Role>: DynClone + Send + Sync {
+    fn contains(&self, role: Option<Role>) -> bool;
+}
+
+impl<T, Role> RoleBounds<Role> for T
+where
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    T: RangeBounds<Role> + Clone + Send + Sync,
+{
+    fn contains(&self, role: Option<Role>) -> bool {
+        if let Some(role) = role {
+            RangeBounds::contains(self, &role)
+        } else {
+            role.is_none()
+        }
+    }
+}
+
 /// Type that performs login authorization.
 ///
 /// See [`RequireAuthorizationLayer::login`] for more details.
 pub struct Login<User, ResBody, Role = ()>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
-    role: Option<Role>,
+    role_bounds: Box<dyn RoleBounds<Role>>,
     _user_type: PhantomData<User>,
     _body_type: PhantomData<fn() -> ResBody>,
 }
 
 impl<User, ResBody, Role> Clone for Login<User, ResBody, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
-            role: self.role.clone(),
+            role_bounds: dyn_clone::clone_box(&*self.role_bounds),
             _user_type: PhantomData,
             _body_type: PhantomData,
         }
@@ -154,7 +174,7 @@ where
 
 impl<User, ReqBody, ResBody, Role> AuthorizeRequest<ReqBody> for Login<User, ResBody, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
     ResBody: HttpBody + Default,
 {
@@ -169,24 +189,14 @@ where
             .get::<Option<User>>()
             .expect("Auth extension missing. Is the auth layer installed?");
 
-        let expected_role = self.role.clone();
-        let actual_role = user.as_ref().and_then(|user| user.get_role());
-
-        match (expected_role, user, actual_role) {
-            (None, Some(user), None | Some(_)) => {
+        match user {
+            Some(user) if self.role_bounds.contains(user.get_role()) => {
                 let user = user.clone();
                 request.extensions_mut().insert(user);
 
                 Ok(())
             }
-            (Some(expected_role), Some(user), Some(actual_role))
-                if expected_role == actual_role =>
-            {
-                let user = user.clone();
-                request.extensions_mut().insert(user);
 
-                Ok(())
-            }
             _ => {
                 let unauthorized_response = Response::builder()
                     .status(http::StatusCode::UNAUTHORIZED)
@@ -205,7 +215,7 @@ pub struct RequireAuthorizationLayer<User, Role = ()>(User, Role);
 
 impl<User, Role> RequireAuthorizationLayer<User, Role>
 where
-    Role: PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
 {
     /// Authorizes requests by requiring a logged in user, otherwise it rejects
@@ -216,7 +226,7 @@ where
         ResBody: HttpBody + Default,
     {
         tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _> {
-            role: None,
+            role_bounds: Box::new(..),
             _user_type: PhantomData,
             _body_type: PhantomData,
         })
@@ -226,13 +236,13 @@ where
     /// role, otherwise it rejects
     /// with [`http::StatusCode::UNAUTHORIZED`].
     pub fn login_with_role<ResBody>(
-        role: Role,
+        role_bounds: impl RangeBounds<Role> + Clone + Send + Sync + 'static,
     ) -> tower_http::auth::RequireAuthorizationLayer<Login<User, ResBody, Role>>
     where
         ResBody: HttpBody + Default,
     {
         tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _> {
-            role: Some(role),
+            role_bounds: Box::new(role_bounds),
             _user_type: PhantomData,
             _body_type: PhantomData,
         })
