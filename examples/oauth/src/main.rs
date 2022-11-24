@@ -64,7 +64,7 @@ async fn main() {
         .with_secure(false)
         .with_same_site_policy(SameSite::Lax);
 
-    let db_url = env::var("DATABASE_URL").unwrap_or("oauth/user_store.db".to_string());
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "oauth/user_store.db".to_string());
 
     let pool = SqlitePoolOptions::new().connect(&db_url).await.unwrap();
 

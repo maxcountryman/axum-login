@@ -23,6 +23,7 @@ use rand::Rng;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[allow(dead_code)]
 enum Role {
     User,
     Admin,
