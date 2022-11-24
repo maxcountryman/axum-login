@@ -1,6 +1,6 @@
 [package]
 name = "axum-login"
-version = "0.2.0"
+version = "0.3.0"
 description = "🪪 Session-based user authentication for Axum."
 edition = "2021"
 homepage = "https://github.com/maxcountryman/axum-login"
