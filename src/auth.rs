@@ -104,7 +104,7 @@ where
         let mut inner = std::mem::replace(&mut self.inner, inner);
         Box::pin(async move {
             let Extension(session_handle): Extension<SessionHandle> = request
-                .extract_parts_with_state(&state)
+                .extract_parts()
                 .await
                 .expect("Session extension missing. Is the session layer installed?");
 
