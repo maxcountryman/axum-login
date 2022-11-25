@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-axum = "0.5.13"
+axum = "0.6.0"
 axum-login = { path = "../../" }
 
 [dependencies.rand]

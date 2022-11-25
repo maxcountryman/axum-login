@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-axum = "0.5.13"
+axum = "0.6.0"
 dotenvy = "0.15.6"
 oauth2 = "4.2.3"
 serde = { version = "1.0.147", features = ["derive"] }
