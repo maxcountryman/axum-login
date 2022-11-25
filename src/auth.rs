@@ -32,7 +32,7 @@ pub struct AuthLayer<User, Store, Role = ()> {
 impl<User, Store, Role> AuthLayer<User, Store, Role>
 where
     User: AuthUser<Role>,
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     Store: UserStore<Role, User = User>,
 {
     /// Creates a layer which will attach the [`AuthContext`] and `User` to
