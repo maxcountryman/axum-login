@@ -8,11 +8,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use axum::{
-    extract::{FromRequest, RequestParts},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Extension, Router,
+    extract::FromRequestParts, http::request::Parts, http::StatusCode, response::IntoResponse,
+    routing::get, Extension, Router,
 };
 use axum_login::{
     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
@@ -68,14 +65,14 @@ struct RequireAdmin(User);
 struct RequireUser(User);
 
 #[async_trait]
-impl<B> FromRequest<B> for RequireAdmin
+impl<S> FromRequestParts<S> for RequireAdmin
 where
-    B: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = StatusCode;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let Extension(user): Extension<User> = Extension::from_request(req)
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Extension(user): Extension<User> = Extension::from_request_parts(parts, state)
             .await
             .map_err(|_err| StatusCode::FORBIDDEN)?;
 
@@ -91,14 +88,14 @@ where
 }
 
 #[async_trait]
-impl<B> FromRequest<B> for RequireUser
+impl<S> FromRequestParts<S> for RequireUser
 where
-    B: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = StatusCode;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let Extension(user): Extension<User> = Extension::from_request(req)
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Extension(user): Extension<User> = Extension::from_request_parts(parts, state)
             .await
             .map_err(|_err| StatusCode::FORBIDDEN)?;
 
