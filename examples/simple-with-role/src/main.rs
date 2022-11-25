@@ -8,8 +8,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use axum::{
-    extract::FromRequestParts, http::request::Parts, http::StatusCode, response::IntoResponse,
-    routing::get, Extension, Router,
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+    response::IntoResponse,
+    routing::get,
+    Extension, Router,
 };
 use axum_login::{
     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
