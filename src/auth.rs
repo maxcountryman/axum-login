@@ -139,7 +139,7 @@ trait RoleBounds<Role>: DynClone + Send + Sync {
 
 impl<T, Role> RoleBounds<Role> for T
 where
-    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq,
     T: RangeBounds<Role> + Clone + Send + Sync,
 {
     fn contains(&self, role: Option<Role>) -> bool {
@@ -154,19 +154,13 @@ where
 /// Type that performs login authorization.
 ///
 /// See [`RequireAuthorizationLayer::login`] for more details.
-pub struct Login<User, ResBody, Role = ()>
-where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-{
+pub struct Login<User, ResBody, Role = ()> {
     role_bounds: Box<dyn RoleBounds<Role>>,
     _user_type: PhantomData<User>,
     _body_type: PhantomData<fn() -> ResBody>,
 }
 
-impl<User, ResBody, Role> Clone for Login<User, ResBody, Role>
-where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-{
+impl<User, ResBody, Role> Clone for Login<User, ResBody, Role> {
     fn clone(&self) -> Self {
         Self {
             role_bounds: dyn_clone::clone_box(&*self.role_bounds),
@@ -178,7 +172,7 @@ where
 
 impl<User, ReqBody, ResBody, Role> AuthorizeRequest<ReqBody> for Login<User, ResBody, Role>
 where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
     ResBody: HttpBody + Default,
 {
