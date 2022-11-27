@@ -2,11 +2,7 @@
 
 use std::marker::PhantomData;
 
-use async_trait::async_trait;
-use axum::{
-    extract::{FromRequest, RequestParts},
-    Extension,
-};
+use axum::{async_trait, extract::FromRequestParts, http::request::Parts, Extension};
 use axum_sessions::SessionHandle;
 use ring::hmac::{self, Key};
 
@@ -124,19 +120,20 @@ where
 }
 
 #[async_trait]
-impl<Body, User, Store, Role> FromRequest<Body> for AuthContext<User, Store, Role>
+impl<State, User, Store, Role> FromRequestParts<State> for AuthContext<User, Store, Role>
 where
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-    Body: Send,
+    State: Send + Sync,
     User: AuthUser<Role>,
     Store: UserStore<Role, User = User>,
 {
     type Rejection = std::convert::Infallible;
 
-    async fn from_request(request: &mut RequestParts<Body>) -> Result<Self, Self::Rejection> {
-        let Extension(auth_cx): Extension<AuthContext<_, _, _>> = Extension::from_request(request)
-            .await
-            .expect("Auth extension missing. Is the auth layer installed?");
+    async fn from_request_parts(parts: &mut Parts, state: &State) -> Result<Self, Self::Rejection> {
+        let Extension(auth_cx): Extension<AuthContext<_, _, _>> =
+            Extension::from_request_parts(parts, state)
+                .await
+                .expect("Auth extension missing. Is the auth layer installed?");
 
         Ok(auth_cx)
     }

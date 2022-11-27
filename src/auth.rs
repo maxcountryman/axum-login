@@ -6,10 +6,9 @@ use std::{
 
 use axum::{
     body::HttpBody,
-    extract::{FromRequest, RequestParts},
     http::{self, Request},
     response::Response,
-    Extension,
+    Extension, RequestExt,
 };
 use axum_sessions::SessionHandle;
 use dyn_clone::DynClone;
@@ -20,20 +19,25 @@ use tower_http::auth::AuthorizeRequest;
 
 use crate::{extractors::AuthContext, user_store::UserStore, AuthUser};
 
-/// Layer that provides session-based authentication via [`AuthContext`].
-#[derive(Debug, Clone)]
-pub struct AuthLayer<User, Store, Role = ()> {
-    store: Store,
+#[derive(Clone)]
+struct AuthState<Store, User, Role = ()> {
     key: Key,
+    store: Store,
     _user_type: PhantomData<User>,
     _role_type: PhantomData<Role>,
 }
 
-impl<User, Store, Role> AuthLayer<User, Store, Role>
+/// Layer that provides session-based authentication via [`AuthContext`].
+#[derive(Clone)]
+pub struct AuthLayer<Store, User, Role = ()> {
+    state: AuthState<Store, User, Role>,
+}
+
+impl<Store, User, Role> AuthLayer<Store, User, Role>
 where
+    Store: UserStore<Role, User = User>,
     User: AuthUser<Role>,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-    Store: UserStore<Role, User = User>,
 {
     /// Creates a layer which will attach the [`AuthContext`] and `User` to
     /// requests via extensions.
@@ -41,71 +45,70 @@ where
     /// Note that the `secret` is used to derive a key for HMAC signing. For
     /// security reasons, this value **must** be securely generated.
     pub fn new(store: Store, secret: &[u8]) -> Self {
-        Self {
+        let state = AuthState {
             store,
             key: Key::new(HMAC_SHA512, secret),
             _user_type: PhantomData,
             _role_type: PhantomData,
-        }
+        };
+
+        Self { state }
     }
 }
 
-impl<User, Store, Inner, Role> Layer<Inner> for AuthLayer<User, Store, Role>
+impl<S, Store, User, Role> Layer<S> for AuthLayer<Store, User, Role>
 where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-    User: AuthUser<Role>,
     Store: UserStore<Role>,
-{
-    type Service = Auth<User, Store, Inner, Role>;
-
-    fn layer(&self, inner: Inner) -> Self::Service {
-        Auth {
-            inner,
-            layer: self.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Auth<User, Store, Inner, Role = ()> {
-    inner: Inner,
-    layer: AuthLayer<User, Store, Role>,
-}
-
-impl<User, Store, Role, Inner, ReqBody, ResBody> Service<Request<ReqBody>>
-    for Auth<User, Store, Inner, Role>
-where
     User: AuthUser<Role>,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-    Store: UserStore<Role, User = User>,
-    Inner: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
-    ResBody: Default + Send + 'static,
-    ReqBody: Send + 'static,
-    Inner::Future: Send + 'static,
 {
-    type Response = Inner::Response;
-    type Error = Inner::Error;
+    type Service = AuthService<S, Store, User, Role>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        AuthService {
+            inner,
+            state: self.state.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct AuthService<S, Store, User, Role = ()> {
+    inner: S,
+    state: AuthState<Store, User, Role>,
+}
+
+impl<S, ReqBody, ResBody, Store, User, Role> Service<Request<ReqBody>>
+    for AuthService<S, Store, User, Role>
+where
+    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    ReqBody: Send + 'static,
+    ResBody: Default + Send + 'static,
+    Store: UserStore<Role, User = User>,
+    User: AuthUser<Role>,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
-        let auth_layer = self.layer.clone();
+    fn call(&mut self, mut request: Request<ReqBody>) -> Self::Future {
+        let state = self.state.clone();
         let inner = self.inner.clone();
+
         let mut inner = std::mem::replace(&mut self.inner, inner);
         Box::pin(async move {
-            let mut request_parts = RequestParts::new(request);
+            let Extension(session_handle): Extension<SessionHandle> = request
+                .extract_parts()
+                .await
+                .expect("Session extension missing. Is the session layer installed?");
 
-            let Extension(session_handle): Extension<SessionHandle> =
-                Extension::from_request(&mut request_parts)
-                    .await
-                    .expect("Session extension missing. Is the session layer installed?");
-
-            let mut request = request_parts.try_into_request().expect("body extracted");
-
-            let mut auth_cx = AuthContext::new(session_handle, auth_layer.store, auth_layer.key);
+            let mut auth_cx = AuthContext::new(session_handle, state.store, state.key);
             match auth_cx.get_user().await {
                 Ok(user) => {
                     auth_cx.current_user = user;
@@ -122,6 +125,7 @@ where
                         .status(http::StatusCode::INTERNAL_SERVER_ERROR)
                         .body(Default::default())
                         .unwrap();
+
                     Ok(response)
                 }
             }
@@ -135,7 +139,7 @@ trait RoleBounds<Role>: DynClone + Send + Sync {
 
 impl<T, Role> RoleBounds<Role> for T
 where
-    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq,
     T: RangeBounds<Role> + Clone + Send + Sync,
 {
     fn contains(&self, role: Option<Role>) -> bool {
@@ -150,19 +154,13 @@ where
 /// Type that performs login authorization.
 ///
 /// See [`RequireAuthorizationLayer::login`] for more details.
-pub struct Login<User, ResBody, Role = ()>
-where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-{
+pub struct Login<User, ResBody, Role = ()> {
     role_bounds: Box<dyn RoleBounds<Role>>,
     _user_type: PhantomData<User>,
     _body_type: PhantomData<fn() -> ResBody>,
 }
 
-impl<User, ResBody, Role> Clone for Login<User, ResBody, Role>
-where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-{
+impl<User, ResBody, Role> Clone for Login<User, ResBody, Role> {
     fn clone(&self) -> Self {
         Self {
             role_bounds: dyn_clone::clone_box(&*self.role_bounds),
@@ -174,7 +172,7 @@ where
 
 impl<User, ReqBody, ResBody, Role> AuthorizeRequest<ReqBody> for Login<User, ResBody, Role>
 where
-    Role: PartialOrd + PartialOrd + PartialEq + Clone + Send + Sync + 'static,
+    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<Role>,
     ResBody: HttpBody + Default,
 {
