@@ -60,6 +60,7 @@
 //!     axum_sessions::{async_session::MemoryStore as SessionMemoryStore, SessionLayer},
 //!     extractors::AuthContext,
 //!     memory_store::MemoryStore as AuthMemoryStore,
+//!     secrecy::SecretVec,
 //!     AuthLayer, AuthUser, RequireAuthorizationLayer,
 //! };
 //! use rand::Rng;
@@ -95,8 +96,8 @@
 //!         format!("{}", self.id)
 //!     }
 //!
-//!     fn get_password_hash(&self) -> String {
-//!         self.password_hash.clone()
+//!     fn get_password_hash(&self) -> SecretVec<u8> {
+//!         SecretVec::new(self.password_hash.clone().into())
 //!     }
 //!
 //!     fn get_role(&self) -> Option<Role> {
@@ -172,6 +173,7 @@ pub use auth::{AuthLayer, RequireAuthorizationLayer};
 pub use auth_user::AuthUser;
 pub use axum_sessions;
 use eyre::Error;
+pub use secrecy;
 #[cfg(feature = "mssql")]
 pub use sqlx_store::MssqlStore;
 #[cfg(feature = "mysql")]

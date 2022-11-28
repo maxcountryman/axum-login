@@ -41,6 +41,7 @@ tokio = { version = "1.20.1", features = ["sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = ["auth"] }
 tracing = "0.1.36"
+secrecy = "0.8.0"
 dyn-clone = "1.0.9"
 
 [dev-dependencies]
