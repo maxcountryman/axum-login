@@ -53,6 +53,7 @@ axum-login = "0.3.0"
 use axum::{response::IntoResponse, routing::get, Extension, Router};
 use axum_login::{
     axum_sessions::{async_session::MemoryStore, SessionLayer},
+    secrecy::SecretVec,
     AuthLayer, AuthUser, RequireAuthorizationLayer, SqliteStore,
 };
 use rand::Rng;
@@ -70,8 +71,8 @@ impl AuthUser for User {
         format!("{}", self.id)
     }
 
-    fn get_password_hash(&self) -> String {
-        self.password_hash.clone()
+    fn get_password_hash(&self) -> SecretVec<u8> {
+        SecretVec::new(self.password_hash.clone().into())
     }
 }
 
@@ -85,7 +86,7 @@ async fn main() {
     let session_layer = SessionLayer::new(session_store, &secret).with_secure(false);
 
     let pool = SqlitePoolOptions::new()
-        .connect("user_store.db")
+        .connect("sqlite/user_store.db")
         .await
         .unwrap();
 
@@ -94,7 +95,7 @@ async fn main() {
 
     async fn login_handler(mut auth: AuthContext) {
         let pool = SqlitePoolOptions::new()
-            .connect("user_store.db")
+            .connect("sqlite/user_store.db")
             .await
             .unwrap();
         let mut conn = pool.acquire().await.unwrap();
