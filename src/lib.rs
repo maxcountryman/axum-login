@@ -169,9 +169,6 @@ pub mod memory_store;
 #[cfg(feature = "sqlx")]
 mod sqlx_store;
 mod user_store;
-#[cfg(feature = "sqlx")]
-pub use sqlx_store::SqlxStore;
-
 pub use auth::{AuthLayer, RequireAuthorizationLayer};
 pub use auth_user::AuthUser;
 pub use axum_sessions;
@@ -185,6 +182,8 @@ pub use sqlx_store::MySqlStore;
 pub use sqlx_store::PostgresStore;
 #[cfg(feature = "sqlite")]
 pub use sqlx_store::SqliteStore;
+#[cfg(feature = "sqlx")]
+pub use sqlx_store::SqlxStore;
 pub use user_store::UserStore;
 
 pub(crate) type Result<T = ()> = std::result::Result<T, Error>;

@@ -17,8 +17,8 @@ const TABLE_NAME_TEMPLATE: &str = "{{table_name}}";
 
 /// A generic SQLx user store.
 ///
-/// Concrete implementions are provided as well and should usually be used unless generics are
-/// required by the application.
+/// Concrete implementions are provided as well and should usually be used
+/// unless generics are required by the application.
 #[derive(Clone, Debug)]
 pub struct SqlxStore<Pool, User, Role = ()> {
     pool: Pool,
@@ -38,7 +38,8 @@ impl<Pool, User, Role> SqlxStore<Pool, User, Role> {
         }
     }
 
-    /// Sets the name of the table which will be queried when calling `load_user`.
+    /// Sets the name of the table which will be queried when calling
+    /// `load_user`.
     pub fn with_table_name(mut self, table_name: impl AsRef<str>) -> Self {
         let table_name = table_name.as_ref();
         self.table_name = table_name.to_string();
