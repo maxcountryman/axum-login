@@ -1,7 +1,7 @@
 use std::marker::{PhantomData, Unpin};
 
 use async_trait::async_trait;
-use sqlx::{database::Database, encode::Encode, FromRow};
+use sqlx::FromRow;
 #[cfg(feature = "mssql")]
 use sqlx::{mssql::MssqlRow, MssqlPool};
 #[cfg(feature = "mysql")]
