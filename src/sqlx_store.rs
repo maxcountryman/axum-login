@@ -100,7 +100,7 @@ mod tests {
     use secrecy::SecretVec;
     use sqlx::SqlitePool;
 
-    use crate::{AuthUser, SqliteStore, SqlxStore};
+    use crate::{AuthUser, SqliteStore};
 
     #[derive(Debug, Default, Clone, sqlx::FromRow)]
     struct User {
