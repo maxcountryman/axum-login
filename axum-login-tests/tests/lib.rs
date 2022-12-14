@@ -1,1 +1,1 @@
-mod sqlx_store;
+mod sqlx_store_tests;
