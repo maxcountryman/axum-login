@@ -13,16 +13,14 @@ use sqlx::{sqlite::SqliteRow, SqlitePool};
 
 use crate::{user_store::UserStore, AuthUser};
 
-const TABLE_NAME_TEMPLATE: &str = "{{table_name}}";
-
 /// A generic SQLx user store.
 ///
-/// Concrete implementions are provided as well and should usually be used
+/// Concrete implementations are provided as well and should usually be used
 /// unless generics are required by the application.
 #[derive(Clone, Debug)]
 pub struct SqlxStore<Pool, User, Role = ()> {
     pool: Pool,
-    table_name: String,
+    query: String,
     _user_type: PhantomData<User>,
     _role_type: PhantomData<Role>,
 }
@@ -32,17 +30,17 @@ impl<Pool, User, Role> SqlxStore<Pool, User, Role> {
     pub fn new(pool: Pool) -> Self {
         Self {
             pool,
-            table_name: "users".into(),
+            query: "SELECT * FROM users WHERE id = $1".to_string(),
             _user_type: Default::default(),
             _role_type: Default::default(),
         }
     }
 
-    /// Sets the name of the table which will be queried when calling
+    /// Sets the query that will be used to query the users table with
     /// `load_user`.
-    pub fn with_table_name(mut self, table_name: impl AsRef<str>) -> Self {
-        let table_name = table_name.as_ref();
-        self.table_name = table_name.to_string();
+    pub fn with_query(mut self, query: impl AsRef<str>) -> Self {
+        let query = query.as_ref();
+        self.query = query.to_string();
         self
     }
 }
@@ -58,12 +56,9 @@ macro_rules! impl_user_store {
             type User = User;
 
             async fn load_user(&self, user_id: &str) -> crate::Result<Option<Self::User>> {
-                let query = format!("select * from {} where id = $1", TABLE_NAME_TEMPLATE);
-                let query = query.replace(TABLE_NAME_TEMPLATE, &self.table_name);
-
                 let mut connection = self.pool.acquire().await?;
 
-                let user: Option<User> = sqlx::query_as(&query)
+                let user: Option<User> = sqlx::query_as(&self.query)
                     .bind(&user_id)
                     .fetch_optional(&mut connection)
                     .await?;
@@ -97,3 +92,41 @@ impl_user_store!(MySqlStore, MySqlRow);
 impl_user_store!(PostgresStore, PgRow);
 #[cfg(feature = "sqlite")]
 impl_user_store!(SqliteStore, SqliteRow);
+
+#[cfg(test)]
+mod tests {
+    //todo: integration tests - docker-compose for non-memory db servers?
+
+    use secrecy::SecretVec;
+    use sqlx::SqlitePool;
+
+    use crate::{AuthUser, SqliteStore};
+
+    #[derive(Debug, Default, Clone, sqlx::FromRow)]
+    struct User {
+        id: i64,
+        password_hash: String,
+    }
+
+    impl AuthUser for User {
+        fn get_id(&self) -> String {
+            format!("{}", self.id)
+        }
+
+        fn get_password_hash(&self) -> SecretVec<u8> {
+            SecretVec::new(self.password_hash.clone().into())
+        }
+    }
+
+    #[sqlx::test]
+    async fn test_store_without_query_override_has_default_query(pool: SqlitePool) {
+        let store = SqliteStore::<User>::new(pool);
+        assert_eq!(store.query, "SELECT * FROM users WHERE id = $1".to_string());
+    }
+
+    #[sqlx::test]
+    async fn test_store_full_query_override(pool: SqlitePool) {
+        let store = SqliteStore::<User>::new(pool).with_query("select 1 from foo");
+        assert_eq!(store.query, "select 1 from foo".to_string());
+    }
+}
