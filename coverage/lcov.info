@@ -1,0 +1,175 @@
+TN:
+SF:/home/tomo/Code/Forks/axum-login/src/auth.rs
+FN:47,new<axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FN:67,layer<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FN:96,poll_ready<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, hyper::body::body::Body, hyper::body::body::Body, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FN:100,call<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, hyper::body::body::Body, hyper::body::body::Body, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FN:105,{async_block#0}<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, hyper::body::body::Body, hyper::body::body::Body, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FNF:5
+FNDA:1,new<axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FNDA:1,layer<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FNDA:1,poll_ready<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, hyper::body::body::Body, hyper::body::body::Body, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FNDA:1,call<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, hyper::body::body::Body, hyper::body::body::Body, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+FNDA:4,{async_block#0}<tower::util::service_fn::ServiceFn<fn(http::request::Request<hyper::body::body::Body>) -> core::future::from_generator::GenFuture<axum_login::auth::tests::login::{async_fn_env#0}>>, hyper::body::body::Body, hyper::body::body::Body, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, axum_login::auth::tests::User, ()>
+DA:47,1
+DA:50,1
+DA:67,1
+DA:70,1
+DA:96,1
+DA:97,1
+DA:100,1
+DA:101,2
+DA:102,1
+DA:104,1
+DA:105,4
+DA:106,4
+DA:107,0
+DA:108,4
+DA:109,0
+DA:111,2
+DA:112,3
+DA:113,1
+DA:114,2
+DA:116,1
+DA:117,1
+DA:119,1
+DA:122,0
+DA:123,0
+DA:124,0
+DA:125,0
+DA:126,0
+DA:127,0
+DA:129,0
+DA:145,0
+DA:146,0
+DA:147,0
+DA:149,0
+DA:164,0
+DA:166,0
+DA:185,0
+DA:190,0
+DA:191,0
+DA:192,0
+DA:193,0
+DA:195,0
+DA:198,0
+DA:199,0
+DA:200,0
+DA:201,0
+DA:204,0
+DA:226,0
+DA:227,0
+DA:228,0
+DA:229,0
+DA:242,0
+DA:243,0
+DA:244,0
+DA:245,0
+LF:54
+LH:20
+end_of_record
+TN:
+SF:/home/tomo/Code/Forks/axum-login/src/auth_user.rs
+FN:70,get_role<axum_login::sqlx_store::tests::User, ()>
+FNF:1
+FNDA:0,get_role<axum_login::sqlx_store::tests::User, ()>
+DA:70,0
+DA:71,0
+LF:2
+LH:0
+end_of_record
+TN:
+SF:/home/tomo/Code/Forks/axum-login/src/extractors.rs
+FN:50,get_session_auth_id<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FN:55,new<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FN:65,get_user<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FN:72,{closure#0}<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FN:97,login<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FN:114,logout<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FNF:6
+FNDA:1,get_session_auth_id<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FNDA:1,new<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FNDA:6,get_user<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FNDA:2,{closure#0}<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FNDA:5,login<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+FNDA:0,logout<axum_login::auth::tests::User, axum_login::memory_store::MemoryStore<axum_login::auth::tests::User>, ()>
+DA:50,1
+DA:51,1
+DA:52,1
+DA:55,1
+DA:65,6
+DA:66,3
+DA:68,3
+DA:69,4
+DA:70,2
+DA:71,0
+DA:72,2
+DA:74,1
+DA:76,1
+DA:77,2
+DA:79,1
+DA:80,1
+DA:82,0
+DA:87,1
+DA:97,5
+DA:98,2
+DA:99,2
+DA:101,2
+DA:102,2
+DA:103,2
+DA:105,2
+DA:107,1
+DA:114,0
+DA:115,0
+DA:116,0
+DA:130,0
+DA:131,0
+DA:132,0
+DA:133,0
+DA:136,0
+LF:34
+LH:24
+end_of_record
+TN:
+SF:/home/tomo/Code/Forks/axum-login/src/lib.rs
+FNF:0
+DA:169,0
+DA:189,0
+LF:2
+LH:0
+end_of_record
+TN:
+SF:/home/tomo/Code/Forks/axum-login/src/memory_store.rs
+FN:28,new<axum_login::auth::tests::User>
+FN:41,destroy_session
+FN:43,load_user<axum_login::auth::tests::User, ()>
+FNF:3
+FNDA:5,new<axum_login::auth::tests::User>
+FNDA:0,destroy_session
+FNDA:6,load_user<axum_login::auth::tests::User, ()>
+DA:28,5
+DA:30,8
+DA:41,0
+DA:43,6
+DA:44,2
+LF:5
+LH:4
+end_of_record
+TN:
+SF:/home/tomo/Code/Forks/axum-login/src/sqlx_store.rs
+FN:30,new<sqlx_core::pool::Pool<sqlx_core::sqlite::database::Sqlite>, axum_login::sqlx_store::tests::User, ()>
+FN:41,with_query<sqlx_core::pool::Pool<sqlx_core::sqlite::database::Sqlite>, axum_login::sqlx_store::tests::User, (), &str>
+FNF:2
+FNDA:1,new<sqlx_core::pool::Pool<sqlx_core::sqlite::database::Sqlite>, axum_login::sqlx_store::tests::User, ()>
+FNDA:1,with_query<sqlx_core::pool::Pool<sqlx_core::sqlite::database::Sqlite>, axum_login::sqlx_store::tests::User, (), &str>
+DA:30,1
+DA:33,1
+DA:34,1
+DA:35,1
+DA:41,1
+DA:42,2
+DA:43,1
+DA:44,1
+LF:8
+LH:8
+end_of_record

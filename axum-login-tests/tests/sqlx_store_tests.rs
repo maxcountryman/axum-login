@@ -1,6 +1,7 @@
 use sqlx;
 
-use axum_login::{AuthUser, secrecy::SecretVec};
+use axum_login::secrecy::SecretVec;
+use axum_login::AuthUser;
 
 #[derive(Debug, Default, Clone, sqlx::FromRow)]
 struct User {
@@ -18,65 +19,59 @@ impl AuthUser for User {
     }
 }
 
-// todo: revisit the macro once you know what you're doing
-macro_rules! test_db_backend {
-    ($test_name:ident, $store:ty, $pool:ty) => {
-        use $crate::User;
-        #[sqlx::test]
-        async fn $test_name(pool: $pool) {
-            let store = $store::<User>::new(pool);
+#[cfg(feature = "postgres")]
+mod tests_pg {
+    use sqlx::PgPool;
 
-            let user = store.load_user("1").await.unwrap().unwrap();
+    use axum_login::{AuthUser, PostgresStore, UserStore};
 
-            assert_eq!(user.get_id(), "1");
-        }
-    };
+    use super::User;
+
+    #[sqlx::test(fixtures("users"))]
+    async fn test_load_user(pool: PgPool) {
+        let store = PostgresStore::<User>::new(pool);
+
+        let user = store.load_user("1").await.unwrap().unwrap();
+
+        assert_eq!(user.get_id(), "1");
+    }
+}
+
+#[cfg(feature = "mysql")]
+mod tests_mysql {
+    use sqlx::MySqlPool;
+
+    use axum_login::AuthUser;
+    use axum_login::MySqlStore;
+    use axum_login::UserStore;
+
+    use super::User;
+
+    #[sqlx::test(fixtures("users"))]
+    async fn test_load_user(pool: MySqlPool) {
+        let store = MySqlStore::<User>::new(pool);
+
+        let user = store.load_user("1").await.unwrap().unwrap();
+
+        assert_eq!(user.get_id(), "1");
+    }
 }
 
 #[cfg(feature = "sqlite")]
-test_db_backend!(test_sqlite, axum_login::SqliteStore, sqlx::SqlitePool);
+mod tests_sqlite {
+    use sqlx::SqlitePool;
 
-#[cfg(feature = "postgres")]
-test_db_backend!(test_postgres, axum_login::PostgresStore, sqlx::PgPool);
+    use axum_login::UserStore;
+    use axum_login::{AuthUser, SqliteStore};
 
-#[cfg(feature = "mysql")]
-test_db_backend!(test_mysql, axum_login::MySqlStore, sqlx::MySqlPool);
+    use super::User;
 
-//
-// #[cfg(feature = "postgres")]
-// mod tests_pg {
-//     use sqlx::PgPool;
-//
-//     use axum_login::{AuthUser, PostgresStore, UserStore};
-//
-//     use super::User;
-//
-//     #[sqlx::test]
-//     async fn test_pg(pool: PgPool) {
-//         let store = PostgresStore::<User>::new(pool);
-//
-//         let user = store.load_user("1").await.unwrap().unwrap();
-//
-//         assert_eq!(user.get_id(), "1");
-//     }
-// }
-//
-// #[cfg(feature = "mysql")]
-// mod tests_mysql {
-//     use sqlx::MySqlPool;
-//
-//     use axum_login::AuthUser;
-//     use axum_login::MySqlStore;
-//     use axum_login::UserStore;
-//
-//     use super::User;
-//
-//     #[sqlx::test]
-//     async fn test_mysql(pool: MySqlPool) {
-//         let store = MySqlStore::<User>::new(pool);
-//
-//         let user = store.load_user("1").await.unwrap().unwrap();
-//
-//         assert_eq!(user.get_id(), "1");
-//     }
-// }
+    #[sqlx::test(fixtures("users"))]
+    async fn test_load_user(pool: SqlitePool) {
+        let store = SqliteStore::<User>::new(pool);
+
+        let user = store.load_user("1").await.unwrap().unwrap();
+
+        assert_eq!(user.get_id(), "1");
+    }
+}
