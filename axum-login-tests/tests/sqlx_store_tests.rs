@@ -1,11 +1,9 @@
-use sqlx;
-
 use axum_login::secrecy::SecretVec;
 use axum_login::AuthUser;
 
 #[derive(Debug, Default, Clone, sqlx::FromRow)]
 struct User {
-    id: i64,
+    id: i32,
     password_hash: String,
 }
 
@@ -29,8 +27,9 @@ mod tests_pg {
 
     #[sqlx::test(fixtures("users"))]
     async fn test_load_user(pool: PgPool) {
-        let store = PostgresStore::<User>::new(pool);
-
+        // custom query because the default one assumes text-ish id column
+        let store = PostgresStore::<User>::new(pool)
+            .with_query("SELECT * FROM users WHERE id = $1::numeric");
         let user = store.load_user("1").await.unwrap().unwrap();
 
         assert_eq!(user.get_id(), "1");
@@ -49,7 +48,8 @@ mod tests_mysql {
 
     #[sqlx::test(fixtures("users"))]
     async fn test_load_user(pool: MySqlPool) {
-        let store = MySqlStore::<User>::new(pool);
+        // custom query because of the way mysql binds are done
+        let store = MySqlStore::<User>::new(pool).with_query("SELECT * FROM users WHERE id = ?");
 
         let user = store.load_user("1").await.unwrap().unwrap();
 

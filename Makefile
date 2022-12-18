@@ -13,8 +13,8 @@ integration_tests_sqlite:
 
 integration_tests:
 	$(MAKE) integration_tests_sqlite
-	$(MAKE) integration_tests_mysql
 	$(MAKE) integration_tests_postgres
+	$(MAKE) integration_tests_mysql
 
 lint:
 	cargo clippy --all --all-targets --all-features -- -Dwarnings

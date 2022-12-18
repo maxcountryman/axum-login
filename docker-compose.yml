@@ -10,6 +10,7 @@ services:
       - "3306:3306"
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD=true
+      - MYSQL_DATABASE=public
   postgres:
     image: postgres
     container_name: axum_login.postgres
