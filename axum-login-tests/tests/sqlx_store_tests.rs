@@ -1,5 +1,4 @@
-use axum_login::secrecy::SecretVec;
-use axum_login::AuthUser;
+use axum_login::{secrecy::SecretVec, AuthUser};
 
 #[derive(Debug, Default, Clone, sqlx::FromRow)]
 struct User {
@@ -19,9 +18,8 @@ impl AuthUser for User {
 
 #[cfg(feature = "postgres")]
 mod tests_pg {
-    use sqlx::PgPool;
-
     use axum_login::{AuthUser, PostgresStore, UserStore};
+    use sqlx::PgPool;
 
     use super::User;
 
@@ -38,11 +36,8 @@ mod tests_pg {
 
 #[cfg(feature = "mysql")]
 mod tests_mysql {
+    use axum_login::{AuthUser, MySqlStore, UserStore};
     use sqlx::MySqlPool;
-
-    use axum_login::AuthUser;
-    use axum_login::MySqlStore;
-    use axum_login::UserStore;
 
     use super::User;
 
@@ -59,10 +54,8 @@ mod tests_mysql {
 
 #[cfg(feature = "sqlite")]
 mod tests_sqlite {
+    use axum_login::{AuthUser, SqliteStore, UserStore};
     use sqlx::SqlitePool;
-
-    use axum_login::UserStore;
-    use axum_login::{AuthUser, SqliteStore};
 
     use super::User;
 
