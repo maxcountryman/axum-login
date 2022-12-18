@@ -11,7 +11,7 @@ oauth2 = "4.2.3"
 serde = { version = "1.0.147", features = ["derive"] }
 
 [dependencies.axum-login]
-path = "../../"
+path = "../../axum-login"
 features = ["sqlite"]
 
 [dependencies.rand]
