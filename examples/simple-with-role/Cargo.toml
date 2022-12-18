@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 axum = "0.6.0"
-axum-login = { path = "../../" }
+axum-login = { path = "../../axum-login" }
 async-trait = "0.1.58"
 
 [dependencies.rand]
