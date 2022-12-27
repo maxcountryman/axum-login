@@ -2,12 +2,15 @@ name: Rust
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
+  POSTGRES_URL: postgres://postgres:postgres@localhost:5432
+  MYSQL_URL: mysql://root@localhost:3306/public
+  SQLITE_URL: sqlite://memory
 
 jobs:
   check:
@@ -79,12 +82,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all --all-features --all-targets
+          args: --all-features --all-targets --manifest-path "axum-login/Cargo.toml"
       - name: Coverage
-        run: cargo tarpaulin --all --all-features --all-targets -o Lcov --output-dir ./coverage
+        working-directory: ./axum-login
+        run: cargo tarpaulin --all-features -o Lcov --output-dir ./coverage
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:
+          path-to-lcov: ./axum-login/coverage/lcov.info
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   test-docs:
@@ -105,3 +110,33 @@ jobs:
         with:
           command: test
           args: --all-features --doc
+
+  integration-tests:
+    strategy:
+      matrix:
+        database_backend:
+          - sqlite
+          - mysql
+          - postgres
+
+    needs: check
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+      - name: Set database URL
+        run: echo "DATABASE_URL=$(env | grep -i ${{ matrix.database_backend }}_url | cut -d "=" -f 2)" >> $GITHUB_ENV
+      - name: Setup DBs
+        run: docker-compose up -d
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+      - uses: Swatinem/rust-cache@v2
+      - name: Run integration tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path "axum-login-tests/Cargo.toml" --features ${{ matrix.database_backend }}

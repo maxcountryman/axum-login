@@ -1,0 +1,35 @@
+[package]
+name = "axum_login_tests"
+version = "0.4.1"
+description = "🪪 Session-based user authentication for Axum."
+edition = "2021"
+homepage = "https://github.com/maxcountryman/axum-login"
+license = "MIT"
+repository = "https://github.com/maxcountryman/axum-login"
+documentation = "https://docs.rs/axum-login"
+publish = false
+
+[dependencies]
+axum-login = { path = "../axum-login", features = [
+    "sqlx",
+    "mssql",
+    "mysql",
+    "postgres",
+    "sqlite",
+] }
+sqlx = { version = "0.6.1" }
+
+[features]
+mysql = ["axum-login/mysql"]
+postgres = ["axum-login/postgres"]
+sqlite = ["axum-login/sqlite"]
+sqlx = ["axum-login/sqlx"]
+
+# not supported by [sqlx::test]
+# https://github.com/launchbadge/sqlx/discussions/1616
+# mssql = ["axum-login/mssql"]
+
+[[test]]
+name = "integration_tests"
+path = "tests/lib.rs"
+harness = true

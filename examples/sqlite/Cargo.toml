@@ -8,7 +8,7 @@ publish = false
 axum = "0.6.0"
 
 [dependencies.axum-login]
-path = "../../"
+path = "../../axum-login"
 features = ["sqlite"]
 
 [dependencies.rand]

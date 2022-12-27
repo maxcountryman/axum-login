@@ -1,0 +1,58 @@
+[package]
+name = "axum-login"
+version = "0.4.1"
+description = "🪪 Session-based user authentication for Axum."
+edition = "2021"
+homepage = "https://github.com/maxcountryman/axum-login"
+license = "MIT"
+keywords = ["sessions", "authentication", "authorization", "login", "axum"]
+categories = [
+    "web-programming::http-server",
+    "web-programming",
+    "database",
+    "asynchronous",
+]
+repository = "https://github.com/maxcountryman/axum-login"
+documentation = "https://docs.rs/axum-login"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = []
+mssql = ["sqlx/mssql"]
+mysql = ["sqlx/mysql"]
+postgres = ["sqlx/postgres"]
+sqlite = ["sqlx/sqlite"]
+sqlx = ["sqlx/runtime-tokio-rustls"]
+
+[dependencies]
+async-trait = "0.1.57"
+axum = "0.6"
+axum-sessions = "0.4"
+base64 = "0.13.0"
+eyre = "0.6.8"
+futures = "0.3.21"
+ring = "0.16.20"
+serde_json = "1.0.83"
+sqlx = { version = "0.6.1", optional = true }
+tokio = { version = "1.20.1", features = ["sync"] }
+tower = "0.4.13"
+tower-http = { version = "0.3.4", features = ["auth"] }
+tracing = "0.1.36"
+secrecy = "0.8.0"
+dyn-clone = "1.0.9"
+
+[dev-dependencies]
+http = "0.2.8"
+hyper = "0.14.23"
+
+[dev-dependencies.rand]
+version = "0.8.5"
+features = ["min_const_gen"]
+
+[dev-dependencies.tokio]
+version = "1.20.1"
+default-features = false
+features = ["macros", "rt-multi-thread"]

@@ -4,3 +4,4 @@
 **/.env
 .idea/
 .vscode/
+coverage/
