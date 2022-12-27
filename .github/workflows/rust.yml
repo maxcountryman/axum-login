@@ -131,7 +131,7 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
-      - user: actions/checkout
+      - uses: actions/checkout
       - name: Setup DBs
         run: docker-compose up -d
       - uses: Swatinem/rust-cache@v2
