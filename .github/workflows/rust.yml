@@ -85,7 +85,7 @@ jobs:
           args: --all-features --all-targets --manifest-path "axum-login/Cargo.toml"
       - name: Coverage
         working-directory: ./axum-login
-        run: cargo tarpaulin --all-features --all-targets -o Lcov --output-dir ./coverage
+        run: cargo tarpaulin --all-features -o Lcov --output-dir ./coverage
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:

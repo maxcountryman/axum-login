@@ -11,10 +11,6 @@ integration_tests_mysql:
 integration_tests_sqlite:
 	DATABASE_URL=${sqlite_url} cargo test --manifest-path "axum-login-tests/Cargo.toml" --features sqlite
 
-integration_tests:
-	$(MAKE) integration_tests_sqlite
-	$(MAKE) integration_tests_postgres
-	$(MAKE) integration_tests_mysql
 
 lint:
 	cargo clippy --all --all-targets --all-features -- -Dwarnings
@@ -23,6 +19,12 @@ lint:
 	cd examples/; cargo fmt --all -- --check
 
 test:
-	cargo tarpaulin --all --all-features --all-targets -o Lcov --output-dir ./coverage
+	cd ./axum-login; cargo tarpaulin --all --all-features -o Lcov --output-dir ./coverage
 
-.PHONY: lint test
+test_integration:
+	$(MAKE) integration_tests_sqlite
+	$(MAKE) integration_tests_postgres
+	$(MAKE) integration_tests_mysql
+
+
+.PHONY: lint test test_integration
