@@ -84,7 +84,8 @@ jobs:
           command: test
           args: --all --all-features --all-targets
       - name: Coverage
-        run: cargo tarpaulin --all --all-features --all-targets -o Lcov --output-dir ./coverage
+        working-directory: ./axum-login
+        run: cargo tarpaulin --all-features --all-targets -o Lcov --output-dir ./coverage
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:
