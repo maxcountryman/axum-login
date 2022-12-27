@@ -2,12 +2,15 @@ name: Rust
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
+  POSTGRES_URL: postgres://postgres:postgres@localhost:5432
+  MYSQL_URL: mysql://root@localhost:3306/public
+  SQLITE_URL: sqlite://memory
 
 jobs:
   check:
@@ -105,3 +108,34 @@ jobs:
         with:
           command: test
           args: --all-features --doc
+
+  integration-tests:
+    strategy:
+      matrix:
+        database_backend:
+          - SQLITE
+          - MYSQL
+          - POSTGRES
+
+    needs: check
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+      - name: Set database URL
+        run: echo "DATABASE_URL=$(env | grep ${{ matrix.database_backend }}_URL | cut -d "=" -f 2)" >> $GITHUB_ENV
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+      - user: actions/checkout
+      - name: Setup DBs
+        run: docker-compose up -d
+      - uses: Swatinem/rust-cache@v2
+      - name: Run integration tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path "axum-login-tests/Cargo.toml" --features ${{ matrix.database_backend }}
