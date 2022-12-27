@@ -123,11 +123,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@master
       - name: Set database URL
-        uses: actions/checkout@master
         run: echo "DATABASE_URL=$(env | grep ${{ matrix.database_backend }}_URL | cut -d "=" -f 2)" >> $GITHUB_ENV
       - name: Setup DBs
-        uses: actions/checkout@master
         run: docker-compose up -d
       - uses: actions-rs/toolchain@v1
         with:
