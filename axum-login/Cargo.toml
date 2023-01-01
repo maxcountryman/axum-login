@@ -25,7 +25,13 @@ mssql = ["sqlx/mssql"]
 mysql = ["sqlx/mysql"]
 postgres = ["sqlx/postgres"]
 sqlite = ["sqlx/sqlite"]
-sqlx = ["sqlx/runtime-tokio-rustls"]
+
+sqlx-runtime-actix-native-tls = ["sqlx/runtime-actix-native-tls"]
+sqlx-runtime-async-std-native-tls = ["sqlx/runtime-async-std-native-tls"]
+sqlx-runtime-tokio-native-tls = ["sqlx/runtime-tokio-native-tls"]
+sqlx-runtime-actix-rustls = ["sqlx/runtime-actix-rustls"]
+sqlx-runtime-async-std-rustls = ["sqlx/runtime-async-std-rustls"]
+sqlx-runtime-tokio-rustls = ["sqlx/runtime-tokio-rustls"]
 
 [dependencies]
 async-trait = "0.1.57"

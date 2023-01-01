@@ -18,9 +18,8 @@ jobs:
 
     strategy:
       matrix:
-        pwd:
-          - .
-          - examples
+        runtime: [async-std, tokio, actix]
+        tls: [native-tls, rustls]
 
     steps:
       - uses: actions/checkout@master
@@ -32,19 +31,48 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.pwd }}
-          workspaces: ${{ matrix.pwd }}
+          key: .
+          workspaces: .
       - name: clippy
-        working-directory: ${{ matrix.pwd }}
+        working-directory: .
+        run: |
+          cargo clippy --all --all-targets --features sqlx-runtime-${{ matrix.runtime }}-${{ matrix.tls }},mssql,mysql,postgres,sqlite -- -Dwarnings
+      - name: rustfmt
+        working-directory: .
+        run: |
+          cargo fmt --all -- --check
+
+  check-examples:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          profile: minimal
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: examples
+          workspaces: examples
+      - name: clippy
+        working-directory: examples
         run: |
           cargo clippy --all --all-targets --all-features -- -Dwarnings
       - name: rustfmt
-        working-directory: ${{ matrix.pwd }}
+        working-directory: examples
         run: |
           cargo fmt --all -- --check
 
   check-docs:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        runtime: [async-std, tokio, actix]
+        tls: [native-tls, rustls]
 
     steps:
       - uses: actions/checkout@master
@@ -57,12 +85,17 @@ jobs:
       - name: cargo doc
         env:
           RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links"
-        run: cargo doc --all-features --no-deps
+        run: cargo doc --features sqlx-runtime-${{ matrix.runtime }}-${{ matrix.tls }},mssql,mysql,postgres,sqlite --no-deps
 
   test:
-    needs: check
+    needs: [check, check-examples]
 
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        runtime: [async-std, tokio, actix]
+        tls: [native-tls, rustls]
 
     steps:
       - uses: actions/checkout@master
@@ -82,10 +115,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --all-targets --manifest-path "axum-login/Cargo.toml"
+          args: --features sqlx-runtime-${{ matrix.runtime }}-${{ matrix.tls }},mssql,mysql,postgres,sqlite --all-targets --manifest-path "axum-login/Cargo.toml"
       - name: Coverage
         working-directory: ./axum-login
-        run: cargo tarpaulin --all-features -o Lcov --output-dir ./coverage
+        run: cargo tarpaulin --features sqlx-runtime-${{ matrix.runtime }}-${{ matrix.tls }},mssql,mysql,postgres,sqlite -o Lcov --output-dir ./coverage
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:
@@ -93,9 +126,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   test-docs:
-    needs: check
+    needs: [check, check-examples]
 
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        runtime: [async-std, tokio, actix]
+        tls: [native-tls, rustls]
 
     steps:
       - uses: actions/checkout@master
@@ -109,7 +147,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --doc
+          args: --features sqlx-runtime-${{ matrix.runtime }}-${{ matrix.tls }},mssql,mysql,postgres,sqlite --doc
 
   integration-tests:
     strategy:
@@ -119,7 +157,7 @@ jobs:
           - mysql
           - postgres
 
-    needs: check
+    needs: [check, check-examples]
 
     runs-on: ubuntu-latest
 
@@ -139,4 +177,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --manifest-path "axum-login-tests/Cargo.toml" --features ${{ matrix.database_backend }}
+          args: --manifest-path "axum-login-tests/Cargo.toml" --features ${{ matrix.database_backend }},sqlx-runtime-tokio-rustls

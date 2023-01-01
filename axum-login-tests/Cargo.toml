@@ -11,7 +11,6 @@ publish = false
 
 [dependencies]
 axum-login = { path = "../axum-login", features = [
-    "sqlx",
     "mssql",
     "mysql",
     "postgres",
@@ -23,7 +22,13 @@ sqlx = { version = "0.6.1" }
 mysql = ["axum-login/mysql"]
 postgres = ["axum-login/postgres"]
 sqlite = ["axum-login/sqlite"]
-sqlx = ["axum-login/sqlx"]
+
+sqlx-runtime-actix-native-tls = ["axum-login/sqlx-runtime-actix-native-tls"]
+sqlx-runtime-async-std-native-tls = ["axum-login/sqlx-runtime-async-std-native-tls"]
+sqlx-runtime-tokio-native-tls = ["axum-login/sqlx-runtime-tokio-native-tls"]
+sqlx-runtime-actix-rustls = ["axum-login/sqlx-runtime-actix-rustls"]
+sqlx-runtime-async-std-rustls = ["axum-login/sqlx-runtime-async-std-rustls"]
+sqlx-runtime-tokio-rustls = ["axum-login/sqlx-runtime-tokio-rustls"]
 
 # not supported by [sqlx::test]
 # https://github.com/launchbadge/sqlx/discussions/1616
