@@ -22,10 +22,10 @@
 //!
 //! In order for your user type to interoperate with this crate, you'll need to
 //! implement `AuthUser` for it. Generally this should be straightforward. The
-//! crate assumes you can provide a stable identifier as well as password hash,
-//! both in terms of `String`. In the case of the latter, the semantics of
-//! re-authentication can be controlled: if this value changes, then the session
-//! becomes invalidate and the user must re-authenticate.
+//! crate assumes you can provide a stable identifier of generic type `UserId`,
+//! as well as a password hash of type `String`. In the case of the latter, the
+//! semantics of re-authentication can be controlled: if this value changes,
+//! then the session becomes invalidated and the user must re-authenticate.
 //!
 //! ## Roles
 //!
@@ -91,9 +91,9 @@
 //!     }
 //! }
 //!
-//! impl AuthUser<Role> for User {
-//!     fn get_id(&self) -> String {
-//!         format!("{}", self.id)
+//! impl AuthUser<usize, Role> for User {
+//!     fn get_id(&self) -> usize {
+//!         self.id
 //!     }
 //!
 //!     fn get_password_hash(&self) -> SecretVec<u8> {
@@ -105,7 +105,8 @@
 //!     }
 //! }
 //!
-//! type Auth = AuthContext<User, AuthMemoryStore<User>, Role>;
+//! type Auth = AuthContext<usize, User, AuthMemoryStore<usize, User>, Role>;
+//! type RequireAuth = RequireAuthorizationLayer<usize, User, Role>;
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -141,11 +142,9 @@
 //!
 //!     let app = Router::new()
 //!         .route("/admin", get(admin_handler))
-//!         .route_layer(RequireAuthorizationLayer::<User, Role>::login_with_role(
-//!             Role::Admin..,
-//!         ))
+//!         .route_layer(RequireAuth::login_with_role(Role::Admin..))
 //!         .route("/", get(protected_handler))
-//!         .route_layer(RequireAuthorizationLayer::<User, Role>::login())
+//!         .route_layer(RequireAuth::login())
 //!         .route("/login", get(login_handler))
 //!         .route("/logout", get(logout_handler))
 //!         .layer(auth_layer)
