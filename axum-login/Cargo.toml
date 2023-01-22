@@ -26,6 +26,7 @@ mysql = ["sqlx/mysql"]
 postgres = ["sqlx/postgres"]
 sqlite = ["sqlx/sqlite"]
 sqlx = ["sqlx/runtime-tokio-rustls"]
+redis = []
 
 [dependencies]
 async-trait = "0.1.57"
@@ -43,6 +44,9 @@ tower-http = { version = "0.3.4", features = ["auth"] }
 tracing = "0.1.36"
 secrecy = "0.8.0"
 dyn-clone = "1.0.9"
+redis = { version = "0.22.2", features = ["ahash", "aio", "tokio-comp", "serde_json", "json"] }
+url = "2.3.1"
+serde = "1.0.152"
 
 [dev-dependencies]
 http = "0.2.8"

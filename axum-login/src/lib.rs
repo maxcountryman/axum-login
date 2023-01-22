@@ -186,4 +186,9 @@ pub use sqlx_store::SqliteStore;
 pub use sqlx_store::SqlxStore;
 pub use user_store::UserStore;
 
+#[cfg(feature = "redis")]
+mod redis_store;
+#[cfg(feature = "redis")]
+pub use redis_store::RedisStore;
+
 pub(crate) type Result<T = ()> = std::result::Result<T, Error>;
