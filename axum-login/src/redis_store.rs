@@ -1,9 +1,8 @@
 use std::marker::{PhantomData, Unpin};
 
 use async_trait::async_trait;
-
 #[cfg(feature = "redis")]
-use redis::{Client, Connection, Commands, FromRedisValue};
+use redis::{Client, Commands, Connection, FromRedisValue};
 
 use crate::{user_store::UserStore, AuthUser};
 
@@ -36,8 +35,8 @@ where
 
     /// user_id is the unique Redis key under which the user data is stored.
     ///
-    /// Note: This key must be returned by your implementation of `get_id(...)` for the
-    /// `AuthUser`-trait.
+    /// Note: This key must be returned by your implementation of `get_id(...)`
+    /// for the `AuthUser`-trait.
     async fn load_user(&self, user_id: &str) -> crate::Result<Option<Self::User>> {
         let mut con: Connection = self.client.get_connection()?;
         let user: Option<User> = con.get(user_id).ok();
@@ -45,13 +44,13 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use redis::{from_redis_value, FromRedisValue};
     use secrecy::SecretVec;
-    use redis::{FromRedisValue, from_redis_value};
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
     use serde_json;
+
     use crate::AuthUser;
 
     #[derive(Debug, Default, Clone, Serialize, Deserialize)]
