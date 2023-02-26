@@ -49,7 +49,6 @@ mod tests {
     use redis::{from_redis_value, FromRedisValue};
     use secrecy::SecretVec;
     use serde::{Deserialize, Serialize};
-    use serde_json;
 
     use crate::AuthUser;
 
@@ -62,7 +61,7 @@ mod tests {
 
     impl AuthUser for User {
         fn get_id(&self) -> String {
-            format!("{}", self.id)
+            self.id.to_string()
         }
 
         fn get_password_hash(&self) -> SecretVec<u8> {
