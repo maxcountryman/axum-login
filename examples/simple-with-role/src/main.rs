@@ -49,9 +49,9 @@ impl User {
     }
 }
 
-impl AuthUser<Role> for User {
-    fn get_id(&self) -> String {
-        format!("{}", self.id)
+impl AuthUser<usize, Role> for User {
+    fn get_id(&self) -> usize {
+        self.id
     }
 
     fn get_password_hash(&self) -> SecretVec<u8> {
@@ -114,7 +114,8 @@ where
     }
 }
 
-type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>, Role>;
+type AuthContext =
+    axum_login::extractors::AuthContext<usize, User, AuthMemoryStore<usize, User>, Role>;
 
 #[tokio::main]
 async fn main() {
@@ -156,7 +157,7 @@ async fn main() {
         .route("/protected", get(protected_handler))
         .route("/protected_admin", get(admin_handler))
         .route("/protected_user", get(user_handler))
-        .route_layer(RequireAuthorizationLayer::<User, Role>::login())
+        .route_layer(RequireAuthorizationLayer::<usize, User, Role>::login())
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
         .layer(auth_layer)

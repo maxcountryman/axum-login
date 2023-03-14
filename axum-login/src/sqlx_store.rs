@@ -1,15 +1,15 @@
 use std::marker::{PhantomData, Unpin};
 
 use async_trait::async_trait;
-use sqlx::FromRow;
 #[cfg(feature = "mssql")]
-use sqlx::{mssql::MssqlRow, MssqlPool};
+use sqlx::{mssql::MssqlRow, Mssql, MssqlPool};
 #[cfg(feature = "mysql")]
-use sqlx::{mysql::MySqlRow, MySqlPool};
+use sqlx::{mysql::MySqlRow, MySql, MySqlPool};
 #[cfg(feature = "postgres")]
-use sqlx::{postgres::PgRow, PgPool};
+use sqlx::{postgres::PgRow, PgPool, Postgres};
 #[cfg(feature = "sqlite")]
-use sqlx::{sqlite::SqliteRow, SqlitePool};
+use sqlx::{sqlite::SqliteRow, Sqlite, SqlitePool};
+use sqlx::{Encode, FromRow, Type};
 
 use crate::{user_store::UserStore, AuthUser};
 
@@ -46,16 +46,17 @@ impl<Pool, User, Role> SqlxStore<Pool, User, Role> {
 }
 
 macro_rules! impl_user_store {
-    ( $store:ident, $row:ident ) => {
+    ( $db:ident, $store:ident, $row:ident ) => {
         #[async_trait]
-        impl<User, Role> UserStore<Role> for $store<User, Role>
+        impl<UserId, User, Role> UserStore<UserId, Role> for $store<User, Role>
         where
+            UserId: Sync + Type<$db> + for<'q> Encode<'q, $db>,
             Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-            User: AuthUser<Role> + Unpin + for<'r> FromRow<'r, $row>,
+            User: AuthUser<UserId, Role> + Unpin + for<'r> FromRow<'r, $row>,
         {
             type User = User;
 
-            async fn load_user(&self, user_id: &str) -> crate::Result<Option<Self::User>> {
+            async fn load_user(&self, user_id: &UserId) -> crate::Result<Option<Self::User>> {
                 let mut connection = self.pool.acquire().await?;
 
                 let user: Option<User> = sqlx::query_as(&self.query)
@@ -85,18 +86,16 @@ pub type PostgresStore<User, Role = ()> = SqlxStore<PgPool, User, Role>;
 pub type SqliteStore<User, Role = ()> = SqlxStore<SqlitePool, User, Role>;
 
 #[cfg(feature = "mssql")]
-impl_user_store!(MssqlStore, MssqlRow);
+impl_user_store!(Mssql, MssqlStore, MssqlRow);
 #[cfg(feature = "mysql")]
-impl_user_store!(MySqlStore, MySqlRow);
+impl_user_store!(MySql, MySqlStore, MySqlRow);
 #[cfg(feature = "postgres")]
-impl_user_store!(PostgresStore, PgRow);
+impl_user_store!(Postgres, PostgresStore, PgRow);
 #[cfg(feature = "sqlite")]
-impl_user_store!(SqliteStore, SqliteRow);
+impl_user_store!(Sqlite, SqliteStore, SqliteRow);
 
 #[cfg(test)]
 mod tests {
-    //todo: integration tests - docker-compose for non-memory db servers?
-
     use secrecy::SecretVec;
     use sqlx::SqlitePool;
 
@@ -108,9 +107,9 @@ mod tests {
         password_hash: String,
     }
 
-    impl AuthUser for User {
-        fn get_id(&self) -> String {
-            format!("{}", self.id)
+    impl AuthUser<i64> for User {
+        fn get_id(&self) -> i64 {
+            self.id
         }
 
         fn get_password_hash(&self) -> SecretVec<u8> {

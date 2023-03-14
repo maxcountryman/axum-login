@@ -6,6 +6,7 @@ use axum::{async_trait, extract::FromRequestParts, http::request::Parts, Extensi
 use axum_sessions::SessionHandle;
 use ring::hmac::{self, Key};
 use secrecy::ExposeSecret;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{user_store::UserStore, AuthUser};
 
@@ -32,19 +33,21 @@ const SESSION_USER_ID_KEY: &str = "_user_id";
 ///
 /// Assumes the extractor is used only after the auth layer has been installed.
 #[derive(Debug, Clone)]
-pub struct AuthContext<User, Store, Role = ()> {
+pub struct AuthContext<UserId, User, Store, Role = ()> {
     /// The currently logged in user for the session, if any.
     pub current_user: Option<User>,
     session_handle: SessionHandle,
     store: Store,
     key: Key,
+    _user_id: PhantomData<UserId>,
     _role: PhantomData<Role>,
 }
 
-impl<User, Store, Role> AuthContext<User, Store, Role>
+impl<UserId, User, Store, Role> AuthContext<UserId, User, Store, Role>
 where
-    User: AuthUser<Role>,
-    Store: UserStore<Role, User = User>,
+    UserId: Serialize + DeserializeOwned,
+    User: AuthUser<UserId, Role>,
+    Store: UserStore<UserId, Role, User = User>,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
     fn get_session_auth_id(&self, password_hash: &[u8]) -> String {
@@ -58,6 +61,7 @@ where
             session_handle,
             store,
             key,
+            _user_id: PhantomData,
             _role: PhantomData,
         }
     }
@@ -65,7 +69,7 @@ where
     pub(super) async fn get_user(&mut self) -> crate::Result<Option<User>> {
         let session = self.session_handle.read().await;
 
-        if let Some(user_id) = session.get::<String>(SESSION_USER_ID_KEY) {
+        if let Some(user_id) = session.get::<UserId>(SESSION_USER_ID_KEY) {
             if let Some(user) = self.store.load_user(&user_id).await? {
                 let session_auth_id = session
                     .get::<String>(SESSION_AUTH_ID_KEY)
@@ -118,17 +122,19 @@ where
 }
 
 #[async_trait]
-impl<State, User, Store, Role> FromRequestParts<State> for AuthContext<User, Store, Role>
+impl<State, UserId, User, Store, Role> FromRequestParts<State>
+    for AuthContext<UserId, User, Store, Role>
 where
+    UserId: Clone + Send + Sync + 'static,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     State: Send + Sync,
-    User: AuthUser<Role>,
-    Store: UserStore<Role, User = User>,
+    User: AuthUser<UserId, Role>,
+    Store: UserStore<UserId, Role, User = User>,
 {
     type Rejection = std::convert::Infallible;
 
     async fn from_request_parts(parts: &mut Parts, state: &State) -> Result<Self, Self::Rejection> {
-        let Extension(auth_cx): Extension<AuthContext<_, _, _>> =
+        let Extension(auth_cx): Extension<AuthContext<_, _, _, _>> =
             Extension::from_request_parts(parts, state)
                 .await
                 .expect("Auth extension missing. Is the auth layer installed?");

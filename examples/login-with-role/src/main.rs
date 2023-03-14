@@ -41,9 +41,9 @@ impl User {
     }
 }
 
-impl AuthUser<Role> for User {
-    fn get_id(&self) -> String {
-        format!("{}", self.id)
+impl AuthUser<usize, Role> for User {
+    fn get_id(&self) -> usize {
+        self.id
     }
 
     fn get_password_hash(&self) -> SecretVec<u8> {
@@ -55,9 +55,10 @@ impl AuthUser<Role> for User {
     }
 }
 
-type AuthContext = axum_login::extractors::AuthContext<User, AuthMemoryStore<User>, Role>;
+type AuthContext =
+    axum_login::extractors::AuthContext<usize, User, AuthMemoryStore<usize, User>, Role>;
 
-type RequireAuth = RequireAuthorizationLayer<User, Role>;
+type RequireAuth = RequireAuthorizationLayer<usize, User, Role>;
 
 #[tokio::main]
 async fn main() {

@@ -24,9 +24,9 @@
 ///     Admin,
 /// }
 ///
-/// impl AuthUser<Role> for MyUser {
-///     fn get_id(&self) -> String {
-///         format!("{}", self.id)
+/// impl AuthUser<i64, Role> for MyUser {
+///     fn get_id(&self) -> i64 {
+///         self.id
 ///     }
 ///
 ///     fn get_password_hash(&self) -> SecretVec<u8> {
@@ -41,14 +41,14 @@
 ///     password_hash: "hunter42".to_string(),
 /// };
 ///
-/// assert_eq!(user.get_id(), "1".to_string());
+/// assert_eq!(user.get_id(), 1);
 /// assert_eq!(
 ///     user.get_password_hash().expose_secret(),
 ///     SecretVec::new("hunter42".into()).expose_secret()
 /// );
 /// # }
 /// ```
-pub trait AuthUser<Role = ()>: Clone + Send + Sync + 'static
+pub trait AuthUser<Id, Role = ()>: Clone + Send + Sync + 'static
 where
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
@@ -56,7 +56,7 @@ where
     ///
     /// This is used to generate the user ID for the session. We assume this
     /// value is globally unique and will not change.
-    fn get_id(&self) -> String;
+    fn get_id(&self) -> Id;
 
     /// Returns the password hash of the user.
     ///
