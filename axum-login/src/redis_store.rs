@@ -26,10 +26,11 @@ impl<User, Role> RedisStore<User, Role> {
 }
 
 #[async_trait]
-impl<User, Role> UserStore<Role> for RedisStore<User, Role>
+impl<UserId, User, Role> UserStore<UserId, Role> for RedisStore<User, Role>
 where
+    UserId: Sync + redis::ToRedisArgs,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-    User: AuthUser<Role> + Unpin + FromRedisValue,
+    User: AuthUser<UserId, Role> + Unpin + FromRedisValue,
 {
     type User = User;
 
@@ -37,7 +38,7 @@ where
     ///
     /// Note: This key must be returned by your implementation of `get_id(...)`
     /// for the `AuthUser`-trait.
-    async fn load_user(&self, user_id: &str) -> crate::Result<Option<Self::User>> {
+    async fn load_user(&self, user_id: &UserId) -> crate::Result<Option<Self::User>> {
         let mut con: Connection = self.client.get_connection()?;
         let user: Option<User> = con.get(user_id).ok();
         Ok(user)
@@ -59,7 +60,7 @@ mod tests {
         password_hash: String,
     }
 
-    impl AuthUser for User {
+    impl AuthUser<String> for User {
         fn get_id(&self) -> String {
             self.id.to_string()
         }

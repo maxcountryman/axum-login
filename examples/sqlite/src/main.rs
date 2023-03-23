@@ -20,9 +20,9 @@ struct User {
     name: String,
 }
 
-impl AuthUser for User {
-    fn get_id(&self) -> String {
-        format!("{}", self.id)
+impl AuthUser<i64> for User {
+    fn get_id(&self) -> i64 {
+        self.id
     }
 
     fn get_password_hash(&self) -> SecretVec<u8> {
@@ -30,7 +30,7 @@ impl AuthUser for User {
     }
 }
 
-type AuthContext = axum_login::extractors::AuthContext<User, SqliteStore<User>>;
+type AuthContext = axum_login::extractors::AuthContext<i64, User, SqliteStore<User>>;
 
 #[tokio::main]
 async fn main() {
@@ -71,7 +71,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/protected", get(protected_handler))
-        .route_layer(RequireAuthorizationLayer::<User>::login())
+        .route_layer(RequireAuthorizationLayer::<i64, User>::login())
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
         .layer(auth_layer)

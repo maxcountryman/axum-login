@@ -1,6 +1,6 @@
 //! An in-memory implementation of `UserStore`.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
@@ -9,11 +9,11 @@ use crate::{user_store::UserStore, AuthUser};
 
 /// An ephemeral store, useful for testing and demonstration purposes.
 #[derive(Clone, Debug, Default)]
-pub struct MemoryStore<User> {
-    inner: Arc<RwLock<HashMap<String, User>>>,
+pub struct MemoryStore<UserId, User> {
+    inner: Arc<RwLock<HashMap<UserId, User>>>,
 }
 
-impl<User> MemoryStore<User> {
+impl<UserId, User> MemoryStore<UserId, User> {
     /// Creates a new memory store.
     ///
     /// ```rust
@@ -25,7 +25,7 @@ impl<User> MemoryStore<User> {
     /// let inner = Arc::new(RwLock::new(HashMap::<String, ()>::new()));
     /// let memory_store = MemoryStore::new(&inner);
     /// ```
-    pub fn new(inner: &Arc<RwLock<HashMap<String, User>>>) -> Self {
+    pub fn new(inner: &Arc<RwLock<HashMap<UserId, User>>>) -> Self {
         Self {
             inner: inner.clone(),
         }
@@ -33,14 +33,15 @@ impl<User> MemoryStore<User> {
 }
 
 #[async_trait]
-impl<User, Role> UserStore<Role> for MemoryStore<User>
+impl<UserId, User, Role> UserStore<UserId, Role> for MemoryStore<UserId, User>
 where
+    UserId: Eq + Clone + Send + Sync + Hash + 'static,
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-    User: AuthUser<Role>,
+    User: AuthUser<UserId, Role>,
 {
     type User = User;
 
-    async fn load_user(&self, user_id: &str) -> crate::Result<Option<Self::User>> {
+    async fn load_user(&self, user_id: &UserId) -> crate::Result<Option<Self::User>> {
         Ok(self.inner.read().await.get(user_id).cloned())
     }
 }

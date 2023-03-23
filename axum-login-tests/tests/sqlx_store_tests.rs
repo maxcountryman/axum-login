@@ -6,9 +6,9 @@ struct User {
     password_hash: String,
 }
 
-impl AuthUser for User {
-    fn get_id(&self) -> String {
-        format!("{}", self.id)
+impl AuthUser<i32> for User {
+    fn get_id(&self) -> i32 {
+        self.id
     }
 
     fn get_password_hash(&self) -> SecretVec<u8> {
@@ -25,12 +25,10 @@ mod tests_pg {
 
     #[sqlx::test(fixtures("users"))]
     async fn test_load_user(pool: PgPool) {
-        // custom query because the default one assumes text-ish id column
-        let store = PostgresStore::<User>::new(pool)
-            .with_query("SELECT * FROM users WHERE id = $1::numeric");
-        let user = store.load_user("1").await.unwrap().unwrap();
+        let store = PostgresStore::<User>::new(pool);
 
-        assert_eq!(user.get_id(), "1");
+        let user = store.load_user(&1).await.unwrap().unwrap();
+        assert_eq!(user.get_id(), 1);
     }
 }
 
@@ -46,9 +44,8 @@ mod tests_mysql {
         // custom query because of the way mysql binds are done
         let store = MySqlStore::<User>::new(pool).with_query("SELECT * FROM users WHERE id = ?");
 
-        let user = store.load_user("1").await.unwrap().unwrap();
-
-        assert_eq!(user.get_id(), "1");
+        let user = store.load_user(&1).await.unwrap().unwrap();
+        assert_eq!(user.get_id(), 1);
     }
 }
 
@@ -63,8 +60,7 @@ mod tests_sqlite {
     async fn test_load_user(pool: SqlitePool) {
         let store = SqliteStore::<User>::new(pool);
 
-        let user = store.load_user("1").await.unwrap().unwrap();
-
-        assert_eq!(user.get_id(), "1");
+        let user = store.load_user(&1).await.unwrap().unwrap();
+        assert_eq!(user.get_id(), 1);
     }
 }
