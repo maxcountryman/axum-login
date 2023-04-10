@@ -30,7 +30,7 @@ sqlx = ["sqlx/runtime-tokio-rustls"]
 [dependencies]
 async-trait = "0.1.57"
 axum = "0.6"
-axum-sessions = "0.4"
+axum-sessions = "0.5"
 base64 = "0.13.0"
 eyre = "0.6.8"
 futures = "0.3.21"
