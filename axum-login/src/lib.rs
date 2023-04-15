@@ -136,6 +136,10 @@
 //!         format!("Logged in as: {}", user.name)
 //!     }
 //!
+//!     async fn account_handler(Extension(user): Extension<User>) -> impl IntoResponse {
+//!         format!("Logged in as: {}", user.name)
+//!     }
+//!
 //!     async fn admin_handler(Extension(user): Extension<User>) -> impl IntoResponse {
 //!         format!("Logged in as admin: {}", user.name)
 //!     }
@@ -145,6 +149,14 @@
 //!         .route_layer(RequireAuth::login_with_role(Role::Admin..))
 //!         .route("/", get(protected_handler))
 //!         .route_layer(RequireAuth::login())
+//!         .route(
+//!             "/account",
+//!             get(account_handler).layer(RequireAuth::login_with_role_or_redirect(
+//!                 Role::Admin..,
+//!                 Arc::new("/login".into()),
+//!                 Some(Arc::new("next".into())),
+//!             )),
+//!         )
 //!         .route("/login", get(login_handler))
 //!         .route("/logout", get(logout_handler))
 //!         .layer(auth_layer)
