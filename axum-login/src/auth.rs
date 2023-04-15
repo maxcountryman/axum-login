@@ -1,6 +1,8 @@
 use std::{
+    borrow::Cow,
     marker::PhantomData,
     ops::RangeBounds,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -13,12 +15,19 @@ use axum::{
 use axum_sessions::SessionHandle;
 use dyn_clone::DynClone;
 use futures::future::BoxFuture;
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use ring::hmac::{Key, HMAC_SHA512};
 use serde::{de::DeserializeOwned, Serialize};
 use tower::{Layer, Service};
 use tower_http::auth::AuthorizeRequest;
 
 use crate::{extractors::AuthContext, user_store::UserStore, AuthUser};
+
+// from https://github.com/tokio-rs/axum/blob/7219fd8df520d295faa42b59f77e25ca2818b6b1/axum-extra/src/lib.rs#L91
+// which in turn is from https://github.com/servo/rust-url/blob/master/url/src/parser.rs
+const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+const PATH: &AsciiSet = &FRAGMENT.add(b'#').add(b'?').add(b'{').add(b'}');
+const PATH_SEGMENT: &AsciiSet = &PATH.add(b'/').add(b'%');
 
 #[derive(Clone)]
 struct AuthState<Store, UserId, User, Role = ()> {
@@ -160,6 +169,8 @@ where
 ///
 /// See [`RequireAuthorizationLayer::login`] for more details.
 pub struct Login<UserId, User, ResBody, Role = ()> {
+    login_url: Option<Arc<Cow<'static, str>>>,
+    redirect_field_name: Option<Arc<Cow<'static, str>>>,
     role_bounds: Box<dyn RoleBounds<Role>>,
     _user_id_type: PhantomData<UserId>,
     _user_type: PhantomData<User>,
@@ -169,6 +180,8 @@ pub struct Login<UserId, User, ResBody, Role = ()> {
 impl<UserId, User, ResBody, Role> Clone for Login<UserId, User, ResBody, Role> {
     fn clone(&self) -> Self {
         Self {
+            login_url: self.login_url.clone(),
+            redirect_field_name: self.redirect_field_name.clone(),
             role_bounds: dyn_clone::clone_box(&*self.role_bounds),
             _user_id_type: PhantomData,
             _user_type: PhantomData,
@@ -204,10 +217,27 @@ where
             }
 
             _ => {
-                let unauthorized_response = Response::builder()
-                    .status(http::StatusCode::UNAUTHORIZED)
-                    .body(Default::default())
-                    .unwrap();
+                let unauthorized_response = if let Some(ref login_url) = self.login_url {
+                    let url: Cow<'static, str> = if let Some(ref next) = self.redirect_field_name {
+                        format!(
+                            "{login_url}?{next}={}",
+                            utf8_percent_encode(request.uri().path(), PATH_SEGMENT)
+                        )
+                        .into()
+                    } else {
+                        login_url.as_ref().clone()
+                    };
+                    Response::builder()
+                        .status(http::StatusCode::TEMPORARY_REDIRECT)
+                        .header(http::header::LOCATION, url.as_ref())
+                        .body(Default::default())
+                        .unwrap()
+                } else {
+                    Response::builder()
+                        .status(http::StatusCode::UNAUTHORIZED)
+                        .body(Default::default())
+                        .unwrap()
+                };
 
                 Err(unauthorized_response)
             }
@@ -232,6 +262,8 @@ where
         ResBody: HttpBody + Default,
     {
         tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+            login_url: None,
+            redirect_field_name: None,
             role_bounds: Box::new(..),
             _user_id_type: PhantomData,
             _user_type: PhantomData,
@@ -249,6 +281,60 @@ where
         ResBody: HttpBody + Default,
     {
         tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+            login_url: None,
+            redirect_field_name: None,
+            role_bounds: Box::new(role_bounds),
+            _user_id_type: PhantomData,
+            _user_type: PhantomData,
+            _body_type: PhantomData,
+        })
+    }
+
+    /// Authorizes requests by requiring a logged in user, otherwise it
+    /// redirects to the provided login URL.
+    ///
+    /// If `redirect_field_name` is set to a value, the login page will receive
+    /// the path it was redirected from in the URI query part. For example,
+    /// attempting to visit a protected path `/protected` would redirect you
+    /// to `/login?next=/protected` allowing you to know how to return the
+    /// visitor to their requested page.
+    pub fn login_or_redirect<ResBody>(
+        login_url: Arc<Cow<'static, str>>,
+        redirect_field_name: Option<Arc<Cow<'static, str>>>,
+    ) -> tower_http::auth::RequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
+    where
+        ResBody: HttpBody + Default,
+    {
+        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+            login_url: Some(login_url),
+            redirect_field_name,
+            role_bounds: Box::new(..),
+            _user_id_type: PhantomData,
+            _user_type: PhantomData,
+            _body_type: PhantomData,
+        })
+    }
+
+    /// Authorizes requests by requiring a logged in user to have a specific
+    /// range of roles, otherwise it redirects to the
+    /// provided login URL.
+    ///
+    /// If `redirect_field_name` is set to a value, the login page will receive
+    /// the path it was redirected from in the URI query part. For example,
+    /// attempting to visit a protected path `/protected` would redirect you
+    /// to `/login?next=/protected` allowing you to know how to return the
+    /// visitor to their requested page.
+    pub fn login_with_role_or_redirect<ResBody>(
+        role_bounds: impl RangeBounds<Role> + Clone + Send + Sync + 'static,
+        login_url: Arc<Cow<'static, str>>,
+        redirect_field_name: Option<Arc<Cow<'static, str>>>,
+    ) -> tower_http::auth::RequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
+    where
+        ResBody: HttpBody + Default,
+    {
+        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+            login_url: Some(login_url),
+            redirect_field_name,
             role_bounds: Box::new(role_bounds),
             _user_id_type: PhantomData,
             _user_type: PhantomData,
@@ -371,5 +457,167 @@ mod tests {
         }
 
         Ok(Response::new(req.into_body()))
+    }
+    type RequireAuth = crate::auth::RequireAuthorizationLayer<usize, User>;
+
+    #[tokio::test]
+    async fn redirects_to_login_url() {
+        let secret = rand::thread_rng().gen::<[u8; 64]>();
+
+        let store = MemoryStore::new();
+        let session_layer = SessionLayer::new(store, &secret);
+
+        let store = Arc::new(RwLock::new(HashMap::default()));
+        let user = User::get_rusty_user();
+        store.write().await.insert(user.get_id(), user);
+
+        let user_store = AuthMemoryStore::new(&store);
+        let auth_layer = AuthLayer::new(user_store, &secret);
+
+        let login_url = Arc::new("/login".into());
+
+        let mut service = ServiceBuilder::new()
+            .layer(session_layer.clone())
+            .layer(auth_layer.clone())
+            .service_fn(login);
+
+        let mut protected_service = ServiceBuilder::new()
+            .layer(session_layer)
+            .layer(auth_layer)
+            .layer(RequireAuth::login_or_redirect(Arc::clone(&login_url), None))
+            .service_fn(login);
+
+        let request = Request::get("/protected").body(Body::empty()).unwrap();
+        let res = protected_service
+            .ready()
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+
+        let session_cookie = res.headers().get(SET_COOKIE).unwrap().clone();
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = protected_service
+            .ready()
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers().get(http::header::LOCATION),
+            Some(&login_url.as_ref().as_ref().try_into().unwrap())
+        );
+
+        let mut request = Request::get("/login").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = protected_service
+            .ready()
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn redirects_to_login_url_with_next() {
+        let secret = rand::thread_rng().gen::<[u8; 64]>();
+
+        let store = MemoryStore::new();
+        let session_layer = SessionLayer::new(store, &secret);
+
+        let store = Arc::new(RwLock::new(HashMap::default()));
+        let user = User::get_rusty_user();
+        store.write().await.insert(user.get_id(), user);
+
+        let user_store = AuthMemoryStore::new(&store);
+        let auth_layer = AuthLayer::new(user_store, &secret);
+
+        let login_url = Arc::new("/login".into());
+
+        let mut service = ServiceBuilder::new()
+            .layer(session_layer.clone())
+            .layer(auth_layer.clone())
+            .service_fn(login);
+
+        let mut protected_service = ServiceBuilder::new()
+            .layer(session_layer)
+            .layer(auth_layer)
+            .layer(RequireAuth::login_or_redirect(
+                Arc::clone(&login_url),
+                Some(Arc::new("next".into())),
+            ))
+            .service_fn(login);
+
+        let request = Request::get("/protected").body(Body::empty()).unwrap();
+        let res = protected_service
+            .ready()
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+
+        let session_cookie = res.headers().get(SET_COOKIE).unwrap().clone();
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = protected_service
+            .ready()
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers().get(http::header::LOCATION),
+            Some(
+                &format!("{}?next=%2Fprotected", login_url.as_ref())
+                    .try_into()
+                    .unwrap()
+            )
+        );
+
+        let mut request = Request::get("/login").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = protected_service
+            .ready()
+            .await
+            .unwrap()
+            .call(request)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
     }
 }
