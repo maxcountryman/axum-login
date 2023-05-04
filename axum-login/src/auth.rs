@@ -19,7 +19,7 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use ring::hmac::{Key, HMAC_SHA512};
 use serde::{de::DeserializeOwned, Serialize};
 use tower::{Layer, Service};
-use tower_http::auth::AuthorizeRequest;
+use tower_http::auth::AsyncAuthorizeRequest;
 
 use crate::{extractors::AuthContext, user_store::UserStore, AuthUser};
 
@@ -190,62 +190,68 @@ impl<UserId, User, ResBody, Role> Clone for Login<UserId, User, ResBody, Role> {
     }
 }
 
-impl<UserId, User, ReqBody, ResBody, Role> AuthorizeRequest<ReqBody>
+impl<UserId, User, ReqBody, ResBody, Role> AsyncAuthorizeRequest<ReqBody>
     for Login<UserId, User, ResBody, Role>
 where
     Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
     User: AuthUser<UserId, Role>,
     ResBody: HttpBody + Default,
+    UserId: Send + 'static,
+    ReqBody: Send + 'static,
 {
     type ResponseBody = ResBody;
+    type RequestBody = ReqBody;
+    type Future =
+        BoxFuture<'static, Result<Request<Self::RequestBody>, Response<Self::ResponseBody>>>;
 
-    fn authorize(
-        &mut self,
-        request: &mut Request<ReqBody>,
-    ) -> Result<(), Response<Self::ResponseBody>> {
-        let user = request
-            .extensions()
-            .get::<Option<User>>()
-            .expect("Auth extension missing. Is the auth layer installed?");
+    fn authorize(&mut self, mut request: Request<ReqBody>) -> Self::Future {
+        let role_bounds = dyn_clone::clone_box(&*self.role_bounds);
+        let login_url = self.login_url.clone();
+        let redirect_field_name = self.redirect_field_name.clone();
+        Box::pin(async move {
+            let user = request
+                .extensions()
+                .get::<Option<User>>()
+                .expect("Auth extension missing. Is the auth layer installed?");
 
-        match user {
-            Some(user) if self.role_bounds.contains(user.get_role()) => {
-                let user = user.clone();
-                request.extensions_mut().insert(user);
+            match user {
+                Some(user) if role_bounds.contains(user.get_role()) => {
+                    let user = user.clone();
+                    request.extensions_mut().insert(user);
 
-                Ok(())
-            }
-
-            _ => {
-                let unauthorized_response = if let Some(ref login_url) = self.login_url {
-                    let url: Cow<'static, str> = if let Some(ref next) = self.redirect_field_name {
-                        format!(
-                            "{login_url}?{next}={}",
-                            utf8_percent_encode(request.uri().path(), PATH_SEGMENT)
-                        )
-                        .into()
+                    Ok(request)
+                }
+                _ => {
+                    let unauthorized_response = if let Some(ref login_url) = login_url {
+                        let url: Cow<'static, str> = if let Some(ref next) = redirect_field_name {
+                            format!(
+                                "{login_url}?{next}={}",
+                                utf8_percent_encode(request.uri().path(), PATH_SEGMENT)
+                            )
+                            .into()
+                        } else {
+                            login_url.as_ref().clone()
+                        };
+                        Response::builder()
+                            .status(http::StatusCode::TEMPORARY_REDIRECT)
+                            .header(http::header::LOCATION, url.as_ref())
+                            .body(Default::default())
+                            .unwrap()
                     } else {
-                        login_url.as_ref().clone()
+                        Response::builder()
+                            .status(http::StatusCode::UNAUTHORIZED)
+                            .body(Default::default())
+                            .unwrap()
                     };
-                    Response::builder()
-                        .status(http::StatusCode::TEMPORARY_REDIRECT)
-                        .header(http::header::LOCATION, url.as_ref())
-                        .body(Default::default())
-                        .unwrap()
-                } else {
-                    Response::builder()
-                        .status(http::StatusCode::UNAUTHORIZED)
-                        .body(Default::default())
-                        .unwrap()
-                };
 
-                Err(unauthorized_response)
+                    Err(unauthorized_response)
+                }
             }
-        }
+        })
     }
 }
 
-/// A wrapper around [`tower_http::auth::RequireAuthorizationLayer`] which
+/// A wrapper around [`tower_http::auth::AsyncRequireAuthorizationLayer`] which
 /// provides login authorization.
 pub struct RequireAuthorizationLayer<UserId, User, Role = ()>(UserId, User, Role);
 
@@ -257,11 +263,11 @@ where
     /// Authorizes requests by requiring a logged in user, otherwise it rejects
     /// with [`http::StatusCode::UNAUTHORIZED`].
     pub fn login<ResBody>(
-    ) -> tower_http::auth::RequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
+    ) -> tower_http::auth::AsyncRequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
     where
         ResBody: HttpBody + Default,
     {
-        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+        tower_http::auth::AsyncRequireAuthorizationLayer::new(Login::<_, _, _, _> {
             login_url: None,
             redirect_field_name: None,
             role_bounds: Box::new(..),
@@ -276,11 +282,11 @@ where
     /// [`http::StatusCode::UNAUTHORIZED`].
     pub fn login_with_role<ResBody>(
         role_bounds: impl RangeBounds<Role> + Clone + Send + Sync + 'static,
-    ) -> tower_http::auth::RequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
+    ) -> tower_http::auth::AsyncRequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
     where
         ResBody: HttpBody + Default,
     {
-        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+        tower_http::auth::AsyncRequireAuthorizationLayer::new(Login::<_, _, _, _> {
             login_url: None,
             redirect_field_name: None,
             role_bounds: Box::new(role_bounds),
@@ -301,11 +307,11 @@ where
     pub fn login_or_redirect<ResBody>(
         login_url: Arc<Cow<'static, str>>,
         redirect_field_name: Option<Arc<Cow<'static, str>>>,
-    ) -> tower_http::auth::RequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
+    ) -> tower_http::auth::AsyncRequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
     where
         ResBody: HttpBody + Default,
     {
-        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+        tower_http::auth::AsyncRequireAuthorizationLayer::new(Login::<_, _, _, _> {
             login_url: Some(login_url),
             redirect_field_name,
             role_bounds: Box::new(..),
@@ -328,11 +334,11 @@ where
         role_bounds: impl RangeBounds<Role> + Clone + Send + Sync + 'static,
         login_url: Arc<Cow<'static, str>>,
         redirect_field_name: Option<Arc<Cow<'static, str>>>,
-    ) -> tower_http::auth::RequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
+    ) -> tower_http::auth::AsyncRequireAuthorizationLayer<Login<UserId, User, ResBody, Role>>
     where
         ResBody: HttpBody + Default,
     {
-        tower_http::auth::RequireAuthorizationLayer::custom(Login::<_, _, _, _> {
+        tower_http::auth::AsyncRequireAuthorizationLayer::new(Login::<_, _, _, _> {
             login_url: Some(login_url),
             redirect_field_name,
             role_bounds: Box::new(role_bounds),
