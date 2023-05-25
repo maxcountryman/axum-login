@@ -183,7 +183,6 @@ mod user_store;
 pub use auth::{AuthLayer, RequireAuthorizationLayer};
 pub use auth_user::AuthUser;
 pub use axum_sessions;
-use eyre::Error;
 pub use secrecy;
 #[cfg(feature = "mssql")]
 pub use sqlx_store::MssqlStore;
@@ -196,5 +195,3 @@ pub use sqlx_store::SqliteStore;
 #[cfg(feature = "sqlx")]
 pub use sqlx_store::SqlxStore;
 pub use user_store::UserStore;
-
-pub(crate) type Result<T = ()> = std::result::Result<T, Error>;
