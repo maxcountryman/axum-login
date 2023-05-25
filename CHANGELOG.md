@@ -1,3 +1,9 @@
+# Unreleased
+
+**BREAKING CHANGES**:
+
+- Use associated type `Error` in `UserStore` instead of eyre for error handling [#69](https://github.com/maxcountryman/axum-login/pull/69)
+
 # 0.5.0
 
 **BREAKING CHANGES**:

@@ -66,7 +66,7 @@ where
         }
     }
 
-    pub(super) async fn get_user(&mut self) -> crate::Result<Option<User>> {
+    pub(super) async fn get_user(&mut self) -> Result<Option<User>, Store::Error> {
         let session = self.session_handle.read().await;
 
         if let Some(user_id) = session.get::<UserId>(SESSION_USER_ID_KEY) {
@@ -98,7 +98,7 @@ where
     /// the value of [`get_id`](crate::auth_user::AuthUser::get_id) will be used
     /// to identify the user on future requests. Once the session has been
     /// updated, the `current_user` will be set to provided user.
-    pub async fn login(&mut self, user: &User) -> crate::Result<()> {
+    pub async fn login(&mut self, user: &User) -> Result<(), serde_json::Error> {
         let auth_id = self.get_session_auth_id(user.get_password_hash().expose_secret());
         let user_id = user.get_id();
 

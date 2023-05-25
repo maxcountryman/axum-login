@@ -56,7 +56,9 @@ macro_rules! impl_user_store {
         {
             type User = User;
 
-            async fn load_user(&self, user_id: &UserId) -> crate::Result<Option<Self::User>> {
+            type Error = sqlx::error::Error;
+
+            async fn load_user(&self, user_id: &UserId) -> Result<Option<Self::User>, Self::Error> {
                 let mut connection = self.pool.acquire().await?;
 
                 let user: Option<User> = sqlx::query_as(&self.query)

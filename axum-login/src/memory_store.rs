@@ -41,7 +41,9 @@ where
 {
     type User = User;
 
-    async fn load_user(&self, user_id: &UserId) -> crate::Result<Option<Self::User>> {
+    type Error = std::convert::Infallible;
+
+    async fn load_user(&self, user_id: &UserId) -> Result<Option<Self::User>, Self::Error> {
         Ok(self.inner.read().await.get(user_id).cloned())
     }
 }
