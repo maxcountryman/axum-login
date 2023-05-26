@@ -128,7 +128,12 @@ where
                     auth_cx.current_user = user;
 
                     request.extensions_mut().insert(auth_cx.clone());
-                    request.extensions_mut().insert(auth_cx.current_user);
+                    request
+                        .extensions_mut()
+                        .insert(auth_cx.current_user.clone());
+                    if let Some(current_user) = auth_cx.current_user {
+                        request.extensions_mut().insert(current_user);
+                    }
 
                     inner.call(request).await
                 }
@@ -830,5 +835,81 @@ mod tests {
                 .unwrap();
             assert_eq!(res.status(), status);
         }
+    }
+
+    #[tokio::test]
+    async fn user_extensions() {
+        let secret = rand::thread_rng().gen::<[u8; 64]>();
+
+        let store = MemoryStore::new();
+        let session_layer = SessionLayer::new(store, &secret);
+
+        let store = Arc::new(RwLock::new(HashMap::default()));
+        let user = User::get_rusty_user();
+        store.write().await.insert(user.get_id(), user);
+
+        let user_store = AuthMemoryStore::new(&store);
+        let auth_layer = AuthLayer::new(user_store, &secret);
+
+        async fn login(mut req: Request<Body>) -> Result<Response<Body>, BoxError> {
+            if req.uri() == "/login" {
+                let auth = req.extensions_mut().get_mut::<Auth>();
+                let user = &User::get_rusty_user();
+                auth.unwrap().login(user).await.unwrap();
+            }
+
+            if req.uri() == "/protected" {
+                let optional_auth_user = req.extensions().get::<Option<User>>();
+                let invalid_optional_auth_user = match optional_auth_user {
+                    Some(None) => true,
+                    Some(Some(User { .. })) => false,
+                    None => unreachable!(),
+                };
+                let auth_user = req.extensions().get::<User>();
+                let invalid_auth_user = match auth_user {
+                    None => true,
+                    Some(User { .. }) => false,
+                };
+                match (invalid_optional_auth_user, invalid_auth_user) {
+                    // Verify Option<User> and User extensions match
+                    (false, false) => (),
+                    (false, true) | (true, false) => unreachable!(),
+                    (true, true) => {
+                        // Emulate invalid extension by returning INTERNAL_SERVER_ERROR
+                        return Ok(Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(Default::default())
+                            .unwrap());
+                    }
+                }
+            }
+
+            Ok(Response::new(req.into_body()))
+        }
+
+        let mut service = ServiceBuilder::new()
+            .layer(session_layer)
+            .layer(auth_layer)
+            .service_fn(login);
+
+        let request = Request::get("/protected").body(Body::empty()).unwrap();
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let session_cookie = res.headers().get(SET_COOKIE).unwrap().clone();
+
+        let mut request = Request::get("/login").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let mut request = Request::get("/protected").body(Body::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(COOKIE, session_cookie.to_owned());
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
     }
 }
