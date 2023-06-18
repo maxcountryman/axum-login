@@ -128,9 +128,6 @@ where
                     auth_cx.current_user = user;
 
                     request.extensions_mut().insert(auth_cx.clone());
-                    request
-                        .extensions_mut()
-                        .insert(auth_cx.current_user.clone());
                     if let Some(current_user) = auth_cx.current_user {
                         request.extensions_mut().insert(current_user);
                     }
@@ -220,10 +217,7 @@ where
         let login_url = self.login_url.clone();
         let redirect_field_name = self.redirect_field_name.clone();
         Box::pin(async move {
-            let user = request
-                .extensions()
-                .get::<Option<User>>()
-                .expect("Auth extension missing. Is the auth layer installed?");
+            let user = request.extensions().get::<User>();
 
             match user {
                 Some(user)
@@ -859,28 +853,13 @@ mod tests {
             }
 
             if req.uri() == "/protected" {
-                let optional_auth_user = req.extensions().get::<Option<User>>();
-                let invalid_optional_auth_user = match optional_auth_user {
-                    Some(None) => true,
-                    Some(Some(User { .. })) => false,
-                    None => unreachable!(),
-                };
                 let auth_user = req.extensions().get::<User>();
-                let invalid_auth_user = match auth_user {
-                    None => true,
-                    Some(User { .. }) => false,
-                };
-                match (invalid_optional_auth_user, invalid_auth_user) {
-                    // Verify Option<User> and User extensions match
-                    (false, false) => (),
-                    (false, true) | (true, false) => unreachable!(),
-                    (true, true) => {
-                        // Emulate invalid extension by returning INTERNAL_SERVER_ERROR
-                        return Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(Default::default())
-                            .unwrap());
-                    }
+                if auth_user.is_none() {
+                    // Emulate invalid extension by returning INTERNAL_SERVER_ERROR
+                    return Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Default::default())
+                        .unwrap());
                 }
             }
 
