@@ -177,12 +177,17 @@ mod auth_user;
 pub mod extractors;
 pub mod memory_store;
 
+#[cfg(feature = "rusqlite")]
+mod rusqlite_store;
+
 #[cfg(feature = "sqlx")]
 mod sqlx_store;
 mod user_store;
 pub use auth::{AuthLayer, RequireAuthorizationLayer};
 pub use auth_user::AuthUser;
 pub use axum_sessions;
+#[cfg(feature = "rusqlite")]
+pub use rusqlite_store::RusqliteStore;
 pub use secrecy;
 #[cfg(feature = "mssql")]
 pub use sqlx_store::MssqlStore;

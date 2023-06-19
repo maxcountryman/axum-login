@@ -26,6 +26,7 @@ mysql = ["sqlx/mysql"]
 postgres = ["sqlx/postgres"]
 sqlite = ["sqlx/sqlite"]
 sqlx = ["sqlx/runtime-tokio-rustls"]
+rusqlite = ["dep:rusqlite", "dep:tokio-rusqlite"]
 
 [dependencies]
 async-trait = "0.1.57"
@@ -41,6 +42,8 @@ sqlx = { version = "0.6", optional = true }
 tokio = { version = "1.20", features = ["sync"] }
 tower = "0.4"
 tower-http = { version = "0.4", features = ["auth"] }
+rusqlite = { version = "0.27.0", optional = true }
+tokio-rusqlite = { version = "0.2.0", optional = true }
 tracing = "0.1"
 secrecy = "0.8"
 dyn-clone = "1"
