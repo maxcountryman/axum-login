@@ -16,14 +16,19 @@ axum-login = { path = "../axum-login", features = [
     "mysql",
     "postgres",
     "sqlite",
+    "mongodb",
 ] }
 sqlx = { version = "0.6" }
+mongodb = { version = "2.5" }
+serde = { version = "1.0.163" }
+tokio = { version = "1", features = ["macros"], default-features = false }
 
 [features]
 mysql = ["axum-login/mysql"]
 postgres = ["axum-login/postgres"]
 sqlite = ["axum-login/sqlite"]
 sqlx = ["axum-login/sqlx"]
+mongodb = ["axum-login/mongodb"]
 
 # not supported by [sqlx::test]
 # https://github.com/launchbadge/sqlx/discussions/1616
