@@ -177,12 +177,17 @@ mod auth_user;
 pub mod extractors;
 pub mod memory_store;
 
+#[cfg(feature = "mongodb")]
+mod mongodb_store;
+
 #[cfg(feature = "sqlx")]
 mod sqlx_store;
 mod user_store;
 pub use auth::{AuthLayer, RequireAuthorizationLayer};
 pub use auth_user::AuthUser;
 pub use axum_sessions;
+#[cfg(feature = "mongodb")]
+pub use mongodb_store::MongoDbStore;
 pub use secrecy;
 #[cfg(feature = "mssql")]
 pub use sqlx_store::MssqlStore;

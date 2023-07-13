@@ -26,7 +26,7 @@ mysql = ["sqlx/mysql"]
 postgres = ["sqlx/postgres"]
 sqlite = ["sqlx/sqlite"]
 sqlx = ["sqlx/runtime-tokio-rustls"]
-mongodb = ["dep:mongodb"]
+mongodb = ["dep:mongodb", "serde/derive"]
 
 [dependencies]
 async-trait = "0.1.57"
@@ -45,7 +45,7 @@ tower-http = { version = "0.4", features = ["auth"] }
 tracing = "0.1"
 secrecy = "0.8"
 dyn-clone = "1"
-mongodb = { version = "2", optional = true }
+mongodb = { version = "2.5", optional = true }
 
 [dev-dependencies]
 http = "0.2"
