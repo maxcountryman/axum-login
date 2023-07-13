@@ -1,6 +1,7 @@
 postgres_url = postgres://postgres:postgres@localhost:5432
 mysql_url = mysql://root@localhost:3306/public
 sqlite_url = sqlite://memory
+mongodb_url = mongodb://localhost:28017
 
 integration_tests_postgres:
 	DATABASE_URL=${postgres_url} cargo test --manifest-path "axum-login-tests/Cargo.toml" --features postgres
@@ -10,6 +11,9 @@ integration_tests_mysql:
 
 integration_tests_sqlite:
 	DATABASE_URL=${sqlite_url} cargo test --manifest-path "axum-login-tests/Cargo.toml" --features sqlite
+
+integration_tests_mongodb:
+	DATABASE_URL=${mongodb_url} cargo test --manifest-path "axum-login-tests/Cargo.toml" --features mongodb
 
 
 lint:
@@ -25,6 +29,7 @@ test_integration:
 	$(MAKE) integration_tests_sqlite
 	$(MAKE) integration_tests_postgres
 	$(MAKE) integration_tests_mysql
+	$(MAKE) integration_tests_mongodb
 
 
 .PHONY: lint test test_integration
