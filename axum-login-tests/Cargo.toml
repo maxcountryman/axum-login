@@ -12,12 +12,11 @@ publish = false
 [dependencies]
 axum-login = { path = "../axum-login", features = [
     "sqlx",
-    "mssql",
     "mysql",
     "postgres",
     "sqlite",
 ] }
-sqlx = { version = "0.6" }
+sqlx = { version = "0.7.1" }
 
 [features]
 mysql = ["axum-login/mysql"]

@@ -3,3 +3,5 @@ members = [
     "axum-login",
     "axum-login-tests",
 ]
+
+resolver = "2"

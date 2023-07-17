@@ -19,7 +19,7 @@ version = "0.8.5"
 features = ["min_const_gen"]
 
 [dependencies.sqlx]
-version = "0.6.1"
+version = "0.7.1"
 default-features = false
 features = ["runtime-tokio-rustls", "sqlite"]
 
