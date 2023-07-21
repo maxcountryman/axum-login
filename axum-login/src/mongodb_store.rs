@@ -78,10 +78,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use mongodb::bson::{doc, oid::ObjectId};
     use serde::{Deserialize, Serialize};
+
+    use super::*;
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     struct TestUser {

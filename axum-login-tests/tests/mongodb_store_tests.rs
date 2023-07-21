@@ -23,9 +23,9 @@ impl AuthUser<ObjectId> for TestUser {
 
 #[cfg(feature = "mongodb")]
 mod mongodb_tests {
-    use super::*;
-
     use axum_login::{MongoDbStore, UserStore};
+
+    use super::*;
 
     fn get_mongodb_uri() -> String {
         std::env::var("DATABASE_URL").unwrap_or_else(|_| "mongodb://localhost:27017".to_string())
