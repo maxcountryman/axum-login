@@ -24,7 +24,7 @@ default = []
 mysql = ["sqlx/mysql"]
 postgres = ["sqlx/postgres"]
 sqlite = ["sqlx/sqlite"]
-sqlx = ["sqlx/runtime-tokio-rustls"]
+sqlx = ["sqlx/runtime-tokio-rustls", "sqlx-rt/runtime-tokio-rustls"]
 
 [dependencies]
 async-trait = "0.1.57"
@@ -43,6 +43,7 @@ tower-http = { version = "0.4", features = ["auth"] }
 tracing = "0.1"
 secrecy = "0.8"
 dyn-clone = "1"
+sqlx-rt = { version = "0.6.3", features = ["runtime-tokio-rustls"] }
 
 [dev-dependencies]
 http = "0.2"
