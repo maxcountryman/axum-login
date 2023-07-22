@@ -3,6 +3,7 @@
 **BREAKING CHANGES**:
 
 - Use associated type `Error` in `UserStore` instead of eyre for error handling [#69](https://github.com/maxcountryman/axum-login/pull/69)
+- Pass `&pool` to `sqlx::query` calls instead of a `&mut conn`, [(example)](https://github.com/maxcountryman/axum-login/pull/83/commits/ca3a4a0a3f7960f21147dfa093b41e01a1510625#diff-a1e8ba9587c151f4568fe2394889e8733a428bf67bfd62be7f3b91d6860cf54d)
 
 # 0.5.0
 
