@@ -1,7 +1,6 @@
-use std::{fmt::Display, error::Error};
+use std::{error::Error, fmt::Display};
 
 use axum_login::axum_sessions::async_session;
-
 
 #[derive(Debug)]
 pub enum Errors {

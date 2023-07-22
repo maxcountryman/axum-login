@@ -2,9 +2,8 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use axum_login::{AuthUser, UserStore};
-use libsql_client::{args, Row, Statement};
-
 pub use errors::Errors;
+use libsql_client::{args, Row, Statement};
 mod errors;
 
 /// A store to support rusqlite as the underlying database crate.
