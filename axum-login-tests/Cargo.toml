@@ -12,7 +12,6 @@ publish = false
 [dependencies]
 axum-login = { path = "../axum-login", features = [
     "sqlx",
-    "mssql",
     "mysql",
     "postgres",
     "sqlite",
@@ -24,10 +23,6 @@ mysql = ["axum-login/mysql"]
 postgres = ["axum-login/postgres"]
 sqlite = ["axum-login/sqlite"]
 sqlx = ["axum-login/sqlx"]
-
-# not supported by [sqlx::test]
-# https://github.com/launchbadge/sqlx/discussions/1616
-# mssql = ["axum-login/mssql"]
 
 [[test]]
 name = "integration_tests"

@@ -1,8 +1,6 @@
 use std::marker::{PhantomData, Unpin};
 
 use async_trait::async_trait;
-#[cfg(feature = "mssql")]
-use sqlx::{mssql::MssqlRow, Mssql, MssqlPool};
 #[cfg(feature = "mysql")]
 use sqlx::{mysql::MySqlRow, MySql, MySqlPool};
 #[cfg(feature = "postgres")]
@@ -99,10 +97,6 @@ macro_rules! impl_user_store {
     };
 }
 
-/// A Mssql user store via sqlx.
-#[cfg(feature = "mssql")]
-pub type MssqlStore<User, Role = ()> = SqlxStore<MssqlPool, User, Role>;
-
 /// A MySql user store via sqlx.
 #[cfg(feature = "mysql")]
 pub type MySqlStore<User, Role = ()> = SqlxStore<MySqlPool, User, Role, MySqlQueryProvider>;
@@ -115,8 +109,6 @@ pub type PostgresStore<User, Role = ()> = SqlxStore<PgPool, User, Role>;
 #[cfg(feature = "sqlite")]
 pub type SqliteStore<User, Role = ()> = SqlxStore<SqlitePool, User, Role>;
 
-#[cfg(feature = "mssql")]
-impl_user_store!(Mssql, MssqlStore, MssqlRow);
 #[cfg(feature = "mysql")]
 impl_user_store!(MySql, MySqlStore, MySqlRow);
 #[cfg(feature = "postgres")]

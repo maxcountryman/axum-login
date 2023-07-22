@@ -184,8 +184,6 @@ pub use auth::{AuthLayer, RequireAuthorizationLayer};
 pub use auth_user::AuthUser;
 pub use axum_sessions;
 pub use secrecy;
-#[cfg(feature = "mssql")]
-pub use sqlx_store::MssqlStore;
 #[cfg(feature = "mysql")]
 pub use sqlx_store::MySqlStore;
 #[cfg(feature = "postgres")]
