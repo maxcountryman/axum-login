@@ -2,11 +2,13 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use axum_login::{AuthUser, UserStore};
-pub use errors::Errors;
 use libsql_client::{args, Row, Statement};
+
+pub use crate::errors::Errors;
+
 mod errors;
 
-/// A store to support rusqlite as the underlying database crate.
+/// A store to support libsql_client as the underlying database crate.
 #[derive(Clone, Debug)]
 pub struct LibsqlStore<User, UserMapper: LibsqlUserMapper<User = User>, Role = ()> {
     client: &'static libsql_client::Client,

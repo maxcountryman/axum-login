@@ -3,7 +3,7 @@ use libsql_client::{args, Client, Row, Statement};
 use once_cell::sync::Lazy;
 use secrecy::SecretVec;
 
-use super::{LibsqlStore, LibsqlUserMapper};
+use crate::{LibsqlStore, LibsqlUserMapper};
 use crate::Errors;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
