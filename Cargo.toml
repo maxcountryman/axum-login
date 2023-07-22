@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "axum-login",
+    "axum-login-libsql",
     "axum-login-tests",
 ]
