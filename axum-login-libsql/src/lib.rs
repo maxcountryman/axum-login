@@ -66,7 +66,6 @@ where
         self.client
             .execute(stmt)
             .await
-            // .map_err(|e| eyre::eyre!("failed to execute query: {}", e))
             .map_err(Errors::DbExecutionError)
             .and_then(|res| match res.rows.first() {
                 Some(row) => UserMapper::map(row).map(Some),
