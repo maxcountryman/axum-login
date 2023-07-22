@@ -4,6 +4,11 @@
 
 - Use associated type `Error` in `UserStore` instead of eyre for error handling [#69](https://github.com/maxcountryman/axum-login/pull/69)
 - Pass `&pool` to `sqlx::query` calls instead of a `&mut conn`, [(example)](https://github.com/maxcountryman/axum-login/pull/83/commits/ca3a4a0a3f7960f21147dfa093b41e01a1510625#diff-a1e8ba9587c151f4568fe2394889e8733a428bf67bfd62be7f3b91d6860cf54d)
+- Support dropped for Mysql Server `mssql` (v0.5.0 last supported version)
+
+**OTHER CHANGES**:
+- `sqlx` library bumped to version `0.7`
+- added support for [`libsql-client-rs`](https://github.com/libsql/libsql-client-rs) via crate `axum-login-libsql`
 
 # 0.5.0
 
