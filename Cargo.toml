@@ -4,3 +4,5 @@ members = [
     "axum-login-libsql",
     "axum-login-tests",
 ]
+
+resolver = "2"

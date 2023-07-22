@@ -16,7 +16,7 @@ axum-login = { path = "../axum-login", features = [
     "postgres",
     "sqlite",
 ] }
-sqlx = { version = "0.6" }
+sqlx = { version = "0.7" }
 
 [features]
 mysql = ["axum-login/mysql"]

@@ -81,7 +81,7 @@ where
             // .map_err(|e| eyre::eyre!("failed to execute query: {}", e))
             .map_err(Errors::DbExecutionError)
             .and_then(|res| match res.rows.first() {
-                Some(row) => UserMapper::map(&row).map(Some),
+                Some(row) => UserMapper::map(row).map(Some),
                 None => Ok(None),
             })
     }
@@ -89,14 +89,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use libsql_client::{Client, Row, Statement, args};
+    use axum_login::{secrecy, AuthUser, UserStore};
+    use libsql_client::{args, Client, Row, Statement};
     use once_cell::sync::Lazy;
     use secrecy::SecretVec;
 
-    use crate::Errors;
-
     use super::{LibsqlStore, LibsqlUserMapper};
-    use axum_login::{secrecy, AuthUser, UserStore};
+    use crate::Errors;
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     struct User {
@@ -144,9 +143,7 @@ mod tests {
             .unwrap();
 
         let insert = Statement::with_args("INSERT INTO users VALUES ($1, $2);", args!(1, "test"));
-        CONN.execute(insert)
-            .await
-            .unwrap();
+        CONN.execute(insert).await.unwrap();
 
         assert_eq!(store.query, "SELECT * FROM users WHERE id = $1".to_string());
 
@@ -164,10 +161,7 @@ mod tests {
     async fn test_store_without_query_override_has_default_query() {
         static CONN: Lazy<Client> = new_in_memory_connection();
         let store = LibsqlStore::<User, MyUserMapper>::new(&CONN);
-        assert_eq!(
-            store.query,
-            "SELECT * FROM users WHERE id = $1".to_string()
-        );
+        assert_eq!(store.query, "SELECT * FROM users WHERE id = $1".to_string());
     }
 
     #[tokio::test]

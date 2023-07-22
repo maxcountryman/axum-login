@@ -5,8 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 async-trait = "0.1.72"
-axum-login = {version = "0.5.0", path = "../axum-login/" }
-eyre = {version = "0.6.8", default-features = false}
+axum-login = {path = "../axum-login/" }
 
 [dependencies.libsql-client]
 branch = "chore/dep-up"
