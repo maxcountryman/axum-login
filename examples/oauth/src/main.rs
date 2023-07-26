@@ -128,15 +128,10 @@ async fn oauth_callback_handler(
         .await
         .unwrap();
 
-    // Do something with the token
-    // ...
-    println!("Getting db connection");
-
     // Fetch the user and log them in
-    let mut conn = pool.acquire().await.unwrap();
     println!("Getting user");
     let user: User = sqlx::query_as("select * from users where id = 1")
-        .fetch_one(&mut conn)
+        .fetch_one(&pool)
         .await
         .unwrap();
     println!("Got user {user:?}. Logging in.");

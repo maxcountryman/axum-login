@@ -52,9 +52,8 @@ async fn main() {
             .connect("sqlite/user_store.db")
             .await
             .unwrap();
-        let mut conn = pool.acquire().await.unwrap();
         let user: User = sqlx::query_as("select * from users where id = 1")
-            .fetch_one(&mut conn)
+            .fetch_one(&pool)
             .await
             .unwrap();
         auth.login(&user).await.unwrap();
