@@ -195,3 +195,5 @@ pub use sqlx_store::SqliteStore;
 #[cfg(feature = "sqlx")]
 pub use sqlx_store::SqlxStore;
 pub use user_store::UserStore;
+#[cfg(feature = "diesel")]
+mod diesel_store;
