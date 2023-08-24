@@ -1,8 +1,18 @@
 # Unreleased
 
+# 0.6.0
+
 **BREAKING CHANGES**:
 
+- Provide `User` without `Option` [#70](https://github.com/maxcountryman/axum-login/pull/70)
 - Use associated type `Error` in `UserStore` instead of eyre for error handling [#69](https://github.com/maxcountryman/axum-login/pull/69)
+- Make `role_bounds` optional [#67](https://github.com/maxcountryman/axum-login/pull/67)
+
+**OTHER CHANGES**
+
+- Introduce `DefaultQueryProvider` for `sqlx` stores [#72](https://github.com/maxcountryman/axum-login/pull/72)
+- Update `tower` to `0.4.0`
+- Add optional redirect in `RequireAuthorizationLayer`
 
 # 0.5.0
 
