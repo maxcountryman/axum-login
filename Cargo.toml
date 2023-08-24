@@ -1,5 +1,2 @@
 [workspace]
-members = [
-    "axum-login",
-    "axum-login-tests",
-]
+members = ["axum-login", "axum-login-tests"]

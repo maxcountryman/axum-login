@@ -14,6 +14,7 @@ categories = [
 ]
 repository = "https://github.com/maxcountryman/axum-login"
 documentation = "https://docs.rs/axum-login"
+readme = "../README.md"
 
 [package.metadata.docs.rs]
 all-features = true
