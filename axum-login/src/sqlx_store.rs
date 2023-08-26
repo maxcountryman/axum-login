@@ -1,8 +1,6 @@
 use std::marker::{PhantomData, Unpin};
 
 use async_trait::async_trait;
-#[cfg(feature = "mssql")]
-use sqlx::{mssql::MssqlRow, Mssql, MssqlPool};
 #[cfg(feature = "mysql")]
 use sqlx::{mysql::MySqlRow, MySql, MySqlPool};
 #[cfg(feature = "postgres")]
@@ -87,21 +85,15 @@ macro_rules! impl_user_store {
             type Error = sqlx::error::Error;
 
             async fn load_user(&self, user_id: &UserId) -> Result<Option<Self::User>, Self::Error> {
-                let mut connection = self.pool.acquire().await?;
-
                 let user: Option<User> = sqlx::query_as(&self.query)
                     .bind(&user_id)
-                    .fetch_optional(connection.as_mut())
+                    .fetch_optional(&self.pool)
                     .await?;
                 Ok(user)
             }
         }
     };
 }
-
-/// A Mssql user store via sqlx.
-#[cfg(feature = "mssql")]
-pub type MssqlStore<User, Role = ()> = SqlxStore<MssqlPool, User, Role>;
 
 /// A MySql user store via sqlx.
 #[cfg(feature = "mysql")]
@@ -115,8 +107,6 @@ pub type PostgresStore<User, Role = ()> = SqlxStore<PgPool, User, Role>;
 #[cfg(feature = "sqlite")]
 pub type SqliteStore<User, Role = ()> = SqlxStore<SqlitePool, User, Role>;
 
-#[cfg(feature = "mssql")]
-impl_user_store!(Mssql, MssqlStore, MssqlRow);
 #[cfg(feature = "mysql")]
 impl_user_store!(MySql, MySqlStore, MySqlRow);
 #[cfg(feature = "postgres")]
