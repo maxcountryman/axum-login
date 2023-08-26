@@ -91,7 +91,7 @@ macro_rules! impl_user_store {
 
                 let user: Option<User> = sqlx::query_as(&self.query)
                     .bind(&user_id)
-                    .fetch_optional(&mut connection)
+                    .fetch_optional(connection.as_mut())
                     .await?;
                 Ok(user)
             }
