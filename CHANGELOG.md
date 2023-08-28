@@ -1,5 +1,9 @@
 # Unreleased
 
+**BREAKING CHANGES**:
+
+- Update `sqlx` to 0.7, which [drops support for MS SQL Server](https://github.com/launchbadge/sqlx/pull/2039)
+
 # 0.6.0
 
 **BREAKING CHANGES**:
@@ -7,7 +11,6 @@
 - Provide `User` without `Option` [#70](https://github.com/maxcountryman/axum-login/pull/70)
 - Use associated type `Error` in `UserStore` instead of eyre for error handling [#69](https://github.com/maxcountryman/axum-login/pull/69)
 - Make `role_bounds` optional [#67](https://github.com/maxcountryman/axum-login/pull/67)
-- Update `sqlx` to 0.7, which [drops support for MS SQL Server](https://github.com/launchbadge/sqlx/pull/2039)
 
 **OTHER CHANGES**
 
