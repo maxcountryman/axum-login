@@ -1,5 +1,9 @@
 # Unreleased
 
+**BREAKING CHANGES**:
+
+- Update `sqlx` to 0.7, which [drops support for MS SQL Server](https://github.com/launchbadge/sqlx/pull/2039)
+
 # 0.6.0
 
 **BREAKING CHANGES**:

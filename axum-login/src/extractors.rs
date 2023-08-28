@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts, Extension};
 use axum_sessions::SessionHandle;
+use base64::{engine::general_purpose, Engine as _};
 use ring::hmac::{self, Key};
 use secrecy::ExposeSecret;
 use serde::{de::DeserializeOwned, Serialize};
@@ -52,7 +53,7 @@ where
 {
     fn get_session_auth_id(&self, password_hash: &[u8]) -> String {
         let tag = hmac::sign(&self.key, password_hash);
-        base64::encode(tag.as_ref())
+        general_purpose::STANDARD.encode(tag.as_ref())
     }
 
     pub(super) fn new(session_handle: SessionHandle, store: Store, key: Key) -> Self {
@@ -73,7 +74,7 @@ where
             if let Some(user) = self.store.load_user(&user_id).await? {
                 let session_auth_id = session
                     .get::<String>(SESSION_AUTH_ID_KEY)
-                    .and_then(|auth_id| base64::decode(auth_id).ok())
+                    .and_then(|auth_id| general_purpose::STANDARD.decode(auth_id).ok())
                     .unwrap_or_default();
                 drop(session);
 
