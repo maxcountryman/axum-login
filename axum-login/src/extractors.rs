@@ -68,7 +68,7 @@ where
     }
 
     pub(super) async fn get_user(&mut self) -> Result<Option<User>, Store::Error> {
-        let session = self.session_handle.read().await;
+        let session = self.session_handle.lock().await;
 
         if let Some(user_id) = session.get::<UserId>(SESSION_USER_ID_KEY) {
             if let Some(user) = self.store.load_user(&user_id).await? {
@@ -103,7 +103,7 @@ where
         let auth_id = self.get_session_auth_id(user.get_password_hash().expose_secret());
         let user_id = user.get_id();
 
-        let mut session = self.session_handle.write().await;
+        let mut session = self.session_handle.lock().await;
         session.insert(SESSION_AUTH_ID_KEY, auth_id)?;
         session.insert(SESSION_USER_ID_KEY, user_id)?;
 
@@ -117,7 +117,7 @@ where
     /// Subsequent requests will not provide an authenticated session until
     /// `login` is invoked again.
     pub async fn logout(&mut self) {
-        let mut session = self.session_handle.write().await;
+        let mut session = self.session_handle.lock().await;
         session.destroy();
     }
 }
