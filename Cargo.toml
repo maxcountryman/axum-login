@@ -1,2 +1,52 @@
-[workspace]
-members = ["axum-login", "axum-login-tests"]
+[package]
+name = "axum-login"
+version = "0.7.0"
+description = "🪪 Session-based user authentication for Axum."
+edition = "2021"
+homepage = "https://github.com/maxcountryman/axum-login"
+license = "MIT"
+keywords = ["sessions", "authentication", "authorization", "login", "axum"]
+categories = [
+    "web-programming::http-server",
+    "web-programming",
+    "database",
+    "asynchronous",
+]
+repository = "https://github.com/maxcountryman/axum-login"
+documentation = "https://docs.rs/axum-login"
+readme = "../README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = []
+sqlx-store = ["sqlx"]
+sqlite-store = ["sqlx/sqlite", "sqlx-store"]
+
+
+[dependencies]
+async-trait = "0.1.57"
+axum = { version = "0.6.20", default-features = false }
+http = "0.2.9"
+serde = "1"
+tower-sessions = "0.2.1"
+thiserror = "1.0.49"
+
+sqlx = { optional = true, version = "0.7.2", features = [
+    "time",
+    "uuid",
+    "runtime-tokio",
+] }
+
+[dev-dependencies]
+axum = "0.6.20"
+hyper = "0.14.27"
+tokio = { version = "1.32.0", features = ["full"] }
+tower = "0.4.13"
+tokio-test = "0.4.3"
+
+[[example]]
+name = "sqlite-store"
+required-features = ["sqlx", "sqlite-store"]
