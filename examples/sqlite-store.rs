@@ -31,18 +31,11 @@ impl SqliteUserStore {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum SqlxStoreError {
-    /// A variant to map `sqlx` errors.
-    #[error("SQLx error: {0}")]
-    Sqlx(#[from] sqlx::Error),
-}
-
 #[async_trait]
 impl UserStore for SqliteUserStore {
     type User = User;
     type UserId = i64;
-    type Error = SqlxStoreError;
+    type Error = sqlx::Error;
 
     async fn load(&self, user_id: &Self::UserId) -> Result<Option<Self::User>, Self::Error> {
         let user = sqlx::query_as(&self.query)
@@ -53,11 +46,11 @@ impl UserStore for SqliteUserStore {
         Ok(user)
     }
 
-    async fn is_authenticated(&self, _user: &User) -> bool {
+    async fn is_authn(&self, _user: &User) -> bool {
         true
     }
 
-    async fn authentication_failure<B: Send>(&self, _req: Request<B>) -> Response {
+    async fn authn_failure<B: Send>(&self, _req: Request<B>) -> Response {
         Redirect::to("/login").into_response()
     }
 }
@@ -72,15 +65,15 @@ type Auth = axum_login::Auth<SqliteUserStore>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
-
+    // Session layer.
     let session_store = MemoryStore::default();
-    let user_store = SqliteUserStore::new(pool.clone());
-
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_max_age(Duration::days(1));
 
+    // Login service.
+    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let user_store = SqliteUserStore::new(pool.clone());
     let login_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_: BoxError| async {
             StatusCode::BAD_REQUEST
@@ -113,18 +106,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn login_handler(mut auth: Auth) -> impl IntoResponse {
-    auth.login(&42).await.unwrap();
+    match auth.login(&42).await {
+        // User was found and set as logged in.
+        Ok(Some(user)) => format!("Logged in as: {}", user.name).into_response(),
 
-    let user = auth.user.unwrap();
-    format!("Logged in as: {}", user.name)
+        // The user didn't exist in our store.
+        Ok(None) => StatusCode::UNAUTHORIZED.into_response(),
+
+        // Our store failed for some reason.
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 async fn logout_handler(mut auth: Auth) -> impl IntoResponse {
-    auth.logout().unwrap();
-    "Logged out."
+    match auth.logout() {
+        Ok(_) => "Logged out.".into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 async fn admin_handler(auth: Auth) -> impl IntoResponse {
-    let user = auth.user.unwrap();
-    format!("Hi, {}!", user.name)
+    match auth.user {
+        Some(user) => format!("Hi, {}!", user.name).into_response(),
+        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
