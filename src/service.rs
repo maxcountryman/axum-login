@@ -13,6 +13,7 @@ use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore}
 
 use crate::{Auth, UserStore};
 
+/// A middleware that provides [`Auth`] as a request extension.
 #[derive(Debug, Clone)]
 pub struct LoginManager<S, Users: UserStore> {
     inner: S,
@@ -20,6 +21,7 @@ pub struct LoginManager<S, Users: UserStore> {
 }
 
 impl<S, Users: UserStore> LoginManager<S, Users> {
+    /// Create a new [`LoginManager`] with the provided user store..
     pub fn new(inner: S, user_store: Users) -> Self {
         Self { inner, user_store }
     }
@@ -64,6 +66,7 @@ where
     }
 }
 
+/// A layer for providing [`Auth`] as a request extension.
 #[derive(Debug, Clone)]
 pub struct LoginManagerLayer<Users: UserStore, Sessions: SessionStore> {
     user_store: Users,
@@ -71,6 +74,7 @@ pub struct LoginManagerLayer<Users: UserStore, Sessions: SessionStore> {
 }
 
 impl<Users: UserStore, Sessions: SessionStore> LoginManagerLayer<Users, Sessions> {
+    /// Create a new [`LoginManagerLayer`] with the provided user store.
     pub fn new(user_store: Users, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
         Self {
             user_store,

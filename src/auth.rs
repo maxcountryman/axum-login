@@ -1,5 +1,3 @@
-//! An authentication context which provides methods for logging users in and
-//! out.
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
@@ -51,8 +49,12 @@ where
 /// Note that the user will be `None` when the user is logged out.
 #[derive(Debug, Clone)]
 pub struct Auth<Users: UserStore> {
+    /// The user. Will be `None` when not logged in.
     pub user: Option<Users::User>,
+
+    /// The user store.
     pub user_store: Users,
+
     auth_data: AuthData<Users::UserId>,
     session: Session,
 }
@@ -91,6 +93,8 @@ impl<Users: UserStore> Auth<Users> {
     }
 
     fn update_session(&mut self) -> Result<(), SessionError> {
+        // N.B. We aren't concerned about atomic updates here because our writes are not
+        // based on read values from the session.
         self.session
             .insert(Self::AUTH_DATA_KEY, self.auth_data.clone())
     }

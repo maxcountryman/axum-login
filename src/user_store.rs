@@ -1,12 +1,11 @@
-//! A trait that provides an interface for loading a user from some store as
-//! well as methods for defining whether a user is autheniticated, authorized,
-//! and respective methods for generating responses for when they are not.
-
 use async_trait::async_trait;
 use axum::response::{IntoResponse, Response};
 use http::{Request, StatusCode};
 use serde::{Deserialize, Serialize};
 
+/// A trait that provides an interface for loading a user from some store as
+/// well as methods for defining whether a user is autheniticated, authorized,
+/// and respective methods for generating responses for when they are not.
 #[async_trait]
 pub trait UserStore: std::fmt::Debug + Clone + Send + Sync + 'static {
     /// The user type this store will load and otherwise manage.

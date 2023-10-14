@@ -1,5 +1,3 @@
-//! Middleware that leverage `UserStore` in order to ensure authentication and
-//! authorization conditions are met.
 use axum::{middleware::Next, response::Response};
 use http::Request;
 
@@ -10,11 +8,11 @@ use crate::{Auth, UserStore};
 ///
 /// This is intended to be used with
 /// [`middleware::from_fn`](axum::middleware::from_fn).
-pub async fn require_authn<Users, B>(auth: Auth<Users>, req: Request<B>, next: Next<B>) -> Response
-where
-    Users: UserStore,
-    B: Send,
-{
+pub async fn require_authn<Users: UserStore, B: Send>(
+    auth: Auth<Users>,
+    req: Request<B>,
+    next: Next<B>,
+) -> Response {
     match auth.user {
         Some(user) if auth.user_store.is_authn(&user).await => next.run(req).await,
         _ => auth.user_store.authn_failure(req).await,
