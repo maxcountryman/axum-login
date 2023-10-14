@@ -14,31 +14,24 @@ categories = [
 ]
 repository = "https://github.com/maxcountryman/axum-login"
 documentation = "https://docs.rs/axum-login"
-readme = "../README.md"
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[features]
-default = []
-sqlx-store = ["sqlx"]
-sqlite-store = ["sqlx/sqlite", "sqlx-store"]
-
-
 [dependencies]
 async-trait = "0.1.57"
 axum = { version = "0.6.20", default-features = false }
+futures = "0.3.28"
 http = "0.2.9"
 serde = "1"
-tower-sessions = "0.2.1"
 thiserror = "1.0.49"
-
-sqlx = { optional = true, version = "0.7.2", features = [
-    "time",
-    "uuid",
-    "runtime-tokio",
-] }
+time = "0.3.29"
+tower-cookies = "0.9.0"
+tower-layer = "0.3.2"
+tower-service = "0.3.2"
+tower-sessions = "0.3.1"
+url = "2.4.1"
 
 [dev-dependencies]
 axum = "0.6.20"
@@ -46,7 +39,12 @@ hyper = "0.14.27"
 tokio = { version = "1.32.0", features = ["full"] }
 tower = "0.4.13"
 tokio-test = "0.4.3"
+sqlx = { oversion = "0.7.2", features = [
+    "sqlite",
+    "time",
+    "uuid",
+    "runtime-tokio",
+] }
 
 [[example]]
 name = "sqlite-store"
-required-features = ["sqlx", "sqlite-store"]

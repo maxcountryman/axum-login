@@ -7,15 +7,10 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-mod auth;
-mod auth_state;
-#[cfg(feature = "sqlx-store")]
-mod sqlx_store;
+mod extract;
+mod service;
 mod user_store;
 
-pub use auth::{require_auth, Auth};
-pub use auth_state::AuthState;
-#[cfg(feature = "sqlite-store")]
-#[cfg_attr(docsrs, doc(cfg(feature = "sqlite-store")))]
-pub use sqlx_store::SqliteUserStore;
+pub use extract::{require_authn, require_authz};
+pub use service::{Auth, LoginManager, LoginManagerLayer};
 pub use user_store::UserStore;

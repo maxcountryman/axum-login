@@ -1,49 +1,43 @@
 use async_trait::async_trait;
-use axum::extract::FromRequestParts;
-use serde::{Deserialize, Serialize};
+use axum::{extract::FromRequestParts, middleware::Next, response::Response};
+use http::{request::Parts, Request, StatusCode};
+
+use crate::{service::Auth, user_store::UserStore};
 
 #[async_trait]
-impl<S, User, UserId, Store> FromRequestParts<S> for Auth<User, UserId, Store>
+impl<S, Users> FromRequestParts<S> for Auth<Users>
 where
     S: Send + Sync,
-    User: Serialize + for<'a> Deserialize<'a> + Clone + Send,
-    UserId: Serialize + for<'a> Deserialize<'a> + Clone + Send + Sync,
-    Store: UserStore<User, UserId> + Send + Sync,
-    AuthState<User, UserId, Store>: FromRef<S>,
+    Users: UserStore + Send + Sync,
 {
     type Rejection = (http::StatusCode, &'static str);
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let session = Session::from_request_parts(parts, state).await?;
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts.extensions.get::<Auth<_>>().cloned().ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Can't extract auth. Is `LoginManagerLayer` enabled?",
+        ))
+    }
+}
 
-        let mut auth_data: AuthData<User, UserId> = session
-            .get(Self::AUTH_DATA_KEY)
-            .expect("infallible")
-            .unwrap_or(AuthData {
-                user: None,
-                user_id: None,
-            });
+pub async fn require_authn<Users, B>(auth: Auth<Users>, req: Request<B>, next: Next<B>) -> Response
+where
+    Users: UserStore,
+    B: Send,
+{
+    match auth.user {
+        Some(user) if auth.user_store.is_authenticated(&user).await => next.run(req).await,
+        _ => auth.user_store.authentication_failure(req).await,
+    }
+}
 
-        let AuthState { user_store, .. } = AuthState::from_ref(state);
-
-        // Poll store to refresh current user.
-        if let Some(ref user_id) = auth_data.user_id {
-            match user_store.load(user_id).await {
-                Ok(user) => auth_data.user = user,
-
-                Err(_) => {
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        "Could not load from user store. Is the store online?",
-                    ))
-                }
-            }
-        };
-
-        Ok(Auth {
-            session,
-            auth_data,
-            user_store,
-        })
+pub async fn require_authz<Users: UserStore, B: Send>(
+    auth: Auth<Users>,
+    req: Request<B>,
+    next: Next<B>,
+) -> Response {
+    match auth.user {
+        Some(user) if auth.user_store.is_authorized(&user).await => next.run(req).await,
+        _ => auth.user_store.authorization_failure(req, auth.user).await,
     }
 }
