@@ -11,30 +11,33 @@ use tower_layer::Layer;
 use tower_service::Service;
 use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore};
 
-use crate::{Auth, UserStore};
+use crate::{AccessController, LoginSession};
 
 /// A middleware that provides [`Auth`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct LoginManager<S, Users: UserStore> {
+pub struct LoginManager<S, Controller: AccessController> {
     inner: S,
-    user_store: Users,
+    access_controller: Controller,
 }
 
-impl<S, Users: UserStore> LoginManager<S, Users> {
-    /// Create a new [`LoginManager`] with the provided user store..
-    pub fn new(inner: S, user_store: Users) -> Self {
-        Self { inner, user_store }
+impl<S, Controller: AccessController> LoginManager<S, Controller> {
+    /// Create a new [`LoginManager`] with the provided access controller.
+    pub fn new(inner: S, access_controller: Controller) -> Self {
+        Self {
+            inner,
+            access_controller,
+        }
     }
 }
 
-impl<ReqBody, ResBody, S, Users> Service<Request<ReqBody>> for LoginManager<S, Users>
+impl<ReqBody, ResBody, S, Controller> Service<Request<ReqBody>> for LoginManager<S, Controller>
 where
     S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
     S::Future: Send,
     ReqBody: Send + 'static,
     ResBody: Send,
-    Users: UserStore,
+    Controller: AccessController,
 {
     type Response = S::Response;
     type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -46,7 +49,7 @@ where
     }
 
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        let user_store = self.user_store.clone();
+        let access_controller = self.access_controller.clone();
 
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
@@ -57,9 +60,10 @@ where
                 .cloned()
                 .expect("Something has gone wrong with tower-sessions.");
 
-            let auth = Auth::from_session(session.clone(), user_store).await?;
+            let login_session =
+                LoginSession::from_session(session.clone(), access_controller).await?;
 
-            req.extensions_mut().insert(auth);
+            req.extensions_mut().insert(login_session);
 
             inner.call(req).await.map_err(Into::into)
         })
@@ -68,28 +72,33 @@ where
 
 /// A layer for providing [`Auth`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct LoginManagerLayer<Users: UserStore, Sessions: SessionStore> {
-    user_store: Users,
+pub struct LoginManagerLayer<Controller: AccessController, Sessions: SessionStore> {
+    access_controller: Controller,
     session_manager_layer: SessionManagerLayer<Sessions>,
 }
 
-impl<Users: UserStore, Sessions: SessionStore> LoginManagerLayer<Users, Sessions> {
-    /// Create a new [`LoginManagerLayer`] with the provided user store.
-    pub fn new(user_store: Users, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
+impl<Controller: AccessController, Sessions: SessionStore> LoginManagerLayer<Controller, Sessions> {
+    /// Create a new [`LoginManagerLayer`] with the provided access controller.
+    pub fn new(
+        access_controller: Controller,
+        session_manager_layer: SessionManagerLayer<Sessions>,
+    ) -> Self {
         Self {
-            user_store,
+            access_controller,
             session_manager_layer,
         }
     }
 }
 
-impl<S, Users: UserStore, Sessions: SessionStore> Layer<S> for LoginManagerLayer<Users, Sessions> {
-    type Service = CookieManager<SessionManager<LoginManager<S, Users>, Sessions>>;
+impl<S, Controller: AccessController, Sessions: SessionStore> Layer<S>
+    for LoginManagerLayer<Controller, Sessions>
+{
+    type Service = CookieManager<SessionManager<LoginManager<S, Controller>, Sessions>>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let login_manager = LoginManager {
             inner,
-            user_store: self.user_store.clone(),
+            access_controller: self.access_controller.clone(),
         };
 
         self.session_manager_layer.layer(login_manager)

@@ -1,21 +1,22 @@
 use axum::{middleware::Next, response::Response};
 use http::Request;
 
-use crate::{Auth, UserStore};
+use crate::{AccessController, LoginSession};
 
-/// Requires the user is authenticated according to the implementation of
-/// [`is_authn`](UserStore.is_authn).
+/// Requires the user is authenticated, which is indicated by the presense of a
+/// user on the login session.
 ///
 /// This is intended to be used with
 /// [`middleware::from_fn`](axum::middleware::from_fn).
-pub async fn require_authn<Users: UserStore, B: Send>(
-    auth: Auth<Users>,
+pub async fn require_authn<Controller: AccessController, B: Send>(
+    login_session: LoginSession<Controller>,
     req: Request<B>,
     next: Next<B>,
 ) -> Response {
-    match auth.user {
-        Some(user) if auth.user_store.is_authn(&user).await => next.run(req).await,
-        _ => auth.user_store.authn_failure(req).await,
+    if login_session.user.is_some() {
+        next.run(req).await
+    } else {
+        login_session.access_controller.authn_failure(req).await
     }
 }
 
@@ -24,13 +25,18 @@ pub async fn require_authn<Users: UserStore, B: Send>(
 ///
 /// This is intended to be used with
 /// [`middleware::from_fn`](axum::middleware::from_fn).
-pub async fn require_authz<Users: UserStore, B: Send>(
-    auth: Auth<Users>,
+pub async fn require_authz<Controller: AccessController, B: Send>(
+    login_session: LoginSession<Controller>,
     req: Request<B>,
     next: Next<B>,
 ) -> Response {
-    match auth.user {
-        Some(user) if auth.user_store.is_authz(&user).await => next.run(req).await,
-        _ => auth.user_store.authz_failure(req, auth.user).await,
+    match login_session.user {
+        Some(user) if login_session.access_controller.is_authz(&user).await => next.run(req).await,
+        _ => {
+            login_session
+                .access_controller
+                .authz_failure(req, login_session.user)
+                .await
+        }
     }
 }

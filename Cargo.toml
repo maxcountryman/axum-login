@@ -29,7 +29,7 @@ time = "0.3.29"
 tower-cookies = "0.9.0"
 tower-layer = "0.3.2"
 tower-service = "0.3.2"
-tower-sessions = "0.3.1"
+tower-sessions = "0.4.1"
 url = "2.4.1"
 
 [dev-dependencies]
@@ -44,6 +44,7 @@ sqlx = { version = "0.7.2", features = [
     "uuid",
     "runtime-tokio",
 ] }
+urlencoding = "2.1.3"
 
 [[example]]
-name = "sqlite-store"
+name = "sqlite"
