@@ -11,33 +11,30 @@ use tower_layer::Layer;
 use tower_service::Service;
 use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore};
 
-use crate::{AccessController, LoginSession};
+use crate::{AuthBackend, AuthSession};
 
-/// A middleware that provides [`Auth`] as a request extension.
+/// A middleware that provides [`AuthSession`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct LoginManager<S, Controller: AccessController> {
+pub struct AuthManager<S, Backend: AuthBackend> {
     inner: S,
-    access_controller: Controller,
+    backend: Backend,
 }
 
-impl<S, Controller: AccessController> LoginManager<S, Controller> {
-    /// Create a new [`LoginManager`] with the provided access controller.
-    pub fn new(inner: S, access_controller: Controller) -> Self {
-        Self {
-            inner,
-            access_controller,
-        }
+impl<S, Backend: AuthBackend> AuthManager<S, Backend> {
+    /// Create a new [`AuthManager`] with the provided access controller.
+    pub fn new(inner: S, backend: Backend) -> Self {
+        Self { inner, backend }
     }
 }
 
-impl<ReqBody, ResBody, S, Controller> Service<Request<ReqBody>> for LoginManager<S, Controller>
+impl<ReqBody, ResBody, S, Backend> Service<Request<ReqBody>> for AuthManager<S, Backend>
 where
     S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
     S::Future: Send,
     ReqBody: Send + 'static,
     ResBody: Send,
-    Controller: AccessController,
+    Backend: AuthBackend + 'static,
 {
     type Response = S::Response;
     type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -49,7 +46,7 @@ where
     }
 
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        let access_controller = self.access_controller.clone();
+        let backend = self.backend.clone();
 
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
@@ -60,45 +57,41 @@ where
                 .cloned()
                 .expect("Something has gone wrong with tower-sessions.");
 
-            let login_session =
-                LoginSession::from_session(session.clone(), access_controller).await?;
+            let auth_session = AuthSession::from_session(session.clone(), backend).await?;
 
-            req.extensions_mut().insert(login_session);
+            req.extensions_mut().insert(auth_session);
 
             inner.call(req).await.map_err(Into::into)
         })
     }
 }
 
-/// A layer for providing [`Auth`] as a request extension.
+/// A layer for providing [`AuthSession`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct LoginManagerLayer<Controller: AccessController, Sessions: SessionStore> {
-    access_controller: Controller,
+pub struct AuthManagerLayer<Backend: AuthBackend, Sessions: SessionStore> {
+    backend: Backend,
     session_manager_layer: SessionManagerLayer<Sessions>,
 }
 
-impl<Controller: AccessController, Sessions: SessionStore> LoginManagerLayer<Controller, Sessions> {
-    /// Create a new [`LoginManagerLayer`] with the provided access controller.
-    pub fn new(
-        access_controller: Controller,
-        session_manager_layer: SessionManagerLayer<Sessions>,
-    ) -> Self {
+impl<Backend: AuthBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Sessions> {
+    /// Create a new [`AuthManagerLayer`] with the provided access controller.
+    pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
         Self {
-            access_controller,
+            backend,
             session_manager_layer,
         }
     }
 }
 
-impl<S, Controller: AccessController, Sessions: SessionStore> Layer<S>
-    for LoginManagerLayer<Controller, Sessions>
+impl<S, Backend: AuthBackend, Sessions: SessionStore> Layer<S>
+    for AuthManagerLayer<Backend, Sessions>
 {
-    type Service = CookieManager<SessionManager<LoginManager<S, Controller>, Sessions>>;
+    type Service = CookieManager<SessionManager<AuthManager<S, Backend>, Sessions>>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let login_manager = LoginManager {
+        let login_manager = AuthManager {
             inner,
-            access_controller: self.access_controller.clone(),
+            backend: self.backend.clone(),
         };
 
         self.session_manager_layer.layer(login_manager)

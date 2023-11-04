@@ -1,16 +1,18 @@
-use std::net::SocketAddr;
+use std::{collections::HashSet, net::SocketAddr};
 
 use async_trait::async_trait;
 use axum::{
     error_handling::HandleErrorLayer,
     extract::Query,
-    middleware,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect},
     routing::get,
     BoxError, Router,
 };
-use axum_login::{require_authn, AccessController, LoginManagerLayer};
+use axum_login::{
+    login_required, permission_required, AuthBackend, AuthManagerLayer, AuthUser, UserId,
+};
 use http::{Request, StatusCode};
+use hyper::Body;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 use time::Duration;
@@ -33,12 +35,19 @@ impl UserBackend {
 }
 
 #[async_trait]
-impl AccessController for UserBackend {
+impl AuthBackend for UserBackend {
     type User = User;
-    type UserId = i64;
+    type Credentials = Option<()>;
+    type Permission = String;
     type Error = sqlx::Error;
 
-    async fn load_user(&self, user_id: &Self::UserId) -> Result<Option<Self::User>, Self::Error> {
+    async fn authenticate<B: Send>(
+        &self,
+        _req: Request<B>,
+        _creds: Self::Credentials,
+    ) -> Result<Option<Self::User>, Self::Error> {
+        // TODO: Use request to authenticate via a form.
+        let user_id = 42;
         let user = sqlx::query_as(&self.query)
             .bind(user_id)
             .fetch_optional(&self.pool)
@@ -47,10 +56,22 @@ impl AccessController for UserBackend {
         Ok(user)
     }
 
-    async fn authn_failure<B: Send>(&self, req: Request<B>) -> Response {
-        let uri_str = &req.uri().to_string();
-        let next = urlencoding::encode(uri_str);
-        Redirect::to(&format!("/login?next={}", next)).into_response()
+    async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+        let user = sqlx::query_as(&self.query)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(user)
+    }
+
+    async fn get_user_permissions(
+        &self,
+        _user: &Self::User,
+    ) -> Result<HashSet<Self::Permission>, Self::Error> {
+        let mut perms = HashSet::new();
+        perms.insert("plebe".to_string());
+        Ok(perms)
     }
 }
 
@@ -60,7 +81,19 @@ pub struct User {
     name: String,
 }
 
-type LoginSession = axum_login::LoginSession<UserBackend>;
+impl AuthUser for User {
+    type Id = i64;
+
+    fn id(&self) -> Self::Id {
+        42
+    }
+
+    fn session_auth_hash(&self) -> Vec<u8> {
+        "bogus".as_bytes().to_vec()
+    }
+}
+
+type AuthSession = axum_login::AuthSession<UserBackend>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -72,12 +105,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Login service.
     let pool = SqlitePool::connect("sqlite::memory:").await?;
-    let access_controller = UserBackend::new(pool.clone());
-    let login_service = ServiceBuilder::new()
+    let user_backend = UserBackend::new(pool.clone());
+    let auth_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_: BoxError| async {
             StatusCode::BAD_REQUEST
         }))
-        .layer(LoginManagerLayer::new(access_controller, session_layer));
+        .layer(AuthManagerLayer::new(user_backend, session_layer));
 
     // Set up example database.
     sqlx::query(r#"create table users (id integer primary key not null, name text not null)"#)
@@ -90,11 +123,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let app = Router::new()
+        .route("/perms", get(admin_handler))
+        .route_layer(permission_required!(
+            UserBackend,
+            login_url = "/login",
+            "plebe".to_string()
+        ))
         .route("/admin", get(admin_handler))
-        .route_layer(middleware::from_fn(require_authn::<UserBackend, _>))
+        .route_layer(login_required!(UserBackend, login_url = "/login"))
         .route("/login", get(login_handler))
         .route("/logout", get(logout_handler))
-        .layer(login_service);
+        .layer(auth_service);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     axum::Server::bind(&addr)
@@ -110,36 +149,38 @@ struct NextUri {
 }
 
 async fn login_handler(
-    mut login_session: LoginSession,
+    mut auth_session: AuthSession,
     Query(NextUri { next }): Query<NextUri>,
+    req: Request<Body>,
 ) -> impl IntoResponse {
-    match login_session.login(&42).await {
-        // User was found and set as logged in.
-        Ok(Some(user)) => {
-            if let Some(next) = next {
-                Redirect::to(&next).into_response()
-            } else {
-                format!("Logged in as: {}", user.name).into_response()
-            }
-        }
+    let user = match auth_session.authenticate(req, None).await {
+        Ok(Some(user)) => user,
 
-        // The user didn't exist in our store.
-        Ok(None) => StatusCode::UNAUTHORIZED.into_response(),
+        Ok(None) => return StatusCode::UNAUTHORIZED.into_response(),
 
-        // Our store failed for some reason.
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if auth_session.login(&user).await.is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    if let Some(next) = next {
+        Redirect::to(&next).into_response()
+    } else {
+        format!("Logged in as: {}", user.name).into_response()
     }
 }
 
-async fn logout_handler(mut login_session: LoginSession) -> impl IntoResponse {
-    match login_session.logout() {
+async fn logout_handler(mut auth_session: AuthSession) -> impl IntoResponse {
+    match auth_session.logout() {
         Ok(_) => "Logged out.".into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
-async fn admin_handler(login_session: LoginSession, session: Session) -> impl IntoResponse {
-    match login_session.user {
+async fn admin_handler(auth_session: AuthSession, session: Session) -> impl IntoResponse {
+    match auth_session.user {
         Some(user) => {
             let mut visits: usize = session.get("visits").unwrap().unwrap_or_default();
             visits += 1;
