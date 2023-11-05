@@ -8,6 +8,7 @@ macro_rules! login_required {
             $login_url,
             "next",
             |auth_session: $crate::AuthSession<$backend_type>| async move {
+                dbg!(&auth_session.user);
                 auth_session.user.is_some()
             }
         );

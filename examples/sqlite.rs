@@ -4,15 +4,15 @@ use async_trait::async_trait;
 use axum::{
     error_handling::HandleErrorLayer,
     extract::Query,
-    response::{IntoResponse, Redirect},
-    routing::get,
-    BoxError, Router,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::{get, post},
+    BoxError, Form, Router,
 };
 use axum_login::{
     login_required, permission_required, AuthBackend, AuthManagerLayer, AuthUser, UserId,
+    WithPermissions,
 };
-use http::{Request, StatusCode};
-use hyper::Body;
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 use time::Duration;
@@ -29,27 +29,31 @@ impl UserBackend {
     pub fn new(pool: SqlitePool) -> Self {
         Self {
             pool,
-            query: String::from("select * from users where id = ?"),
+            query: String::from("select * from users where username = ? and password = ?"),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Credentials {
+    username: String,
+    password: String,
+    next: Option<String>,
 }
 
 #[async_trait]
 impl AuthBackend for UserBackend {
     type User = User;
-    type Credentials = Option<()>;
-    type Permission = String;
+    type Credentials = Credentials;
     type Error = sqlx::Error;
 
-    async fn authenticate<B: Send>(
+    async fn authenticate(
         &self,
-        _req: Request<B>,
-        _creds: Self::Credentials,
+        creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        // TODO: Use request to authenticate via a form.
-        let user_id = 42;
-        let user = sqlx::query_as(&self.query)
-            .bind(user_id)
+        let user = sqlx::query_as("select * from users where username = ? and password = ?")
+            .bind(creds.username)
+            .bind(creds.password)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -57,13 +61,18 @@ impl AuthBackend for UserBackend {
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = sqlx::query_as(&self.query)
+        let user = sqlx::query_as("select * from users where id = ?")
             .bind(user_id)
             .fetch_optional(&self.pool)
             .await?;
 
         Ok(user)
     }
+}
+
+#[async_trait]
+impl WithPermissions for UserBackend {
+    type Permission = String;
 
     async fn get_user_permissions(
         &self,
@@ -78,7 +87,8 @@ impl AuthBackend for UserBackend {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
     id: i64,
-    name: String,
+    username: String,
+    password: String,
 }
 
 impl AuthUser for User {
@@ -89,7 +99,7 @@ impl AuthUser for User {
     }
 
     fn session_auth_hash(&self) -> Vec<u8> {
-        "bogus".as_bytes().to_vec()
+        self.password.as_bytes().to_vec()
     }
 }
 
@@ -113,12 +123,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(AuthManagerLayer::new(user_backend, session_layer));
 
     // Set up example database.
-    sqlx::query(r#"create table users (id integer primary key not null, name text not null)"#)
+    sqlx::query(r#"create table users (id integer primary key not null, username text not null, password text not null)"#)
         .execute(&pool)
         .await?;
-    sqlx::query(r#"insert into users (id, name) values (?, ?)"#)
+    sqlx::query(r#"insert into users (id, username, password) values (?, ?, ?)"#)
         .bind(42)
-        .bind("Ferris")
+        .bind("ferris")
+        .bind("hunter42")
         .execute(&pool)
         .await?;
 
@@ -131,7 +142,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ))
         .route("/admin", get(admin_handler))
         .route_layer(login_required!(UserBackend, login_url = "/login"))
-        .route("/login", get(login_handler))
+        .route("/login", post(login_handler))
+        .route("/login", get(login_view_handler))
         .route("/logout", get(logout_handler))
         .layer(auth_service);
 
@@ -148,12 +160,50 @@ struct NextUri {
     next: Option<String>,
 }
 
+async fn login_view_handler(Query(NextUri { next }): Query<NextUri>) -> Html<String> {
+    let next_html = if let Some(next) = next {
+        format!(r#"<input type="hidden" name="next" value="{}">"#, next)
+    } else {
+        String::default()
+    };
+
+    let html = format!(
+        r#"
+        <html>
+        <head>
+            <title>Login</title>
+        </head>
+        <body>
+            <form method="post" action="/login">
+            <table>
+            <tr>
+                <td>Username</td>
+                <td><input name="username"></td>
+            </tr>
+            <tr>
+                <td>Password</td>
+                <td><input name="password" type="password"></td>
+            </tr>
+            </table>
+
+            <input type="submit" value="login">
+            {}
+            </form>
+        </body>
+        </html>
+    "#,
+        next_html
+    );
+
+    Html(html)
+}
+
 async fn login_handler(
     mut auth_session: AuthSession,
-    Query(NextUri { next }): Query<NextUri>,
-    req: Request<Body>,
+    Form(creds): Form<Credentials>,
 ) -> impl IntoResponse {
-    let user = match auth_session.authenticate(req, None).await {
+    dbg!(&creds);
+    let user = match auth_session.authenticate(creds.clone()).await {
         Ok(Some(user)) => user,
 
         Ok(None) => return StatusCode::UNAUTHORIZED.into_response(),
@@ -165,10 +215,10 @@ async fn login_handler(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    if let Some(next) = next {
-        Redirect::to(&next).into_response()
+    if let Some(ref next) = creds.next {
+        Redirect::to(next).into_response()
     } else {
-        format!("Logged in as: {}", user.name).into_response()
+        format!("Logged in as: {}", user.username).into_response()
     }
 }
 
@@ -187,7 +237,7 @@ async fn admin_handler(auth_session: AuthSession, session: Session) -> impl Into
             session.insert("visits", visits).unwrap();
             format!(
                 "Hi, {}! You've visited this page {} times.",
-                user.name, visits
+                user.username, visits
             )
             .into_response()
         }

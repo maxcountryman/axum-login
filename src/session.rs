@@ -58,14 +58,13 @@ pub struct AuthSession<Backend: AuthBackend> {
 impl<Backend: AuthBackend> AuthSession<Backend> {
     const DATA_KEY: &'static str = "axum-login.data";
 
-    pub async fn authenticate<B: Send>(
+    pub async fn authenticate(
         &self,
-        req: Request<B>,
         creds: Backend::Credentials,
     ) -> Result<Option<Backend::User>, Error<Backend>> {
         Ok(self
             .backend
-            .authenticate(req, creds)
+            .authenticate(creds)
             .await
             .map_err(Error::Backend)?)
     }

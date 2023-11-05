@@ -17,12 +17,12 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-pub use backend::{AuthBackend, AuthUser, UserId};
+pub use backend::{AuthBackend, AuthUser, UserId, WithPermissions};
 pub use service::{AuthManager, AuthManagerLayer};
 pub use session::AuthSession;
 
 mod backend;
 mod extract;
-pub mod middleware;
+mod middleware;
 mod service;
 mod session;

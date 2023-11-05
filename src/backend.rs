@@ -19,16 +19,22 @@ pub trait AuthUser: Clone + Send + Sync {
 pub trait AuthBackend: Clone + Send + Sync {
     type User: AuthUser;
     type Credentials: Clone + Send + Sync;
-    type Permission: Hash + Eq + Clone + Send + Sync;
     type Error: std::error::Error + Send + Sync;
 
-    async fn authenticate<B: Send>(
+    async fn authenticate(
         &self,
-        req: Request<B>,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error>;
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error>;
+}
+
+#[async_trait]
+pub trait WithPermissions: Clone + Send + Sync
+where
+    Self: AuthBackend,
+{
+    type Permission: Hash + Eq + Clone + Send + Sync;
 
     async fn get_user_permissions(
         &self,
