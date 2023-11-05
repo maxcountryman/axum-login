@@ -1,8 +1,6 @@
 use std::{collections::HashSet, hash::Hash};
 
 use async_trait::async_trait;
-use http::Request;
-use secrecy::SecretVec;
 use serde::{Deserialize, Serialize};
 
 pub type UserId<Backend> = <<Backend as AuthBackend>::User as AuthUser>::Id;

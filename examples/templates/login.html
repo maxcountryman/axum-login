@@ -1,0 +1,30 @@
+<html>
+  <head>
+    <title>Login</title>
+  </head>
+
+  <body>
+    {% if message.is_some() %}
+    <span><strong>{{ message.clone().unwrap() }}</strong></span>
+    {% endif %}
+
+    <form method="post">
+      <table>
+        <tr>
+          <td>Username</td>
+          <td><input name="username" /></td>
+        </tr>
+        <tr>
+          <td>Password</td>
+          <td><input name="password" type="password" /></td>
+        </tr>
+      </table>
+
+      <input type="submit" value="login" />
+
+      {% if next.is_some() %}
+      <input type="hidden" name="next" value="{{next.clone().unwrap()}}" />
+      {% endif %}
+    </form>
+  </body>
+</html>

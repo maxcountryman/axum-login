@@ -25,7 +25,6 @@ axum = { version = "0.6.20", default-features = false }
 futures = "0.3.29"
 http = "0.2.9"
 ring = "0.17.5"
-secrecy = "0.8.0"
 serde = "1"
 thiserror = "1.0.49"
 time = "0.3.29"
@@ -42,12 +41,9 @@ hyper = "0.14.27"
 tokio = { version = "1.32.0", features = ["full"] }
 tower = "0.4.13"
 tokio-test = "0.4.3"
-sqlx = { version = "0.7.2", features = [
-    "sqlite",
-    "time",
-    "uuid",
-    "runtime-tokio",
-] }
+sqlx = { version = "0.7.2", features = ["sqlite", "time", "runtime-tokio"] }
+askama = { version = "0.12.1", features = ["with-axum"] }
+askama_axum = "0.3.0"
 
 [[example]]
 name = "sqlite"

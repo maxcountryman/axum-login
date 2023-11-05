@@ -1,5 +1,3 @@
-use crate::{AuthBackend, AuthSession};
-
 #[macro_export]
 macro_rules! login_required {
     ($backend_type:ty, login_url = $login_url:expr) => {
@@ -8,7 +6,6 @@ macro_rules! login_required {
             $login_url,
             "next",
             |auth_session: $crate::AuthSession<$backend_type>| async move {
-                dbg!(&auth_session.user);
                 auth_session.user.is_some()
             }
         );
@@ -28,7 +25,7 @@ macro_rules! login_required {
 
 #[macro_export]
 macro_rules! permission_required {
-    ($backend_type:ty,  login_url = $login_url:expr, $($perm:expr),*) => {
+    ($backend_type:ty,  login_url = $login_url:expr, $($perm:expr),+) => {
         $crate::predicate_required!(
             $backend_type,
             $login_url,
@@ -38,7 +35,7 @@ macro_rules! permission_required {
                     let mut has_all_permissions = true;
                     $(
                         has_all_permissions = has_all_permissions && auth_session.backend.has_perm(user, $perm).await.unwrap_or(false);
-                    )*
+                    )+
                     has_all_permissions
 
                 } else {
@@ -53,7 +50,6 @@ macro_rules! permission_required {
     };
 }
 
-#[doc(hidden)]
 #[macro_export]
 macro_rules! predicate_required {
     ($backend_type:ty, $login_url:expr, $redirect_field:expr, $predicate:expr) => {{
