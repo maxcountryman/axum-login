@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use axum::extract::FromRequestParts;
 use http::{request::Parts, StatusCode};
 
-use crate::{AuthBackend, AuthSession};
+use crate::{AuthSession, AuthnBackend};
 
 #[async_trait]
 impl<S, Backend> FromRequestParts<S> for AuthSession<Backend>
 where
     S: Send + Sync,
-    Backend: AuthBackend + Send + Sync + 'static,
+    Backend: AuthnBackend + Send + Sync + 'static,
 {
     type Rejection = (http::StatusCode, &'static str);
 

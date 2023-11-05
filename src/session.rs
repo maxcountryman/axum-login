@@ -1,18 +1,17 @@
 use std::fmt::Debug;
 
-use http::Request;
 use ring::constant_time::verify_slices_are_equal;
 use serde::{Deserialize, Serialize};
 use tower_sessions::{session, Session};
 
 use crate::{
     backend::{AuthUser, UserId},
-    AuthBackend,
+    AuthnBackend,
 };
 
 /// An error type to map session and access controller errors.
 #[derive(thiserror::Error)]
-pub enum Error<Backend: AuthBackend> {
+pub enum Error<Backend: AuthnBackend> {
     #[error(transparent)]
     Session(session::Error),
 
@@ -20,7 +19,7 @@ pub enum Error<Backend: AuthBackend> {
     Backend(Backend::Error),
 }
 
-impl<Backend: AuthBackend> Debug for Error<Backend> {
+impl<Backend: AuthnBackend> Debug for Error<Backend> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Session(err) => write!(f, "{:?}", err)?,
@@ -47,7 +46,7 @@ impl<UserId: Clone> Default for Data<UserId> {
 }
 
 #[derive(Clone)]
-pub struct AuthSession<Backend: AuthBackend> {
+pub struct AuthSession<Backend: AuthnBackend> {
     pub user: Option<Backend::User>,
     pub backend: Backend,
 
@@ -55,7 +54,7 @@ pub struct AuthSession<Backend: AuthBackend> {
     session: Session,
 }
 
-impl<Backend: AuthBackend> AuthSession<Backend> {
+impl<Backend: AuthnBackend> AuthSession<Backend> {
     const DATA_KEY: &'static str = "axum-login.data";
 
     pub async fn authenticate(

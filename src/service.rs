@@ -11,16 +11,16 @@ use tower_layer::Layer;
 use tower_service::Service;
 use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore};
 
-use crate::{AuthBackend, AuthSession};
+use crate::{AuthSession, AuthnBackend};
 
 /// A middleware that provides [`AuthSession`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct AuthManager<S, Backend: AuthBackend> {
+pub struct AuthManager<S, Backend: AuthnBackend> {
     inner: S,
     backend: Backend,
 }
 
-impl<S, Backend: AuthBackend> AuthManager<S, Backend> {
+impl<S, Backend: AuthnBackend> AuthManager<S, Backend> {
     /// Create a new [`AuthManager`] with the provided access controller.
     pub fn new(inner: S, backend: Backend) -> Self {
         Self { inner, backend }
@@ -34,7 +34,7 @@ where
     S::Future: Send,
     ReqBody: Send + 'static,
     ResBody: Send,
-    Backend: AuthBackend + 'static,
+    Backend: AuthnBackend + 'static,
 {
     type Response = S::Response;
     type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -68,12 +68,12 @@ where
 
 /// A layer for providing [`AuthSession`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct AuthManagerLayer<Backend: AuthBackend, Sessions: SessionStore> {
+pub struct AuthManagerLayer<Backend: AuthnBackend, Sessions: SessionStore> {
     backend: Backend,
     session_manager_layer: SessionManagerLayer<Sessions>,
 }
 
-impl<Backend: AuthBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Sessions> {
+impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Sessions> {
     /// Create a new [`AuthManagerLayer`] with the provided access controller.
     pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
         Self {
@@ -83,7 +83,7 @@ impl<Backend: AuthBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Ses
     }
 }
 
-impl<S, Backend: AuthBackend, Sessions: SessionStore> Layer<S>
+impl<S, Backend: AuthnBackend, Sessions: SessionStore> Layer<S>
     for AuthManagerLayer<Backend, Sessions>
 {
     type Service = CookieManager<SessionManager<AuthManager<S, Backend>, Sessions>>;

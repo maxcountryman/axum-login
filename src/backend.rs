@@ -3,7 +3,7 @@ use std::{collections::HashSet, hash::Hash};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-pub type UserId<Backend> = <<Backend as AuthBackend>::User as AuthUser>::Id;
+pub type UserId<Backend> = <<Backend as AuthnBackend>::User as AuthUser>::Id;
 
 pub trait AuthUser: Clone + Send + Sync {
     type Id: Clone + Send + Sync + Serialize + for<'de> Deserialize<'de>;
@@ -14,7 +14,7 @@ pub trait AuthUser: Clone + Send + Sync {
 }
 
 #[async_trait]
-pub trait AuthBackend: Clone + Send + Sync {
+pub trait AuthnBackend: Clone + Send + Sync {
     type User: AuthUser;
     type Credentials: Clone + Send + Sync;
     type Error: std::error::Error + Send + Sync;
@@ -28,9 +28,9 @@ pub trait AuthBackend: Clone + Send + Sync {
 }
 
 #[async_trait]
-pub trait WithPermissions: Clone + Send + Sync
+pub trait AuthzBackend: Clone + Send + Sync
 where
-    Self: AuthBackend,
+    Self: AuthnBackend,
 {
     type Permission: Hash + Eq + Clone + Send + Sync;
 

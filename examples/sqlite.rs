@@ -9,7 +9,7 @@ use axum::{
     routing::{get, post},
     BoxError, Form, Router,
 };
-use axum_login::{login_required, AuthBackend, AuthManagerLayer, AuthUser, UserId};
+use axum_login::{login_required, AuthManagerLayer, AuthUser, AuthnBackend, UserId};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
@@ -17,15 +17,17 @@ use time::Duration;
 use tower::ServiceBuilder;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 
-#[derive(Debug, Clone)]
-pub struct Backend {
-    pool: SqlitePool,
+#[derive(Template)]
+#[template(path = "login.html")]
+struct LoginTemplate {
+    message: Option<String>,
+    next: Option<String>,
 }
 
-impl Backend {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
-    }
+#[derive(Template)]
+#[template(path = "protected.html")]
+struct ProtectedTemplate<'a> {
+    username: &'a str,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,8 +42,19 @@ pub struct Credentials {
     next: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Backend {
+    pool: SqlitePool,
+}
+
+impl Backend {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
 #[async_trait]
-impl AuthBackend for Backend {
+impl AuthnBackend for Backend {
     type User = User;
     type Credentials = Credentials;
     type Error = sqlx::Error;
@@ -50,6 +63,11 @@ impl AuthBackend for Backend {
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
+        // **NEVER** store plaintext passwords!
+        //
+        // Instead a real application should store a password hash.
+        //
+        // For example, `argon2` is an excellent password hashing function.
         let user = sqlx::query_as("select * from users where username = ? and password = ?")
             .bind(creds.username)
             .bind(creds.password)
@@ -90,68 +108,63 @@ impl AuthUser for User {
 
 type AuthSession = axum_login::AuthSession<Backend>;
 
-#[derive(Template)]
-#[template(path = "login.html")]
-struct LoginTemplate {
-    message: Option<String>,
-    next: Option<String>,
-}
+mod post_handlers {
+    use super::*;
 
-#[derive(Template)]
-#[template(path = "protected.html")]
-struct ProtectedTemplate<'a> {
-    username: &'a str,
-}
-
-async fn get_login_handler(Query(NextUri { next }): Query<NextUri>) -> LoginTemplate {
-    LoginTemplate {
-        message: None,
-        next,
-    }
-}
-
-async fn post_login_handler(
-    mut auth_session: AuthSession,
-    Form(creds): Form<Credentials>,
-) -> impl IntoResponse {
-    let user = match auth_session.authenticate(creds.clone()).await {
-        Ok(Some(user)) => user,
-        Ok(None) => {
-            return LoginTemplate {
-                message: Some("Invalid credentials.".to_string()),
-                next: creds.next,
+    pub async fn login(
+        mut auth_session: AuthSession,
+        Form(creds): Form<Credentials>,
+    ) -> impl IntoResponse {
+        let user = match auth_session.authenticate(creds.clone()).await {
+            Ok(Some(user)) => user,
+            Ok(None) => {
+                return LoginTemplate {
+                    message: Some("Invalid credentials.".to_string()),
+                    next: creds.next,
+                }
+                .into_response()
             }
-            .into_response()
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+
+        if auth_session.login(&user).await.is_err() {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
 
-    if auth_session.login(&user).await.is_err() {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
-
-    if let Some(ref next) = creds.next {
-        Redirect::to(next).into_response()
-    } else {
-        Redirect::to("/").into_response()
+        if let Some(ref next) = creds.next {
+            Redirect::to(next).into_response()
+        } else {
+            Redirect::to("/").into_response()
+        }
     }
 }
 
-async fn logout_handler(mut auth_session: AuthSession) -> impl IntoResponse {
-    match auth_session.logout() {
-        Ok(_) => Redirect::to("/login").into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
+mod get_handlers {
+    use super::*;
 
-async fn protected_handler(auth_session: AuthSession) -> impl IntoResponse {
-    match auth_session.user {
-        Some(user) => ProtectedTemplate {
-            username: &user.username,
+    pub async fn login(Query(NextUri { next }): Query<NextUri>) -> LoginTemplate {
+        LoginTemplate {
+            message: None,
+            next,
         }
-        .into_response(),
+    }
 
-        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
+        match auth_session.logout() {
+            Ok(_) => Redirect::to("/login").into_response(),
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
+
+    pub async fn protected(auth_session: AuthSession) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => ProtectedTemplate {
+                username: &user.username,
+            }
+            .into_response(),
+
+            None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
     }
 }
 
@@ -173,11 +186,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(AuthManagerLayer::new(backend, session_layer));
 
     let app = Router::new()
-        .route("/", get(protected_handler))
+        .route("/", get(get_handlers::protected))
         .route_layer(login_required!(Backend, login_url = "/login"))
-        .route("/login", post(post_login_handler))
-        .route("/login", get(get_login_handler))
-        .route("/logout", get(logout_handler))
+        .route("/login", post(post_handlers::login))
+        .route("/login", get(get_handlers::login))
+        .route("/logout", get(get_handlers::logout))
         .layer(auth_service);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
