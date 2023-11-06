@@ -56,7 +56,7 @@ axum-login = "0.7.0"
 
 ## 🤸 Usage
 
-We recommend reviewing our [`sqlite` example][sqlite-example] as well as reading the documentation.
+We recommend reviewing our [`sqlite` example][sqlite-example].
 
 > [!NOTE]
 > See the [crate documentation][docs] for usage information.
@@ -67,7 +67,7 @@ This crate uses `#![forbid(unsafe_code)]` to ensure everything is implemented in
 
 ## 🛟 Getting Help
 
-We've put together a number of [examples][examples] to help get you started. You're also welcome to [open a discussion](https://github.com/maxcountryman/tower-sessions/discussions/new?category=q-a) and ask additional questions you might have.
+We've put together a number of [examples][examples] to help get you started. You're also welcome to [open a discussion](https://github.com/maxcountryman/axum-login/discussions/new?category=q-a) and ask additional questions you might have.
 
 ## 👯 Contributing
 
