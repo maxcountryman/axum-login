@@ -72,9 +72,33 @@ jobs:
           name: coverage-artifacts-doc
           path: coverage-artifacts/doc
 
+  test-integration:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup toolchain install stable --profile minimal
+          cargo install cargo-tarpaulin
+      - uses: Swatinem/rust-cache@v2
+      - name: Run integration tests
+        run: |
+          cargo test --test integration-test
+      - name: Generate code coverage
+        run: |
+          output_dir="./coverage/integration"
+          cargo tarpaulin -olcov --test integration-test --output-dir $output_dir
+          mkdir -p coverage-artifacts/integration
+          mv $output_dir coverage-artifacts/integration/
+      - uses: actions/upload-artifact@v3
+        with:
+          name: coverage-artifacts-integration
+          path: coverage-artifacts/integration
+
 upload-coverage:
   needs:
     - test-docs
+    - test-integration
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
