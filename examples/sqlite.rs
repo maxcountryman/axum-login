@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{fmt::Debug, net::SocketAddr};
 
 use askama::Template;
 use async_trait::async_trait;
@@ -31,7 +31,7 @@ struct ProtectedTemplate<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-struct NextUri {
+struct NextUrl {
     next: Option<String>,
 }
 
@@ -40,6 +40,35 @@ pub struct Credentials {
     username: String,
     password: String,
     next: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+pub struct User {
+    id: i64,
+    username: String,
+    password: String,
+}
+
+impl Debug for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("User")
+            .field("id", &self.id)
+            .field("username", &self.username)
+            .field("password", &"[redacted]")
+            .finish()
+    }
+}
+
+impl AuthUser for User {
+    type Id = i64;
+
+    fn id(&self) -> Self::Id {
+        self.id
+    }
+
+    fn session_auth_hash(&self) -> &[u8] {
+        self.password.as_bytes()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -87,25 +116,6 @@ impl AuthnBackend for Backend {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct User {
-    id: i64,
-    username: String,
-    password: String,
-}
-
-impl AuthUser for User {
-    type Id = i64;
-
-    fn id(&self) -> Self::Id {
-        self.id
-    }
-
-    fn session_auth_hash(&self) -> Vec<u8> {
-        self.password.as_bytes().to_vec()
-    }
-}
-
 type AuthSession = axum_login::AuthSession<Backend>;
 
 mod post_handlers {
@@ -142,7 +152,7 @@ mod post_handlers {
 mod get_handlers {
     use super::*;
 
-    pub async fn login(Query(NextUri { next }): Query<NextUri>) -> LoginTemplate {
+    pub async fn login(Query(NextUrl { next }): Query<NextUrl>) -> LoginTemplate {
         LoginTemplate {
             message: None,
             next,
@@ -170,6 +180,15 @@ mod get_handlers {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::new(std::env::var("RUST_LOG").unwrap_or_else(
+            |_| "axum_login=debug,sqlx=warn,tower_http=debug".into(),
+        )))
+        .with(tracing_subscriber::fmt::layer())
+        .try_init()?;
+
     // Session layer.
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)

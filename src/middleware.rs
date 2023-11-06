@@ -1,13 +1,6 @@
+/// A middleware that requires login.
 #[macro_export]
 macro_rules! login_required {
-    ($backend_type:ty, login_url = $login_url:expr) => {
-        $crate::login_required!(
-            $backend_type,
-            login_url = $login_url,
-            redirect_field = "next"
-        )
-    };
-
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
         async fn is_authenticated(
             auth_session: $crate::AuthSession<$backend_type>,
@@ -17,8 +10,17 @@ macro_rules! login_required {
 
         $crate::predicate_required!($backend_type, $login_url, $redirect_field, is_authenticated)
     }};
+
+    ($backend_type:ty, login_url = $login_url:expr) => {
+        $crate::login_required!(
+            $backend_type,
+            login_url = $login_url,
+            redirect_field = "next"
+        )
+    };
 }
 
+/// A middleware that requires the given permissions.
 #[macro_export]
 macro_rules! permission_required {
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+) => {{
@@ -43,16 +45,25 @@ macro_rules! permission_required {
         )
     }};
 
-    ($backend_type:ty, login_url = $login_url:expr, $($perm:expr),+) => {{
+    ($backend_type:ty, login_url = $login_url:expr, $($perm:expr),+) => {
         $crate::permission_required!(
             $backend_type,
             login_url = $login_url,
             redirect_field = "next",
             $($perm),+
         )
-    }};
+    };
 }
 
+/// A middleware which processes the request if the predicate is `true` and does
+/// not error.
+///
+/// Takes a backend type (i.e. a type that implements `AuthnBackend`), a login
+/// URL, a redirect field and a predicate.
+///
+/// The predicate should be an async function that takes `AuthSession` and
+/// returns a result which is either a boolean or in the case of an error some
+/// type that implements `IntoResponse`.
 #[macro_export]
 macro_rules! predicate_required {
     ($backend_type:ty, $login_url:expr, $redirect_field:expr, $predicate:expr) => {{

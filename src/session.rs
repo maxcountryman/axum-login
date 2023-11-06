@@ -9,7 +9,7 @@ use crate::{
     AuthnBackend,
 };
 
-/// An error type to map session and access controller errors.
+/// An error type which maps session and backend errors.
 #[derive(thiserror::Error)]
 pub enum Error<Backend: AuthnBackend> {
     #[error(transparent)]
@@ -45,9 +45,30 @@ impl<UserId: Clone> Default for Data<UserId> {
     }
 }
 
-#[derive(Clone)]
+/// A specialized session for identification, authentication, and authorization
+/// of users associated with a backend.
+///
+/// The session is generic over some backend which implements [`AuthnBackend`].
+/// The backend may also implement [`AuthzBackend`](crate::AuthzBackend),
+/// in which case it will also supply authorization methods.
+///
+/// Methods for authenticating the session and logging a user in are provided.
+///
+/// Generally this session will be used in the context of some authentication
+/// workflow, for example via a frontend login form. There a user would provide
+/// their credentails, such as username and password, and via the backend
+/// the session would authenticate those credentials.
+///
+/// Once the supplied credentials have been authenticated, a user will be
+/// returned. In the case the credentials are invalid, no user will be returned.
+/// When we do have a user, it's then possible to set the state of the session
+/// so that the user is logged in.
+#[derive(Debug, Clone)]
 pub struct AuthSession<Backend: AuthnBackend> {
+    /// The user associated by the backend. `None` when not logged in.
     pub user: Option<Backend::User>,
+
+    /// The authentication and authorization backend.
     pub backend: Backend,
 
     data: Data<UserId<Backend>>,
@@ -57,21 +78,32 @@ pub struct AuthSession<Backend: AuthnBackend> {
 impl<Backend: AuthnBackend> AuthSession<Backend> {
     const DATA_KEY: &'static str = "axum-login.data";
 
+    /// Verifies the provided credentials via the backend returning the
+    /// authenticated user if valid and otherwise `None`.
+    #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
     pub async fn authenticate(
         &self,
         creds: Backend::Credentials,
     ) -> Result<Option<Backend::User>, Error<Backend>> {
-        Ok(self
+        let result = self
             .backend
             .authenticate(creds)
             .await
-            .map_err(Error::Backend)?)
+            .map_err(Error::Backend);
+
+        if let Ok(Some(ref user)) = result {
+            tracing::Span::current().record("user.id", user.id().to_string());
+        }
+
+        result
     }
 
+    /// Updates the session such that the user is logged in.
+    #[tracing::instrument(level = "debug", skip_all, fields(user.id = user.id().to_string()), ret, err)]
     pub async fn login(&mut self, user: &Backend::User) -> Result<(), Error<Backend>> {
         self.user = Some(user.clone());
         self.data.user_id = Some(user.id());
-        self.data.auth_hash = Some(user.session_auth_hash());
+        self.data.auth_hash = Some(user.session_auth_hash().to_owned());
         self.session.cycle_id(); // Session-fixation mitigation.
 
         self.update_session().map_err(Error::Session)?;
@@ -79,14 +111,22 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         Ok(())
     }
 
+    /// Updates the session such that the user is logged out.
+    #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
     pub fn logout(&mut self) -> Result<Option<Backend::User>, Error<Backend>> {
+        let user = self.user.clone();
+
+        if let Some(ref user) = user {
+            tracing::Span::current().record("user.id", user.id().to_string());
+        }
+
         self.user = None;
         self.data = Data::default();
         self.session.flush();
 
         self.update_session().map_err(Error::Session)?;
 
-        Ok(self.user.clone())
+        Ok(user.clone())
     }
 
     fn update_session(&mut self) -> Result<(), session::Error> {
@@ -112,7 +152,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             .auth_hash
             .clone()
             .and_then(|user_hash| {
-                verify_slices_are_equal(&user_hash[..], &user.clone()?.session_auth_hash()).ok()
+                verify_slices_are_equal(&user_hash[..], user.clone()?.session_auth_hash()).ok()
             })
             .is_some();
 
