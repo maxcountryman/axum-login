@@ -67,4 +67,11 @@ async fn sqlite_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{}/", URL));
+
+    // Log out and check the cookie has been removed in response.
+    let res = client.get(format!("{}/logout", URL)).send().await.unwrap();
+    assert!(res
+        .cookies()
+        .find(|c| c.name() == "tower.sid")
+        .is_some_and(|c| c.value() == ""));
 }
