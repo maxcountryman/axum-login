@@ -19,7 +19,7 @@ use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 
 #[derive(Template)]
 #[template(path = "login.html")]
-struct LoginTemplate {
+pub struct LoginTemplate {
     message: Option<String>,
     next: Option<String>,
 }
@@ -31,7 +31,7 @@ struct ProtectedTemplate<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-struct NextUrl {
+pub struct NextUrl {
     next: Option<String>,
 }
 

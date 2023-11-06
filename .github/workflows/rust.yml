@@ -8,31 +8,22 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
   check:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        pwd:
-          - .
-          - examples
 
     steps:
       - uses: actions/checkout@v4
       - run: |
           rustup toolchain install nightly --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.pwd }}
-          workspaces: ${{ matrix.pwd }}
       - name: clippy
-        working-directory: ${{ matrix.pwd }}
         run: |
           cargo clippy --all --all-targets --all-features -- -Dwarnings
       - name: rustfmt
-        working-directory: ${{ matrix.pwd }}
         run: |
           cargo fmt --all -- --check
 
