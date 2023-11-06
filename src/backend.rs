@@ -70,7 +70,7 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 /// use async_trait::async_trait;
 /// use axum_login::{AuthUser, AuthnBackend, UserId};
 ///
-/// #[derive(Clone)]
+/// #[derive(Debug, Clone)]
 /// struct User {
 ///     id: i64,
 ///     pw_hash: Vec<u8>,

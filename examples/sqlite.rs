@@ -195,7 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_secure(false)
         .with_expiry(Expiry::OnInactivity(Duration::days(1)));
 
-    // Login service.
+    // Auth service.
     let pool = SqlitePool::connect("sqlite:examples/example.db").await?;
     let backend = Backend::new(pool.clone());
     let auth_service = ServiceBuilder::new()
