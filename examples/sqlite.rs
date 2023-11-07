@@ -18,6 +18,8 @@ use time::Duration;
 use tower::ServiceBuilder;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 
+// Templates.
+
 #[derive(Template)]
 #[template(path = "login.html")]
 pub struct LoginTemplate {
@@ -31,17 +33,25 @@ struct ProtectedTemplate<'a> {
     username: &'a str,
 }
 
+// Extractors.
+
+// This allows us to extract the "next" field from the query string. We use this
+// to redirect after log in.
 #[derive(Debug, Deserialize)]
 pub struct NextUrl {
     next: Option<String>,
 }
 
+// This allows us to extract the authentication fields from forms. We use this
+// to authenticate requests with the backend.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Credentials {
     username: String,
     password: String,
     next: Option<String>,
 }
+
+// User and backend.
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -50,6 +60,8 @@ pub struct User {
     password: String,
 }
 
+// Here we've implemented `Debug` manually to avoid accidentally logging the
+// password hash.
 impl Debug for User {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("User")
@@ -68,7 +80,10 @@ impl AuthUser for User {
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        self.password.as_bytes()
+        self.password.as_bytes() // We use the password hash as the auth
+                                 // hash--what this means
+                                 // is when the user changes their password the
+                                 // auth session becomes invalid.
     }
 }
 
@@ -101,7 +116,9 @@ impl AuthnBackend for Backend {
         Ok(user.filter(|user| {
             verify_password(creds.password, &user.password)
                 .ok()
-                .is_some()
+                .is_some() // We're using password-based authentication--this
+                           // works by comparing our form input with an argon2
+                           // password hash.
         }))
     }
 
@@ -115,11 +132,20 @@ impl AuthnBackend for Backend {
     }
 }
 
+// We use a type alias for convenience. Note that we've supplied our concrete
+// backend here.
 type AuthSession = axum_login::AuthSession<Backend>;
 
 mod post_handlers {
     use super::*;
 
+    // This is our POST log in handler.
+    //
+    // It uses our auth session and the form URL encoded credentials to authenticate
+    // and log and user in.
+    //
+    // We've also implemented a basic scheme for displaying errors and redirecting
+    // on success.
     pub async fn login(
         mut auth_session: AuthSession,
         Form(creds): Form<Credentials>,
@@ -189,12 +215,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .try_init()?;
 
     // Session layer.
+    //
+    // This uses `tower-sessions` to establish a layer that will provide the session
+    // as a request extension.
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_expiry(Expiry::OnInactivity(Duration::days(1)));
 
     // Auth service.
+    //
+    // This combines the session layer with our backend to establish the auth
+    // service which will provide the auth session as a request extension.
     let pool = SqlitePool::connect("sqlite:examples/example.db").await?;
     let backend = Backend::new(pool.clone());
     let auth_service = ServiceBuilder::new()
