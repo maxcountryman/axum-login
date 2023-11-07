@@ -56,7 +56,7 @@ impl<UserId: Clone> Default for Data<UserId> {
 ///
 /// Generally this session will be used in the context of some authentication
 /// workflow, for example via a frontend login form. There a user would provide
-/// their credentails, such as username and password, and via the backend
+/// their credentials, such as username and password, and via the backend
 /// the session would authenticate those credentials.
 ///
 /// Once the supplied credentials have been authenticated, a user will be
