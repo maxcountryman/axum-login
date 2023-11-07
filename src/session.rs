@@ -126,7 +126,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
 
         self.update_session().map_err(Error::Session)?;
 
-        Ok(user.clone())
+        Ok(user)
     }
 
     fn update_session(&mut self) -> Result<(), session::Error> {
