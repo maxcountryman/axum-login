@@ -1,4 +1,6 @@
-/// A middleware that requires login.
+/// Login predicate middleware.
+///
+/// Requires that the user is authenticated.
 #[macro_export]
 macro_rules! login_required {
     ($backend_type:ty) => {{
@@ -35,7 +37,10 @@ macro_rules! login_required {
     };
 }
 
-/// A middleware that requires the given permissions.
+/// Permission predicate middleware.
+///
+/// Requires that the specified permissions, either user or group or both, are
+/// all assigned to the user.
 #[macro_export]
 macro_rules! permission_required {
     ($backend_type:ty, $($perm:expr),+) => {{
