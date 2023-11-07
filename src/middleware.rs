@@ -137,7 +137,7 @@ macro_rules! predicate_required {
                     let uri = req.uri().to_string();
                     let next = urlencoding::encode(&uri);
                     let redirect_url = format!("{}?{}={}", $login_url, $redirect_field, next);
-                    Redirect::to(&redirect_url).into_response()
+                    Redirect::temporary(&redirect_url).into_response()
                 }
             },
         )
