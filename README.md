@@ -1,9 +1,9 @@
 <h1 align="center">
-axum-login
+    axum-login
 </h1>
 
 <p align="center">
-🪪 User identification, authentication, and authorization for Axum.
+    🪪 User identification, authentication, and authorization for Axum.
 </p>
 
 <div align="center">
@@ -39,7 +39,7 @@ If offers:
   routes are provided via the `login_required` and `permission_required`
   macros. Or bring your own by using `AuthSession` directly with
   `from_fn`.
-- **Rock-solid Session Management**: Uses `tower-sessions`
+- **Rock-solid Session Management**: Uses [`tower-sessions`](https://github.com/maxcountryman/tower-sessions)
   for high-performing and ergonomic session management. _Look ma, no deadlocks!_
 
 ## 📦 Install
