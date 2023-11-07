@@ -52,16 +52,16 @@ jobs:
       - name: Run doc tests
         run: |
           cargo test --all-features --doc
-      #- name: Generate code coverage
-      #  run: |
-      #    output_dir="./coverage/doc"
-      #    cargo tarpaulin -olcov --doc  --output-dir $output_dir
-      #    mkdir -p coverage-artifacts/doc
-      #    mv $output_dir coverage-artifacts/doc/
-      #- uses: actions/upload-artifact@v3
-      #  with:
-      #    name: coverage-artifacts-doc
-      #    path: coverage-artifacts/doc
+      - name: Generate code coverage
+        run: |
+          output_dir="./coverage/doc"
+          cargo tarpaulin -olcov --doc  --output-dir $output_dir
+          mkdir -p coverage-artifacts/doc
+          mv $output_dir coverage-artifacts/doc/
+      - uses: actions/upload-artifact@v3
+        with:
+          name: coverage-artifacts-doc
+          path: coverage-artifacts/doc
 
   test-integration:
     needs: check
@@ -75,44 +75,44 @@ jobs:
       - name: Run integration tests
         run: |
           cargo test --test integration-test
-      #- name: Generate code coverage
-      #  run: |
-      #    output_dir="./coverage/integration"
-      #    cargo tarpaulin -olcov --test integration-test --output-dir $output_dir
-      #    mkdir -p coverage-artifacts/integration
-      #    mv $output_dir coverage-artifacts/integration/
-      #- uses: actions/upload-artifact@v3
-      #  with:
-      #    name: coverage-artifacts-integration
-      #    path: coverage-artifacts/integration
+      - name: Generate code coverage
+        run: |
+          output_dir="./coverage/integration"
+          cargo tarpaulin -olcov --test integration-test --output-dir $output_dir
+          mkdir -p coverage-artifacts/integration
+          mv $output_dir coverage-artifacts/integration/
+      - uses: actions/upload-artifact@v3
+        with:
+          name: coverage-artifacts-integration
+          path: coverage-artifacts/integration
 
-  #upload-coverage:
-  #  needs:
-  #    - test-docs
-  #    #- test-integration
-  #  runs-on: ubuntu-latest
-  #  steps:
-  #    - uses: actions/checkout@v4
-  #    - name: Download Docs Coverage
-  #      uses: actions/download-artifact@v3
-  #      with:
-  #        name: coverage-artifacts-doc
-  #        path: coverage-artifacts-doc
-  #    - name: Download Integration Coverage
-  #      uses: actions/download-artifact@v3
-  #      with:
-  #        name: coverage-artifacts-integration
-  #        path: coverage-artifacts-integration
-  #    - name: Combine Coverage Data
-  #      run: |
-  #        mkdir -p ./coverage
-  #        mv coverage-artifacts-doc/* ./coverage/
-  #        mv coverage-artifacts-integration/* ./coverage/
-  #        ls -la ./coverage
-  #    - name: Upload all coverage data to Codecov
-  #      uses: codecov/codecov-action@v3
-  #      env:
-  #        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-  #      with:
-  #        directory: ./coverage
-  #        fail_ci_if_error: true
+  upload-coverage:
+    needs:
+      - test-docs
+      - test-integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Docs Coverage
+        uses: actions/download-artifact@v3
+        with:
+          name: coverage-artifacts-doc
+          path: coverage-artifacts-doc
+      - name: Download Integration Coverage
+        uses: actions/download-artifact@v3
+        with:
+          name: coverage-artifacts-integration
+          path: coverage-artifacts-integration
+      - name: Combine Coverage Data
+        run: |
+          mkdir -p ./coverage
+          mv coverage-artifacts-doc/* ./coverage/
+          mv coverage-artifacts-integration/* ./coverage/
+          ls -la ./coverage
+      - name: Upload all coverage data to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          directory: ./coverage
+          fail_ci_if_error: true
