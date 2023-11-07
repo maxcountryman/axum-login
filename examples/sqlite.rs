@@ -1,5 +1,9 @@
 use std::{fmt::Debug, net::SocketAddr};
 
+use argon2::{
+    password_hash::{PasswordHash, PasswordVerifier},
+    Argon2,
+};
 use askama::Template;
 use async_trait::async_trait;
 use axum::{
@@ -92,18 +96,18 @@ impl AuthnBackend for Backend {
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        // **NEVER** store plaintext passwords!
-        //
-        // Instead a real application should store a password hash.
-        //
-        // For example, `argon2` is an excellent password hashing function.
-        let user = sqlx::query_as("select * from users where username = ? and password = ?")
+        let user: Option<Self::User> = sqlx::query_as("select * from users where username = ? ")
             .bind(creds.username)
-            .bind(creds.password)
             .fetch_optional(&self.pool)
             .await?;
 
-        Ok(user)
+        Ok(user.filter(|user| {
+            let parsed_hash =
+                PasswordHash::new(&user.password).expect("Failed to create password hash.");
+            Argon2::default()
+                .verify_password(creds.password.as_bytes(), &parsed_hash)
+                .is_ok()
+        }))
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {

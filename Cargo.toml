@@ -34,6 +34,7 @@ tracing = { version = "0.1.40", features = ["log"] }
 urlencoding = "2.1.3"
 
 [dev-dependencies]
+argon2 = { version = "0.5.2" }
 askama = { version = "0.12.1", features = ["with-axum"] }
 askama_axum = "0.3.0"
 axum = "0.6.20"
