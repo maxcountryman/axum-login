@@ -1,9 +1,5 @@
 use std::{fmt::Debug, net::SocketAddr};
 
-use argon2::{
-    password_hash::{PasswordHash, PasswordVerifier},
-    Argon2,
-};
 use askama::Template;
 use async_trait::async_trait;
 use axum::{
@@ -15,6 +11,7 @@ use axum::{
 };
 use axum_login::{login_required, AuthManagerLayer, AuthUser, AuthnBackend, UserId};
 use http::StatusCode;
+use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 use time::Duration;
@@ -102,11 +99,9 @@ impl AuthnBackend for Backend {
             .await?;
 
         Ok(user.filter(|user| {
-            let parsed_hash =
-                PasswordHash::new(&user.password).expect("Failed to create password hash.");
-            Argon2::default()
-                .verify_password(creds.password.as_bytes(), &parsed_hash)
-                .is_ok()
+            verify_password(creds.password, &user.password)
+                .ok()
+                .is_some()
         }))
     }
 
