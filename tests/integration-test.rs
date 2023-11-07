@@ -23,9 +23,7 @@ impl Drop for ChildGuard {
 
 async fn start_example_binary() -> ChildGuard {
     let child = Command::new("cargo")
-        .arg("tarpaulin")
-        .arg("--command")
-        .arg("test")
+        .arg("run")
         .arg("--example")
         .arg("sqlite")
         .spawn()
@@ -34,7 +32,7 @@ async fn start_example_binary() -> ChildGuard {
     let start_time = Instant::now();
     let mut is_server_ready = false;
 
-    while start_time.elapsed() < Duration::from_secs(300) {
+    while start_time.elapsed() < Duration::from_secs(30) {
         if reqwest::get(WEBSERVER_URL).await.is_ok() {
             is_server_ready = true;
             break;

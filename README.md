@@ -7,18 +7,15 @@ axum-login
 </p>
 
 <div align="center">
-<a href="https://crates.io/crates/axum-login">
-<img src="https://img.shields.io/crates/v/axum-login.svg" />
-</a>
-<a href="https://docs.rs/axum-login">
-<img src="https://docs.rs/axum-login/badge.svg" />
-</a>
-<a href="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml">
-<img src="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml/badge.svg" />
-</a>
-<a href='https://coveralls.io/github/maxcountryman/axum-login?branch=main'>
-<img src='https://coveralls.io/repos/github/maxcountryman/axum-login/badge.svg?branch=main' alt='Coverage Status' />
-</a>
+    <a href="https://crates.io/crates/axum-login">
+        <img src="https://img.shields.io/crates/v/axum-login.svg" />
+    </a>
+    <a href="https://docs.rs/axum-login">
+        <img src="https://docs.rs/axum-login/badge.svg" />
+    </a>
+    <a href="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml">
+        <img src="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml/badge.svg" />
+    </a>
 </div>
 
 ## 🎨 Overview
