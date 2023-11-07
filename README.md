@@ -3,36 +3,44 @@ axum-login
 </h1>
 
 <p align="center">
-🪪 Session-based user authentication for Axum.
+🪪 User identification, authentication, and authorization for Axum.
 </p>
 
 <div align="center">
-<a href="https://crates.io/crates/axum-login">
-<img src="https://img.shields.io/crates/v/axum-login.svg" />
-</a>
-<a href="https://docs.rs/axum-login">
-<img src="https://docs.rs/axum-login/badge.svg" />
-</a>
-<a href="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml">
-<img src="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml/badge.svg" />
-</a>
-<a href='https://coveralls.io/github/maxcountryman/axum-login?branch=main'>
-<img src='https://coveralls.io/repos/github/maxcountryman/axum-login/badge.svg?branch=main' alt='Coverage Status' />
-</a>
+    <a href="https://crates.io/crates/axum-login">
+        <img src="https://img.shields.io/crates/v/axum-login.svg" />
+    </a>
+    <a href="https://docs.rs/axum-login">
+        <img src="https://docs.rs/axum-login/badge.svg" />
+    </a>
+    <a href="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml">
+        <img src="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml/badge.svg" />
+    </a>
 </div>
 
 ## 🎨 Overview
 
-`axum-login` is a Tower middleware providing session-based user authentication for `axum` applications.
+This crate provides user identification, authentication, and authorization
+as a `tower` middleware for `axum`.
 
-- Decouples user storage from authentication
-- Supports arbitrary user types and arbitrary storage backends
-- Provides methods for: logging in, logging out, and accessing current user
-- Optional role-based access controls via an arbitrary role type
-- Wraps [`axum-sessions`](https://github.com/maxcountryman/axum-sessions) to provide flexible sessions
-- Leverages `tower_http::auth::RequireAuthorizationLayer` to protect routes
+If offers:
 
-> **Note** `axum-login` implements a fundamental pattern for user authentication, however some features may be missing. Folks are encouraged to make suggestions for extensions to the library.
+- **User Identification, Authentication, and Authorization**: Leverage
+  `AuthSession` to easily manage authentication and authorization. This is
+  also an extractor, so it can be used directly in your `axum` handlers.
+- **Support for Arbitrary Users and Backends**: Applications implement a
+  couple of traits, `AuthUser` and `AuthnBackend`, allowing for any user
+  type and any user management backend. Your database? Yep. LDAP? Sure. An
+  auth provider? You bet.
+- **User and Group Permissions**: Authorization is supported via the
+  `AuthzBackend` trait, which allows applications to define custom
+  permissions. Both user and group permissions are supported.
+- **Convenient Route Protection**: Middleware for protecting access to
+  routes are provided via the `login_required` and `permission_required`
+  macros. Or bring your own by using `AuthSession` directly with
+  `from_fn`.
+- **Rock-solid Session Management**: Uses `tower-sessions`
+  for high-performing and ergonomic session management. _Look ma, no deadlocks!_
 
 ## 📦 Install
 
@@ -40,100 +48,28 @@ To use the crate in your project, add the following to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-axum-login = "0.6.0"
+axum-login = "0.7.0"
 ```
 
 ## 🤸 Usage
 
-`axum` applications can use the middleware via the auth layer.
+We recommend reviewing our [`sqlite` example][sqlite-example].
 
-### `axum` Example
+> [!NOTE]
+> See the [crate documentation][docs] for usage information.
 
-```rust
-use axum::{response::IntoResponse, routing::get, Extension, Router};
-use axum_login::{
-    axum_sessions::{async_session::MemoryStore, SessionLayer},
-    secrecy::SecretVec,
-    AuthLayer, AuthUser, RequireAuthorizationLayer, SqliteStore,
-};
-use rand::Rng;
-use sqlx::sqlite::SqlitePoolOptions;
+## 🦺 Safety
 
-#[derive(Debug, Default, Clone, sqlx::FromRow)]
-struct User {
-    id: i64,
-    password_hash: String,
-    name: String,
-}
+This crate uses `#![forbid(unsafe_code)]` to ensure everything is implemented in 100% safe Rust.
 
-impl AuthUser<i64> for User {
-    fn get_id(&self) -> i64 {
-        self.id
-    }
+## 🛟 Getting Help
 
-    fn get_password_hash(&self) -> SecretVec<u8> {
-        SecretVec::new(self.password_hash.clone().into())
-    }
-}
+We've put together a number of [examples][examples] to help get you started. You're also welcome to [open a discussion](https://github.com/maxcountryman/axum-login/discussions/new?category=q-a) and ask additional questions you might have.
 
-type AuthContext = axum_login::extractors::AuthContext<i64, User, SqliteStore<User>>;
+## 👯 Contributing
 
-#[tokio::main]
-async fn main() {
-    let secret = rand::thread_rng().gen::<[u8; 64]>();
+We appreciate all kinds of contributions, thank you!
 
-    let session_store = MemoryStore::new();
-    let session_layer = SessionLayer::new(session_store, &secret).with_secure(false);
-
-    let pool = SqlitePoolOptions::new()
-        .connect("sqlite/user_store.db")
-        .await
-        .unwrap();
-
-    let user_store = SqliteStore::<User>::new(pool);
-    let auth_layer = AuthLayer::new(user_store, &secret);
-
-    async fn login_handler(mut auth: AuthContext) {
-        let pool = SqlitePoolOptions::new()
-            .connect("sqlite/user_store.db")
-            .await
-            .unwrap();
-        let mut conn = pool.acquire().await.unwrap();
-        let user: User = sqlx::query_as("select * from users where id = 1")
-            .fetch_one(&mut conn)
-            .await
-            .unwrap();
-        auth.login(&user).await.unwrap();
-    }
-
-    async fn logout_handler(mut auth: AuthContext) {
-        dbg!("Logging out user: {}", &auth.current_user);
-        auth.logout().await;
-    }
-
-    async fn protected_handler(Extension(user): Extension<User>) -> impl IntoResponse {
-        format!("Logged in as: {}", user.name)
-    }
-
-    let app = Router::new()
-        .route("/protected", get(protected_handler))
-        .route_layer(RequireAuthorizationLayer::<i64, User>::login())
-        .route("/login", get(login_handler))
-        .route("/logout", get(logout_handler))
-        .layer(auth_layer)
-        .layer(session_layer);
-
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
-}
-```
-
-You can find this [example][sqlite-example] as well as other example projects in the [example directory][examples].
-
-See the [crate documentation][docs] for more usage information.
-
-[sqlite-example]: https://github.com/maxcountryman/axum-login/tree/main/examples/sqlite
+[sqlite-example]: https://github.com/maxcountryman/axum-login/tree/main/examples/sqlite.rs
 [examples]: https://github.com/maxcountryman/axum-login/tree/main/examples
 [docs]: https://docs.rs/axum-login

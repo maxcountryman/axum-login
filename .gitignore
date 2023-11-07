@@ -5,3 +5,6 @@
 .idea/
 .vscode/
 coverage/
+
+**/*.db-shm
+**/*.db-wal

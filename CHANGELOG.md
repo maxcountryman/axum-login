@@ -1,8 +1,14 @@
 # Unreleased
 
-**BREAKING CHANGES**:
+# 0.7.0
 
-- Update `sqlx` to 0.7, which [drops support for MS SQL Server](https://github.com/launchbadge/sqlx/pull/2039)
+⚠️ **This crate has been rewritten from the ground up.** ⚠️
+
+We have entirely reimagined this crate's API, having now rewritten it to use `tower-sessions`.
+
+The upshot of this is issues with deadlocks are a thing of the past. However, applications that rely on prior versions of the crate will have to evaluate the new API and decide if it's appropriate to migrate or not.
+
+Please review [the documentation](https://docs.rs/axum-login/0.7.0/axum_login/index.html) for an overview of the new API.
 
 # 0.6.0
 
