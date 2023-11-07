@@ -55,7 +55,7 @@ where
                 .extensions()
                 .get::<Session>()
                 .cloned()
-                .expect("Something has gone wrong with tower-sessions.");
+                .expect("Requests should have a `Session` extension via tower-sessions.");
 
             let auth_session = AuthSession::from_session(session.clone(), backend).await?;
 
