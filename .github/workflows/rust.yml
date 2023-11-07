@@ -47,21 +47,21 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           rustup toolchain install nightly --profile minimal
-          cargo install cargo-tarpaulin
+          #    cargo install cargo-tarpaulin
       - uses: Swatinem/rust-cache@v2
       - name: Run doc tests
         run: |
           cargo test --all-features --doc
-      - name: Generate code coverage
-        run: |
-          output_dir="./coverage/doc"
-          cargo tarpaulin -olcov --doc  --output-dir $output_dir
-          mkdir -p coverage-artifacts/doc
-          mv $output_dir coverage-artifacts/doc/
-      - uses: actions/upload-artifact@v3
-        with:
-          name: coverage-artifacts-doc
-          path: coverage-artifacts/doc
+      #- name: Generate code coverage
+      #  run: |
+      #    output_dir="./coverage/doc"
+      #    cargo tarpaulin -olcov --doc  --output-dir $output_dir
+      #    mkdir -p coverage-artifacts/doc
+      #    mv $output_dir coverage-artifacts/doc/
+      #- uses: actions/upload-artifact@v3
+      #  with:
+      #    name: coverage-artifacts-doc
+      #    path: coverage-artifacts/doc
 
   test-integration:
     needs: check
@@ -89,7 +89,7 @@ jobs:
   upload-coverage:
     needs:
       - test-docs
-      - test-integration
+      #- test-integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
