@@ -1,6 +1,12 @@
 <html>
   <head>
     <title>Login</title>
+    <style>
+      label {
+        display: block;
+        margin-bottom: 5px;
+      }
+    </style>
   </head>
 
   <body>
@@ -9,16 +15,22 @@
     {% endif %}
 
     <form method="post">
-      <table>
-        <tr>
-          <td>Username</td>
-          <td><input name="username" value="ferris" /></td>
-        </tr>
-        <tr>
-          <td>Password</td>
-          <td><input name="password" type="password" value="hunter42" /></td>
-        </tr>
-      </table>
+      <fieldset>
+        <legend>User login</legend>
+        <p>
+          <label for="username">Username</label>
+          <input name="username" id="username" value="ferris" />
+        </p>
+        <p>
+          <label for="password">Password</label>
+          <input
+            name="password"
+            id="password"
+            type="password"
+            value="hunter42"
+          />
+        </p>
+      </fieldset>
 
       <input type="submit" value="login" />
 
