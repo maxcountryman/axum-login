@@ -86,33 +86,33 @@ jobs:
       #    name: coverage-artifacts-integration
       #    path: coverage-artifacts/integration
 
-  upload-coverage:
-    needs:
-      - test-docs
-      #- test-integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download Docs Coverage
-        uses: actions/download-artifact@v3
-        with:
-          name: coverage-artifacts-doc
-          path: coverage-artifacts-doc
-      - name: Download Integration Coverage
-        uses: actions/download-artifact@v3
-        with:
-          name: coverage-artifacts-integration
-          path: coverage-artifacts-integration
-      - name: Combine Coverage Data
-        run: |
-          mkdir -p ./coverage
-          mv coverage-artifacts-doc/* ./coverage/
-          mv coverage-artifacts-integration/* ./coverage/
-          ls -la ./coverage
-      - name: Upload all coverage data to Codecov
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        with:
-          directory: ./coverage
-          fail_ci_if_error: true
+  #upload-coverage:
+  #  needs:
+  #    - test-docs
+  #    #- test-integration
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v4
+  #    - name: Download Docs Coverage
+  #      uses: actions/download-artifact@v3
+  #      with:
+  #        name: coverage-artifacts-doc
+  #        path: coverage-artifacts-doc
+  #    - name: Download Integration Coverage
+  #      uses: actions/download-artifact@v3
+  #      with:
+  #        name: coverage-artifacts-integration
+  #        path: coverage-artifacts-integration
+  #    - name: Combine Coverage Data
+  #      run: |
+  #        mkdir -p ./coverage
+  #        mv coverage-artifacts-doc/* ./coverage/
+  #        mv coverage-artifacts-integration/* ./coverage/
+  #        ls -la ./coverage
+  #    - name: Upload all coverage data to Codecov
+  #      uses: codecov/codecov-action@v3
+  #      env:
+  #        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  #      with:
+  #        directory: ./coverage
+  #        fail_ci_if_error: true
