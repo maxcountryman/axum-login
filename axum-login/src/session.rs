@@ -75,11 +75,10 @@ pub struct AuthSession<Backend: AuthnBackend> {
 
     data: Data<UserId<Backend>>,
     session: Session,
+    data_key: &'static str,
 }
 
 impl<Backend: AuthnBackend> AuthSession<Backend> {
-    const DATA_KEY: &'static str = "axum-login.data";
-
     /// Verifies the provided credentials via the backend returning the
     /// authenticated user if valid and otherwise `None`.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
@@ -136,15 +135,16 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
     }
 
     fn update_session(&mut self) -> Result<(), session::Error> {
-        self.session.insert(Self::DATA_KEY, self.data.clone())
+        self.session.insert(self.data_key, self.data.clone())
     }
 
     pub(crate) async fn from_session(
         session: Session,
         backend: Backend,
+        data_key: &'static str,
     ) -> Result<Self, Error<Backend>> {
         let mut data: Data<_> = session
-            .get(Self::DATA_KEY)
+            .get(data_key)
             .map_err(Error::Session)?
             .unwrap_or_default();
 
@@ -171,6 +171,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             data,
             backend,
             session,
+            data_key,
         })
     }
 }

@@ -4,7 +4,7 @@ use axum::{error_handling::HandleErrorLayer, BoxError};
 use axum_login::{
     permission_required,
     tower_sessions::{Expiry, MemoryStore, SessionManagerLayer},
-    AuthManagerLayer,
+    AuthManagerLayerBuilder,
 };
 use http::StatusCode;
 use sqlx::SqlitePool;
@@ -49,7 +49,7 @@ impl App {
             .layer(HandleErrorLayer::new(|_: BoxError| async {
                 StatusCode::BAD_REQUEST
             }))
-            .layer(AuthManagerLayer::new(backend, session_layer));
+            .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
 
         let app = restricted::router()
             .route_layer(permission_required!(
