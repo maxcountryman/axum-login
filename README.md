@@ -70,6 +70,6 @@ We've put together a number of [examples][examples] to help get you started. You
 
 We appreciate all kinds of contributions, thank you!
 
-[sqlite-example]: https://github.com/maxcountryman/axum-login/tree/main/examples/sqlite.rs
+[sqlite-example]: https://github.com/maxcountryman/axum-login/tree/main/examples/sqlite
 [examples]: https://github.com/maxcountryman/axum-login/tree/main/examples
 [docs]: https://docs.rs/axum-login

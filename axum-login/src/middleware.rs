@@ -11,7 +11,7 @@ macro_rules! login_required {
         $crate::predicate_required!(
             $backend_type,
             is_authenticated,
-            ::http::StatusCode::UNAUTHORIZED
+            $crate::http::StatusCode::UNAUTHORIZED
         )
     }};
 
@@ -60,7 +60,7 @@ macro_rules! permission_required {
         $crate::predicate_required!(
             is_authorized,
             $backend_type,
-            ::http::StatusCode::FORBIDDEN
+            $crate::http::StatusCode::FORBIDDEN
         )
     }};
 
@@ -107,7 +107,7 @@ macro_rules! permission_required {
 #[macro_export]
 macro_rules! predicate_required {
     ($backend_type:ty, $predicate:expr, $alternative:expr) => {{
-        use axum::{
+        use $crate::axum::{
             middleware::{from_fn, Next},
             response::{IntoResponse, Redirect},
         };
@@ -124,7 +124,7 @@ macro_rules! predicate_required {
     }};
 
     ($backend_type:ty, $predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
-        use axum::{
+        use $crate::axum::{
             middleware::{from_fn, Next},
             response::{IntoResponse, Redirect},
         };
@@ -135,7 +135,7 @@ macro_rules! predicate_required {
                     next.run(req).await
                 } else {
                     let uri = req.uri().to_string();
-                    let next = urlencoding::encode(&uri);
+                    let next = $crate::urlencoding::encode(&uri);
                     let redirect_url = format!("{}?{}={}", $login_url, $redirect_field, next);
                     Redirect::temporary(&redirect_url).into_response()
                 }

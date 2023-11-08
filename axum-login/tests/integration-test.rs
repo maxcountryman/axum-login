@@ -24,8 +24,8 @@ impl Drop for ChildGuard {
 async fn start_example_binary() -> ChildGuard {
     let child = Command::new("cargo")
         .arg("run")
-        .arg("--example")
-        .arg("sqlite")
+        .arg("-p")
+        .arg("example-sqlite")
         .spawn()
         .expect("Failed to start example binary");
 
