@@ -15,9 +15,6 @@ categories = [
 repository = "https://github.com/maxcountryman/axum-login"
 documentation = "https://docs.rs/axum-login"
 
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 async-trait = "0.1.57"

@@ -388,9 +388,14 @@
 //! implementation as well.
 //!
 //! A complete example can be found in [`examples/sqlite.rs`](https://github.com/maxcountryman/axum-login/blob/main/examples/sqlite.rs).
-#![warn(clippy::all, nonstandard_style, future_incompatible, missing_docs)]
+#![warn(
+    clippy::all,
+    nonstandard_style,
+    future_incompatible,
+    missing_docs,
+    missing_debug_implementations
+)]
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 pub use service::{AuthManager, AuthManagerLayer};
