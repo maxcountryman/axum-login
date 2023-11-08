@@ -387,7 +387,7 @@
 //! are incomplete and as such it's recommended to review a comprehensive
 //! implementation as well.
 //!
-//! A complete example can be found in [`examples/sqlite.rs`](https://github.com/maxcountryman/axum-login/blob/main/examples/sqlite.rs).
+//! A complete example can be found in [`examples/sqlite.rs`](https://github.com/maxcountryman/axum-login/blob/main/examples/sqlite).
 #![warn(
     clippy::all,
     nonstandard_style,
@@ -397,9 +397,13 @@
 )]
 #![forbid(unsafe_code)]
 
+pub use axum;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
+pub use http;
 pub use service::{AuthManager, AuthManagerLayer};
 pub use session::AuthSession;
+pub use tower_sessions;
+pub use urlencoding;
 
 mod backend;
 mod extract;
