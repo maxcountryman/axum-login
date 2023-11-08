@@ -4,7 +4,7 @@ use axum::{error_handling::HandleErrorLayer, BoxError};
 use axum_login::{
     login_required,
     tower_sessions::{cookie::SameSite, Expiry, MemoryStore, SessionManagerLayer},
-    AuthManagerLayer,
+    AuthManagerLayerBuilder,
 };
 use http::StatusCode;
 use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, TokenUrl};
@@ -65,7 +65,7 @@ impl App {
             .layer(HandleErrorLayer::new(|_: BoxError| async {
                 StatusCode::BAD_REQUEST
             }))
-            .layer(AuthManagerLayer::new(backend, session_layer));
+            .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
 
         let app = protected::router()
             .route_layer(login_required!(Backend, login_url = "/login"))

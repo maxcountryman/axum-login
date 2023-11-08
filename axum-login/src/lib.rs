@@ -345,7 +345,7 @@
 //!     routing::{get, post},
 //!     BoxError, Form, Router,
 //! };
-//! use axum_login::{login_required, AuthManagerLayer};
+//! use axum_login::{login_required, AuthManagerLayerBuilder};
 //! use http::StatusCode;
 //! use tower::ServiceBuilder;
 //! use tower_sessions::{MemoryStore, SessionManagerLayer};
@@ -362,7 +362,7 @@
 //!         .layer(HandleErrorLayer::new(|_: BoxError| async {
 //!             StatusCode::BAD_REQUEST
 //!         }))
-//!         .layer(AuthManagerLayer::new(backend, session_layer));
+//!         .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
 //!
 //!     let app = Router::new()
 //!         .route("/protected", get(todo!()))
@@ -400,7 +400,7 @@
 pub use axum;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 pub use http;
-pub use service::{AuthManager, AuthManagerLayer};
+pub use service::{AuthManager, AuthManagerLayer, AuthManagerLayerBuilder};
 pub use session::{AuthSession, Error};
 pub use tower_sessions;
 pub use urlencoding;

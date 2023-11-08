@@ -18,12 +18,17 @@ use crate::{AuthSession, AuthnBackend};
 pub struct AuthManager<S, Backend: AuthnBackend> {
     inner: S,
     backend: Backend,
+    data_key: &'static str,
 }
 
 impl<S, Backend: AuthnBackend> AuthManager<S, Backend> {
     /// Create a new [`AuthManager`] with the provided access controller.
-    pub fn new(inner: S, backend: Backend) -> Self {
-        Self { inner, backend }
+    pub fn new(inner: S, backend: Backend, data_key: &'static str) -> Self {
+        Self {
+            inner,
+            backend,
+            data_key,
+        }
     }
 }
 
@@ -50,6 +55,8 @@ where
 
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
+        let data_key = self.data_key;
+
         Box::pin(async move {
             let session = req
                 .extensions()
@@ -57,7 +64,8 @@ where
                 .cloned()
                 .expect("Requests should have a `Session` extension via tower-sessions.");
 
-            let auth_session = AuthSession::from_session(session.clone(), backend).await?;
+            let auth_session =
+                AuthSession::from_session(session.clone(), backend, data_key).await?;
 
             req.extensions_mut().insert(auth_session);
 
@@ -71,14 +79,20 @@ where
 pub struct AuthManagerLayer<Backend: AuthnBackend, Sessions: SessionStore> {
     backend: Backend,
     session_manager_layer: SessionManagerLayer<Sessions>,
+    data_key: &'static str,
 }
 
 impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Sessions> {
     /// Create a new [`AuthManagerLayer`] with the provided access controller.
-    pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
+    pub(crate) fn new(
+        backend: Backend,
+        data_key: &'static str,
+        session_manager_layer: SessionManagerLayer<Sessions>,
+    ) -> Self {
         Self {
             backend,
             session_manager_layer,
+            data_key,
         }
     }
 }
@@ -92,8 +106,46 @@ impl<S, Backend: AuthnBackend, Sessions: SessionStore> Layer<S>
         let login_manager = AuthManager {
             inner,
             backend: self.backend.clone(),
+            data_key: self.data_key,
         };
 
         self.session_manager_layer.layer(login_manager)
+    }
+}
+
+/// Builder for the [`AuthManagerLayer`].
+#[derive(Debug, Clone)]
+pub struct AuthManagerLayerBuilder<Backend: AuthnBackend, Sessions: SessionStore> {
+    backend: Backend,
+    session_manager_layer: SessionManagerLayer<Sessions>,
+    data_key: Option<&'static str>,
+}
+
+impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayerBuilder<Backend, Sessions> {
+    /// Create a new [`AuthManagerLayerBuilder`] with the provided access controller.
+    pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
+        Self {
+            backend,
+            session_manager_layer,
+            data_key: None,
+        }
+    }
+
+    /// Configure the `data_key` optional property of the builder. If not configured it will default to "axum-login.data".
+    pub fn with_data_key(
+        mut self,
+        data_key: &'static str,
+    ) -> AuthManagerLayerBuilder<Backend, Sessions> {
+        self.data_key = Some(data_key);
+        self
+    }
+
+    /// Build the [`AuthManagerLayer`].
+    pub fn build(self) -> AuthManagerLayer<Backend, Sessions> {
+        AuthManagerLayer::new(
+            self.backend,
+            self.data_key.unwrap_or("axum-login.data"),
+            self.session_manager_layer,
+        )
     }
 }
