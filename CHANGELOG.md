@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.7.1
+
+- Ensure middleware-producing macros (`login_required`, `permission_required`, and `predicate_required`) use crate dependencies.
+- Re-organize into a workspace such that examples are self-contained crates.
+
 # 0.7.0
 
 ⚠️ **This crate has been rewritten from the ground up.** ⚠️
