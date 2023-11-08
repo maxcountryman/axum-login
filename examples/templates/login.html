@@ -10,8 +10,8 @@
   </head>
 
   <body>
-    {% if message.is_some() %}
-    <span><strong>{{ message.clone().unwrap() }}</strong></span>
+    {% if let Some(message) = message %}
+    <span><strong>{{ message }}</strong></span>
     {% endif %}
 
     <form method="post">
@@ -34,8 +34,8 @@
 
       <input type="submit" value="login" />
 
-      {% if next.is_some() %}
-      <input type="hidden" name="next" value="{{next.clone().unwrap()}}" />
+      {% if let Some(next) = next %}
+      <input type="hidden" name="next" value="{{next}}" />
       {% endif %}
     </form>
   </body>
