@@ -228,13 +228,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_secure(false)
         .with_expiry(Expiry::OnInactivity(Duration::days(1)));
 
-    let db_path = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR")?).join("example.db"); // TODO: This isn't exemplary.
-
     // Auth service.
     //
     // This combines the session layer with our backend to establish the auth
     // service which will provide the auth session as a request extension.
-    let pool = SqlitePool::connect(&db_path.to_string_lossy()).await?;
+    let pool = SqlitePool::connect(":memory:").await?;
+    sqlx::migrate!().run(&pool).await?;
     let backend = Backend::new(pool.clone());
     let auth_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_: BoxError| async {
