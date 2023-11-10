@@ -148,23 +148,16 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             None
         };
 
-        let session_verified = match (&data.auth_hash, user.clone()) {
-            (Some(user_hash), Some(user)) => {
-                let session_auth_hash = user.session_auth_hash();
-                verify_slices_are_equal(&user_hash[..], session_auth_hash).is_ok()
+        if let Some(ref authed_user) = user {
+            let session_auth_hash = authed_user.session_auth_hash();
+            let session_verified = &data.clone().auth_hash.is_some_and(|auth_hash| {
+                verify_slices_are_equal(&auth_hash[..], session_auth_hash).is_ok()
+            });
+            if !session_verified {
+                user = None;
+                data = Data::default();
+                session.flush();
             }
-
-            // A user without a hash is not valid.
-            (None, Some(_)) => false,
-
-            // Before logging in, the session is considered verified.
-            _ => true,
-        };
-
-        if !session_verified {
-            user = None;
-            data = Data::default();
-            session.flush();
         }
 
         Ok(Self {
