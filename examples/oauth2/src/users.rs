@@ -129,7 +129,7 @@ impl AuthnBackend for Backend {
             returning *
             "#,
         )
-        .bind(user_info.login) // TODO: Obtain from OAuth.
+        .bind(user_info.login)
         .bind(token_res.access_token().secret())
         .fetch_one(&self.db)
         .await
