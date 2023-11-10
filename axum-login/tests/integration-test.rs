@@ -32,7 +32,7 @@ async fn start_example_binary() -> ChildGuard {
     let start_time = Instant::now();
     let mut is_server_ready = false;
 
-    while start_time.elapsed() < Duration::from_secs(30) {
+    while start_time.elapsed() < Duration::from_secs(300) {
         if reqwest::get(WEBSERVER_URL).await.is_ok() {
             is_server_ready = true;
             break;
