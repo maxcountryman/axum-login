@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.7.2
+
+- Cycle ID only as logging in. [#115](https://github.com/maxcountryman/axum-login/pull/115)
+- Ensure anonymous sessions are verified. [#113](https://github.com/maxcountryman/axum-login/pull/113)
+
 # 0.7.1
 
 - Ensure middleware-producing macros (`login_required`, `permission_required`, and `predicate_required`) use crate dependencies.

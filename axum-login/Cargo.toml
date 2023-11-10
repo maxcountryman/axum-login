@@ -1,6 +1,6 @@
 [package]
 name = "axum-login"
-version = "0.7.1"
+version = "0.7.2"
 description = "🪪 User identification, authentication, and authorization for Axum."
 edition = "2021"
 homepage = "https://github.com/maxcountryman/axum-login"
