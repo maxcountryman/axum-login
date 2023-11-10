@@ -68,7 +68,7 @@ pub enum BackendError {
 #[derive(Debug, Clone)]
 pub struct Backend {
     db: SqlitePool,
-    pub client: BasicClient,
+    client: BasicClient,
 }
 
 impl Backend {
