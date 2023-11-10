@@ -102,9 +102,13 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
     #[tracing::instrument(level = "debug", skip_all, fields(user.id = user.id().to_string()), ret, err)]
     pub async fn login(&mut self, user: &Backend::User) -> Result<(), Error<Backend>> {
         self.user = Some(user.clone());
+
+        if self.data.auth_hash.is_none() {
+            self.session.cycle_id(); // Session-fixation mitigation.
+        }
+
         self.data.user_id = Some(user.id());
         self.data.auth_hash = Some(user.session_auth_hash().to_owned());
-        self.session.cycle_id(); // Session-fixation mitigation.
 
         self.update_session().map_err(Error::Session)?;
 
