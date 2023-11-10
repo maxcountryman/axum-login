@@ -11,7 +11,7 @@ use tower_sessions::Session;
 
 use crate::{
     users::{AuthSession, Credentials},
-    web::auth::LoginTemplate,
+    web::auth::{LoginTemplate, NEXT_URL_KEY},
 };
 
 pub const CSRF_STATE_KEY: &str = "oauth.csrf-state";
@@ -28,7 +28,6 @@ pub fn router() -> Router<()> {
 
 mod get {
     use super::*;
-    use crate::web::auth::NEXT_URL_KEY;
 
     pub async fn callback(
         mut auth_session: AuthSession,
