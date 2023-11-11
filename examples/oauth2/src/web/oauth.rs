@@ -66,7 +66,7 @@ mod get {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
 
-        if let Ok(Some(next)) = session.get::<String>(NEXT_URL_KEY) {
+        if let Ok(Some(next)) = session.remove::<String>(NEXT_URL_KEY) {
             Redirect::to(&next).into_response()
         } else {
             Redirect::to("/").into_response()
