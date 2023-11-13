@@ -45,6 +45,7 @@ macro_rules! login_required {
 macro_rules! permission_required {
     ($backend_type:ty, $($perm:expr),+) => {{
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
+            use $crate::AuthzBackend;
             if let Some(ref user) = auth_session.user {
                 let mut has_all_permissions = true;
                 $(
@@ -58,8 +59,8 @@ macro_rules! permission_required {
         }
 
         $crate::predicate_required!(
-            is_authorized,
             $backend_type,
+            is_authorized,
             $crate::http::StatusCode::FORBIDDEN
         )
     }};
