@@ -41,37 +41,19 @@ macro_rules! login_required {
 ///
 /// Requires that the specified permissions, either user or group or both, are
 /// all assigned to the user.
+/// Permission predicate middleware.
 #[macro_export]
 macro_rules! permission_required {
-    ($backend_type:ty, $($perm:expr),+) => {{
+    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+ $(,)?) => {{
+        use $crate::AuthzBackend;
+
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
             use $crate::AuthzBackend;
             if let Some(ref user) = auth_session.user {
                 let mut has_all_permissions = true;
                 $(
                     has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm).await.unwrap_or(false);
-                )+
-                has_all_permissions
-            } else {
-                false
-            }
-        }
-
-        $crate::predicate_required!(
-            $backend_type,
-            is_authorized,
-            $crate::http::StatusCode::FORBIDDEN
-        )
-    }};
-
-    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+) => {{
-        async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user {
-                let mut has_all_permissions = true;
-                $(
-                    has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm).await.unwrap_or(false);
+                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
                 )+
                 has_all_permissions
             } else {
@@ -87,7 +69,7 @@ macro_rules! permission_required {
         )
     }};
 
-    ($backend_type:ty, login_url = $login_url:expr, $($perm:expr),+) => {
+    ($backend_type:ty, login_url = $login_url:expr, $($perm:expr),+ $(,)?) => {
         $crate::permission_required!(
             $backend_type,
             login_url = $login_url,
@@ -95,6 +77,29 @@ macro_rules! permission_required {
             $($perm),+
         )
     };
+
+    ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
+        use $crate::AuthzBackend;
+
+        async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
+            if let Some(ref user) = auth_session.user {
+                let mut has_all_permissions = true;
+                $(
+                    has_all_permissions = has_all_permissions &&
+                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                )+
+                has_all_permissions
+            } else {
+                false
+            }
+        }
+
+        $crate::predicate_required!(
+            $backend_type,
+            is_authorized,
+            $crate::http::StatusCode::FORBIDDEN
+        )
+    }};
 }
 
 /// Predicate middleware.
