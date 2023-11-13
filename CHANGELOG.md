@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.7.3
+
+- Fix `permission_required` macro. [#116](https://github.com/maxcountryman/axum-login/pull/116) and 7a6720a
+
 # 0.7.2
 
 - Cycle ID only as logging in. [#115](https://github.com/maxcountryman/axum-login/pull/115)
