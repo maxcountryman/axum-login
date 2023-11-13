@@ -53,9 +53,9 @@ values (
     '$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw'
 );
 
--- Insert "user" and "admin" groups.
-insert into groups (name) values ('user');
-insert into groups (name) values ('admin');
+-- Insert "users" and "superusers" groups.
+insert into groups (name) values ('users');
+insert into groups (name) values ('superusers');
 
 -- Insert individual permissions.
 insert into permissions (name) values ('protected.read');
@@ -64,10 +64,10 @@ insert into permissions (name) values ('restricted.read');
 -- Insert group permissions.
 insert into groups_permissions (group_id, permission_id)
 values (
-    (select id from groups where name = 'user'),
+    (select id from groups where name = 'users'),
     (select id from permissions where name = 'protected.read')
 ), (
-    (select id from groups where name = 'admin'),
+    (select id from groups where name = 'superusers'),
     (select id from permissions where name = 'restricted.read')
 );
 
@@ -75,11 +75,11 @@ values (
 insert into users_groups (user_id, group_id)
 values (
     (select id from users where username = 'ferris'),
-    (select id from groups where name = 'user')
+    (select id from groups where name = 'users')
 ), (
     (select id from users where username = 'admin'),
-    (select id from groups where name = 'user')
+    (select id from groups where name = 'users')
 ), (
     (select id from users where username = 'admin'),
-    (select id from groups where name = 'admin')
+    (select id from groups where name = 'superusers')
 );
