@@ -68,9 +68,6 @@ values (
     (select id from permissions where name = 'protected.read')
 ), (
     (select id from groups where name = 'admin'),
-    (select id from permissions where name = 'protected.read')
-), (
-    (select id from groups where name = 'admin'),
     (select id from permissions where name = 'restricted.read')
 );
 
@@ -78,6 +75,9 @@ values (
 insert into users_groups (user_id, group_id)
 values (
     (select id from users where username = 'ferris'),
+    (select id from groups where name = 'user')
+), (
+    (select id from users where username = 'admin'),
     (select id from groups where name = 'user')
 ), (
     (select id from users where username = 'admin'),
