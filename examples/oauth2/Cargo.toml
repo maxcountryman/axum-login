@@ -1,0 +1,25 @@
+[package]
+name = "example-oauth2"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+askama = { version = "0.12.1", features = ["with-axum"] }
+askama_axum = "0.3.0"
+async-trait = "0.1.57"
+axum = "0.6.20"
+axum-login = { path = "../../axum-login" }
+dotenvy = "0.15.7"
+http = "0.2.9"
+hyper = "0.14.27"
+oauth2 = "4.4.2"
+reqwest = { version = "0.11.22", features = ["json"] }
+serde = "1"
+sqlx = { version = "0.7.2", features = ["sqlite", "time", "runtime-tokio"] }
+thiserror = "1.0.50"
+time = "0.3.30"
+tokio = { version = "1.32.0", features = ["full"] }
+tower = "0.4.13"
+tower-sessions = "0.4.1"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

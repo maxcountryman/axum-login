@@ -1,0 +1,19 @@
+<html>
+  <head>
+    <title>OAuth2 Login</title>
+  </head>
+
+  <body>
+    {% if let Some(message) = message %}
+    <span><strong>{{ message }}</strong></span>
+    {% endif %}
+
+    <form method="post">
+      <input type="submit" value="GitHub Login" />
+
+      {% if let Some(next) = next %}
+      <input type="hidden" name="next" value="{{next}}" />
+      {% endif %}
+    </form>
+  </body>
+</html>
