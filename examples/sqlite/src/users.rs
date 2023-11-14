@@ -4,8 +4,6 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
-use crate::web::Credentials;
-
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
     id: i64,
@@ -38,6 +36,15 @@ impl AuthUser for User {
                                  // is when the user changes their password the
                                  // auth session becomes invalid.
     }
+}
+
+// This allows us to extract the authentication fields from forms. We use this
+// to authenticate requests with the backend.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+    pub next: Option<String>,
 }
 
 #[derive(Debug, Clone)]

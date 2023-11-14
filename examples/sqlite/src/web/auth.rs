@@ -8,7 +8,7 @@ use axum::{
 use http::StatusCode;
 use serde::Deserialize;
 
-use crate::users::AuthSession;
+use crate::users::{AuthSession, Credentials};
 
 #[derive(Template)]
 #[template(path = "login.html")]
@@ -21,15 +21,6 @@ pub struct LoginTemplate {
 // to redirect after log in.
 #[derive(Debug, Deserialize)]
 pub struct NextUrl {
-    next: Option<String>,
-}
-
-// This allows us to extract the authentication fields from forms. We use this
-// to authenticate requests with the backend.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Credentials {
-    pub username: String,
-    pub password: String,
     next: Option<String>,
 }
 
