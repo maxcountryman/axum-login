@@ -92,6 +92,6 @@ async fn sqlite_example() {
         .unwrap();
     assert!(res
         .cookies()
-        .find(|c| c.name() == "tower.sid")
+        .find(|c| c.name() == "id")
         .is_some_and(|c| c.value() == ""));
 }
