@@ -1,0 +1,42 @@
+<html>
+  <head>
+    <title>Login</title>
+    <style>
+      label {
+        display: block;
+        margin-bottom: 5px;
+      }
+    </style>
+  </head>
+
+  <body>
+    {% if let Some(message) = message %}
+    <span><strong>{{ message }}</strong></span>
+    {% endif %}
+
+    <form method="post">
+      <fieldset>
+        <legend>User login</legend>
+        <p>
+          <label for="username">Username</label>
+          <input name="username" id="username" value="ferris" />
+        </p>
+        <p>
+          <label for="password">Password</label>
+          <input
+            name="password"
+            id="password"
+            type="password"
+            value="hunter42"
+          />
+        </p>
+      </fieldset>
+
+      <input type="submit" value="login" />
+
+      {% if let Some(next) = next %}
+      <input type="hidden" name="next" value="{{next}}" />
+      {% endif %}
+    </form>
+  </body>
+</html>
