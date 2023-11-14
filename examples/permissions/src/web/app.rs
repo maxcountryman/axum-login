@@ -1,12 +1,15 @@
 use std::net::SocketAddr;
 
 use axum::{error_handling::HandleErrorLayer, BoxError};
-use axum_login::{permission_required, AuthManagerLayer};
+use axum_login::{
+    permission_required,
+    tower_sessions::{Expiry, MemoryStore, SessionManagerLayer},
+    AuthManagerLayer,
+};
 use http::StatusCode;
 use sqlx::SqlitePool;
 use time::Duration;
 use tower::ServiceBuilder;
-use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 
 use crate::{
     users::Backend,

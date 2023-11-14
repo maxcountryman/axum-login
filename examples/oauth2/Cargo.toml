@@ -21,5 +21,4 @@ thiserror = "1.0.50"
 time = "0.3.30"
 tokio = { version = "1.32.0", features = ["full"] }
 tower = "0.4.13"
-tower-sessions = "0.4.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

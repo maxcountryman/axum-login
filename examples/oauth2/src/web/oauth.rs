@@ -4,10 +4,10 @@ use axum::{
     routing::get,
     Router,
 };
+use axum_login::tower_sessions::Session;
 use http::StatusCode;
 use oauth2::CsrfToken;
 use serde::Deserialize;
-use tower_sessions::Session;
 
 use crate::{
     users::{AuthSession, Credentials},

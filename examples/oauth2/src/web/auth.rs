@@ -5,9 +5,9 @@ use axum::{
     routing::{get, post},
     Form, Router,
 };
+use axum_login::tower_sessions::Session;
 use http::StatusCode;
 use serde::Deserialize;
-use tower_sessions::Session;
 
 use crate::{users::AuthSession, web::oauth::CSRF_STATE_KEY};
 

@@ -1,7 +1,7 @@
 //! Run with
 //!
 //! ```not_rust
-//! cargo run -p example-sqlite
+//! cargo run -p example-permissions
 //! ```
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
