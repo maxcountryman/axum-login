@@ -12,9 +12,11 @@ use crate::{
 /// An error type which maps session and backend errors.
 #[derive(thiserror::Error)]
 pub enum Error<Backend: AuthnBackend> {
+    /// A mapping to `tower_sessions::session::Error'.
     #[error(transparent)]
     Session(session::Error),
 
+    /// A mapping to `Backend::Error`.
     #[error(transparent)]
     Backend(Backend::Error),
 }

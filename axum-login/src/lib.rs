@@ -401,7 +401,7 @@ pub use axum;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 pub use http;
 pub use service::{AuthManager, AuthManagerLayer};
-pub use session::AuthSession;
+pub use session::{AuthSession, Error};
 pub use tower_sessions;
 pub use urlencoding;
 
