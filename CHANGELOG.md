@@ -1,5 +1,17 @@
 # Unreleased
 
+# 0.8.0
+
+**Breaking changes**
+
+- Update `tower-sessions` to 0.5.0; this changes the default session cookie name from "tower.sid" to "id".
+
+Note that applications using the old default, "tower.sid", may continue to do so without disruption by specifying [`with_name("tower.sid")`](https://docs.rs/tower-sessions/latest/tower_sessions/service/struct.SessionManagerLayer.html#method.with_name).
+
+**Other changes**
+
+- Ensure session error type is accessible. [#120](https://github.com/maxcountryman/axum-login/pull/120)
+
 # 0.7.3
 
 - Fix `permission_required` macro. [#116](https://github.com/maxcountryman/axum-login/pull/116) and 7a6720a
