@@ -1,5 +1,15 @@
 # Unreleased
 
+# 0.9.0
+
+**Breaking Changes**
+
+- Update `tower-sessions` to 0.6.0; this removes `replace_if_equal` and addressed a performance bottleneck.
+
+** Other Changes**
+
+- Make `DATA_KEY` configurable. [#109](https://github.com/maxcountryman/axum-login/pull/109)
+
 # 0.8.0
 
 **Breaking changes**
