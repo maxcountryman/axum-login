@@ -1,6 +1,5 @@
-use std::fmt::Debug;
 
-use ring::constant_time::verify_slices_are_equal;
+use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 use tower_sessions::{session, Session};
 
@@ -8,6 +7,19 @@ use crate::{
     backend::{AuthUser, UserId},
     AuthnBackend,
 };
+
+fn compare(a: &[u8], b: &[u8]) -> core::cmp::Ordering {
+    for (ai, bi) in a.iter().zip(b.iter()) {
+        match ai.cmp(bi) {
+            core::cmp::Ordering::Equal => continue,
+            ord => return ord
+        }
+    }
+
+    /* if every single element was equal, compare length */
+    a.len().cmp(&b.len())
+}
+
 
 /// An error type which maps session and backend errors.
 #[derive(thiserror::Error)]
@@ -157,7 +169,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         if let Some(ref authed_user) = user {
             let session_auth_hash = authed_user.session_auth_hash();
             let session_verified = &data.auth_hash.clone().is_some_and(|auth_hash| {
-                verify_slices_are_equal(&auth_hash[..], session_auth_hash).is_ok()
+                compare(&auth_hash[..],session_auth_hash) == core::cmp::Ordering::Equal
             });
             if !session_verified {
                 user = None;

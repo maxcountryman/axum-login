@@ -5,7 +5,7 @@ use axum::{
     Router,
 };
 use axum_login::tower_sessions::Session;
-use http::StatusCode;
+use axum::http::StatusCode;
 use oauth2::CsrfToken;
 use serde::Deserialize;
 
