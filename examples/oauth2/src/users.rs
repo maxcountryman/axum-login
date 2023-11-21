@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use axum_login::{AuthUser, AuthnBackend, UserId};
-use http::header::{AUTHORIZATION, USER_AGENT};
+use axum::http::header::{AUTHORIZATION, USER_AGENT};
 use oauth2::{
     basic::{BasicClient, BasicRequestTokenError},
     reqwest::{async_http_client, AsyncHttpClientError},

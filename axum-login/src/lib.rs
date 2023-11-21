@@ -170,7 +170,7 @@
 //!     response::{IntoResponse, Redirect},
 //!     Form,
 //! };
-//! use http::StatusCode;
+//! use axum::http::StatusCode;
 //!
 //! type AuthSession = axum_login::AuthSession<Backend>;
 //!
@@ -346,7 +346,7 @@
 //!     BoxError, Form, Router,
 //! };
 //! use axum_login::{login_required, AuthManagerLayerBuilder};
-//! use http::StatusCode;
+//! use axum::http::StatusCode;
 //! use tower::ServiceBuilder;
 //! use tower_sessions::{MemoryStore, SessionManagerLayer};
 //!
@@ -398,8 +398,8 @@
 #![forbid(unsafe_code)]
 
 pub use axum;
+pub use axum::http;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
-pub use http;
 pub use service::{AuthManager, AuthManagerLayer, AuthManagerLayerBuilder};
 pub use session::{AuthSession, Error};
 pub use tower_sessions;
