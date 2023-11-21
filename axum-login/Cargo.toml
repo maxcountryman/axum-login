@@ -20,7 +20,7 @@ readme = "../README.md"
 async-trait = "0.1.57"
 axum = { version = "0.6.20", default-features = false }
 http = "0.2.9"
-ring = "0.17.5"
+##ring = "0.17.5"
 serde = "1"
 thiserror = "1.0.49"
 tower-cookies = "0.9.0"
