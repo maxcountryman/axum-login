@@ -6,7 +6,7 @@ use axum_login::{
     tower_sessions::{cookie::SameSite, Expiry, MemoryStore, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
-use http::StatusCode;
+use axum::http::StatusCode;
 use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, TokenUrl};
 use sqlx::SqlitePool;
 use time::Duration;

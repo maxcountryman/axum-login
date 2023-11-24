@@ -6,7 +6,7 @@ use axum::{
     Form, Router,
 };
 use axum_login::tower_sessions::Session;
-use http::StatusCode;
+use axum::http::StatusCode;
 use serde::Deserialize;
 
 use crate::{users::AuthSession, web::oauth::CSRF_STATE_KEY};
