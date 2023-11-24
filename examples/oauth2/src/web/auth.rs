@@ -1,4 +1,5 @@
 use askama::Template;
+use axum::http::StatusCode;
 use axum::{
     extract::Query,
     response::{IntoResponse, Redirect},
@@ -6,7 +7,6 @@ use axum::{
     Form, Router,
 };
 use axum_login::tower_sessions::Session;
-use axum::http::StatusCode;
 use serde::Deserialize;
 
 use crate::{users::AuthSession, web::oauth::CSRF_STATE_KEY};
