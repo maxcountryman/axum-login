@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use axum::{
     extract::Query,
     response::{IntoResponse, Redirect},
@@ -5,7 +6,6 @@ use axum::{
     Router,
 };
 use axum_login::tower_sessions::Session;
-use axum::http::StatusCode;
 use oauth2::CsrfToken;
 use serde::Deserialize;
 

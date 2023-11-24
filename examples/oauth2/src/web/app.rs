@@ -1,12 +1,12 @@
 use std::{env, net::SocketAddr};
 
+use axum::http::StatusCode;
 use axum::{error_handling::HandleErrorLayer, BoxError};
 use axum_login::{
     login_required,
     tower_sessions::{cookie::SameSite, Expiry, MemoryStore, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
-use axum::http::StatusCode;
 use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, TokenUrl};
 use sqlx::SqlitePool;
 use time::Duration;

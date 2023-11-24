@@ -1,11 +1,11 @@
 use askama::Template;
+use axum::http::StatusCode;
 use axum::{
     extract::Query,
     response::{IntoResponse, Redirect},
     routing::{get, post},
     Form, Router,
 };
-use axum::http::StatusCode;
 use serde::Deserialize;
 
 use crate::users::{AuthSession, Credentials};
