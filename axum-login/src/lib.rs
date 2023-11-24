@@ -170,7 +170,7 @@
 //!     response::{IntoResponse, Redirect},
 //!     Form,
 //! };
-//! use http::StatusCode;
+//! use axum::http::StatusCode;
 //!
 //! type AuthSession = axum_login::AuthSession<Backend>;
 //!
@@ -346,7 +346,7 @@
 //!     BoxError, Form, Router,
 //! };
 //! use axum_login::{login_required, AuthManagerLayerBuilder};
-//! use http::StatusCode;
+//! use axum::http::StatusCode;
 //! use tower::ServiceBuilder;
 //! use tower_sessions::{MemoryStore, SessionManagerLayer};
 //!

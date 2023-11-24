@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use axum::extract::FromRequestParts;
-use http::{request::Parts, StatusCode};
+use axum::http::{request::Parts, StatusCode};
 
 use crate::{AuthSession, AuthnBackend};
 
@@ -10,7 +10,7 @@ where
     S: Send + Sync,
     Backend: AuthnBackend + Send + Sync + 'static,
 {
-    type Rejection = (http::StatusCode, &'static str);
+    type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         parts.extensions.get::<AuthSession<_>>().cloned().ok_or((
