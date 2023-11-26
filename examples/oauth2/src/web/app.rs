@@ -1,7 +1,6 @@
 use std::{env, net::SocketAddr};
 
-use axum::http::StatusCode;
-use axum::{error_handling::HandleErrorLayer, BoxError};
+use axum::{error_handling::HandleErrorLayer, http::StatusCode, BoxError};
 use axum_login::{
     login_required,
     tower_sessions::{cookie::SameSite, Expiry, MemoryStore, SessionManagerLayer},

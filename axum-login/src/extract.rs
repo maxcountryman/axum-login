@@ -1,6 +1,8 @@
 use async_trait::async_trait;
-use axum::extract::FromRequestParts;
-use axum::http::{request::Parts, StatusCode};
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+};
 
 use crate::{AuthSession, AuthnBackend};
 

@@ -122,7 +122,8 @@ pub struct AuthManagerLayerBuilder<Backend: AuthnBackend, Sessions: SessionStore
 }
 
 impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayerBuilder<Backend, Sessions> {
-    /// Create a new [`AuthManagerLayerBuilder`] with the provided access controller.
+    /// Create a new [`AuthManagerLayerBuilder`] with the provided access
+    /// controller.
     pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
         Self {
             backend,
@@ -131,7 +132,8 @@ impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayerBuilder<Back
         }
     }
 
-    /// Configure the `data_key` optional property of the builder. If not configured it will default to "axum-login.data".
+    /// Configure the `data_key` optional property of the builder. If not
+    /// configured it will default to "axum-login.data".
     pub fn with_data_key(
         mut self,
         data_key: &'static str,
