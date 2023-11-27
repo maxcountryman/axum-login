@@ -18,21 +18,21 @@ readme = "../README.md"
 
 [dependencies]
 async-trait = "0.1.57"
-axum = { version = "0.6.20", default-features = false }
+axum = { version = "0.7.1", default-features = false }
 ring = "0.17.5"
 serde = "1"
 thiserror = "1.0.49"
-tower-cookies = "0.9.0"
+tower-cookies = "0.10.0"
 tower-layer = "0.3.2"
 tower-service = "0.3.2"
-tower-sessions = "0.6.0"
+tower-sessions = "0.7.0"
 tracing = { version = "0.1.40", features = ["log"] }
 urlencoding = "2.1.3"
 
 [dev-dependencies]
-axum = "0.6.20"
+axum = "0.7.0"
 reqwest = { version = "0.11.22", features = ["cookies"] }
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.4.13"
-tower-sessions = "0.6.0"
+tower-sessions = "0.7.0"

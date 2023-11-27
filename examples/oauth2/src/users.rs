@@ -107,9 +107,9 @@ impl AuthnBackend for Backend {
         // Use access token to request user info.
         let user_info = reqwest::Client::new()
             .get("https://api.github.com/user")
-            .header(USER_AGENT, "axum-login") // See: https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#user-agent-required
+            .header(USER_AGENT.as_str(), "axum-login") // See: https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#user-agent-required
             .header(
-                AUTHORIZATION,
+                AUTHORIZATION.as_str(),
                 format!("Bearer {}", token_res.access_token().secret()),
             )
             .send()
