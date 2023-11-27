@@ -23,7 +23,7 @@ jobs:
           cargo clippy --all --all-targets --all-features -- -Dwarnings
       - name: rustfmt
         run: |
-          cargo fmt --all -- --check
+          cargo +nightly fmt --all -- --check
 
   check-docs:
     runs-on: ubuntu-latest
