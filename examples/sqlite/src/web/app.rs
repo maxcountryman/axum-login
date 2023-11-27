@@ -1,7 +1,4 @@
-use std::net::SocketAddr;
-
-use axum::http::StatusCode;
-use axum::{error_handling::HandleErrorLayer, BoxError};
+use axum::{error_handling::HandleErrorLayer, http::StatusCode, BoxError};
 use axum_login::{
     login_required,
     tower_sessions::{Expiry, MemoryStore, SessionManagerLayer},
@@ -29,8 +26,6 @@ impl App {
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error>> {
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
         // Session layer.
         //
         // This uses `tower-sessions` to establish a layer that will provide the session
@@ -56,9 +51,8 @@ impl App {
             .merge(auth::router())
             .layer(auth_service);
 
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .await?;
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+        axum::serve(listener, app.into_make_service()).await?;
 
         Ok(())
     }

@@ -21,7 +21,6 @@ macro_rules! login_required {
         }
 
         $crate::predicate_required!(
-            $backend_type,
             is_authenticated,
             login_url = $login_url,
             redirect_field = $redirect_field
@@ -62,7 +61,6 @@ macro_rules! permission_required {
         }
 
         $crate::predicate_required!(
-            $backend_type,
             is_authorized,
             login_url = $login_url,
             redirect_field = $redirect_field
@@ -95,7 +93,6 @@ macro_rules! permission_required {
         }
 
         $crate::predicate_required!(
-            $backend_type,
             is_authorized,
             $crate::http::StatusCode::FORBIDDEN
         )
@@ -112,14 +109,14 @@ macro_rules! permission_required {
 /// used as the response.
 #[macro_export]
 macro_rules! predicate_required {
-    ($backend_type:ty, $predicate:expr, $alternative:expr) => {{
+    ($predicate:expr, $alternative:expr) => {{
         use $crate::axum::{
             middleware::{from_fn, Next},
             response::{IntoResponse, Redirect},
         };
 
         from_fn(
-            |auth_session: $crate::AuthSession<$backend_type>, req, next: Next<_>| async move {
+            |auth_session: $crate::AuthSession<_>, req, next: Next| async move {
                 if $predicate(auth_session).await {
                     next.run(req).await
                 } else {
@@ -129,14 +126,14 @@ macro_rules! predicate_required {
         )
     }};
 
-    ($backend_type:ty, $predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
+    ($predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
         use $crate::axum::{
             middleware::{from_fn, Next},
             response::{IntoResponse, Redirect},
         };
 
         from_fn(
-            |auth_session: $crate::AuthSession<$backend_type>, req, next: Next<_>| async move {
+            |auth_session: $crate::AuthSession<_>, req, next: Next| async move {
                 if $predicate(auth_session).await {
                     next.run(req).await
                 } else {
