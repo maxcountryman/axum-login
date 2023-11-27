@@ -1,7 +1,7 @@
 use askama::Template;
-use axum::http::StatusCode;
 use axum::{
     extract::Query,
+    http::StatusCode,
     response::{IntoResponse, Redirect},
     routing::{get, post},
     Form, Router,

@@ -1,6 +1,5 @@
 use askama::Template;
-use axum::http::StatusCode;
-use axum::{response::IntoResponse, routing::get, Router};
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 
 use crate::users::AuthSession;
 
