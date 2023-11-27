@@ -1,5 +1,13 @@
 # Unreleased
 
+# 0.10.0
+
+**Breaking Changes**
+
+- Update `tower-sessions` to 0.7.0.
+
+This includes support for `axum` 0.7.0.
+
 # 0.9.0
 
 **Breaking Changes**
