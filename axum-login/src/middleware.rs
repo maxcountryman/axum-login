@@ -8,7 +8,10 @@ macro_rules! login_required {
             auth_session.user.is_some()
         }
 
-        $crate::predicate_required!(is_authenticated, $crate::http::StatusCode::UNAUTHORIZED)
+        $crate::predicate_required!(
+            is_authenticated,
+            $crate::axum::http::StatusCode::UNAUTHORIZED
+        )
     }};
 
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
@@ -90,7 +93,7 @@ macro_rules! permission_required {
 
         $crate::predicate_required!(
             is_authorized,
-            $crate::http::StatusCode::FORBIDDEN
+            $crate::axum::http::StatusCode::FORBIDDEN
         )
     }};
 }
