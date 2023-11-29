@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.10.2
+
+- Ensure `http` is referenced apropriately in macros.
+
 # 0.10.1
 
 - Ensure `predicate_required` is invoked correctly.
