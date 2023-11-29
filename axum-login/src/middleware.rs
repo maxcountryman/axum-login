@@ -9,7 +9,6 @@ macro_rules! login_required {
         }
 
         $crate::predicate_required!(
-            $backend_type,
             is_authenticated,
             $crate::http::StatusCode::UNAUTHORIZED
         )
