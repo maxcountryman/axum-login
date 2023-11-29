@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.10.1
+
+- Ensure `predicate_required` is invoked correctly.
+
 # 0.10.0
 
 **Breaking Changes**
