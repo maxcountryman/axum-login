@@ -132,11 +132,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             tracing::Span::current().record("user.id", user.id().to_string());
         }
 
-        self.user = None;
-        self.data = Data::default();
         self.session.flush().await?;
-
-        self.update_session().await?;
 
         Ok(user)
     }
