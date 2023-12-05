@@ -32,6 +32,12 @@ impl<Backend: AuthnBackend> Debug for Error<Backend> {
     }
 }
 
+impl<Backend: AuthnBackend> From<session::Error> for Error<Backend> {
+    fn from(value: session::Error) -> Self {
+        Self::Session(value)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct Data<UserId> {
     user_id: Option<UserId>,
@@ -105,20 +111,21 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         self.user = Some(user.clone());
 
         if self.data.auth_hash.is_none() {
-            self.session.cycle_id(); // Session-fixation mitigation.
+            self.session.cycle_id().await?; // Session-fixation
+                                            // mitigation.
         }
 
         self.data.user_id = Some(user.id());
         self.data.auth_hash = Some(user.session_auth_hash().to_owned());
 
-        self.update_session().map_err(Error::Session)?;
+        self.update_session().await?;
 
         Ok(())
     }
 
     /// Updates the session such that the user is logged out.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
-    pub fn logout(&mut self) -> Result<Option<Backend::User>, Error<Backend>> {
+    pub async fn logout(&mut self) -> Result<Option<Backend::User>, Error<Backend>> {
         let user = self.user.clone();
 
         if let Some(ref user) = user {
@@ -127,15 +134,15 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
 
         self.user = None;
         self.data = Data::default();
-        self.session.flush();
+        self.session.flush().await?;
 
-        self.update_session().map_err(Error::Session)?;
+        self.update_session().await?;
 
         Ok(user)
     }
 
-    fn update_session(&mut self) -> Result<(), session::Error> {
-        self.session.insert(self.data_key, self.data.clone())
+    async fn update_session(&mut self) -> Result<(), session::Error> {
+        self.session.insert(self.data_key, self.data.clone()).await
     }
 
     pub(crate) async fn from_session(
@@ -143,10 +150,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         backend: Backend,
         data_key: &'static str,
     ) -> Result<Self, Error<Backend>> {
-        let mut data: Data<_> = session
-            .get(data_key)
-            .map_err(Error::Session)?
-            .unwrap_or_default();
+        let mut data: Data<_> = session.get(data_key).await?.unwrap_or_default();
 
         let mut user = if let Some(ref user_id) = data.user_id {
             backend.get_user(user_id).await.map_err(Error::Backend)?
@@ -162,7 +166,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             if !session_verified {
                 user = None;
                 data = Data::default();
-                session.flush();
+                session.flush().await?;
             }
         }
 

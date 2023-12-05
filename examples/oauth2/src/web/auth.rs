@@ -52,10 +52,12 @@ mod post {
 
         session
             .insert(CSRF_STATE_KEY, csrf_state.secret())
+            .await
             .expect("Serialization should not fail.");
 
         session
             .insert(NEXT_URL_KEY, next)
+            .await
             .expect("Serialization should not fail.");
 
         Redirect::to(auth_url.as_str()).into_response()
@@ -73,7 +75,7 @@ mod get {
     }
 
     pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
-        match auth_session.logout() {
+        match auth_session.logout().await {
             Ok(_) => Redirect::to("/login").into_response(),
             Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
