@@ -1,10 +1,10 @@
 # Unreleased
 
-**Breaking Changes**
-
 # 0.11.0
 
-- Update `tower-sessions` to 0.8.0; this introduces lazy sessions.
+**Breaking Changes**
+
+- Update `tower-sessions` to 0.8.0; this introduces lazy sessions. [#132](https://github.com/maxcountryman/axum-login/pull/132)
 
 This is a significant update to the session API, which now requires awaiting its methods. That said, changes to this crate are fairly minimal.
 
