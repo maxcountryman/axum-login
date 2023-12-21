@@ -37,7 +37,7 @@ mod get {
             state: new_state,
         }): Query<AuthzResp>,
     ) -> impl IntoResponse {
-        let Ok(Some(old_state)) = session.get(CSRF_STATE_KEY) else {
+        let Ok(Some(old_state)) = session.get(CSRF_STATE_KEY).await else {
             return StatusCode::BAD_REQUEST.into_response();
         };
 
@@ -66,7 +66,7 @@ mod get {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
 
-        if let Ok(Some(next)) = session.remove::<String>(NEXT_URL_KEY) {
+        if let Ok(Some(next)) = session.remove::<String>(NEXT_URL_KEY).await {
             Redirect::to(&next).into_response()
         } else {
             Redirect::to("/").into_response()
