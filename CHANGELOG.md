@@ -1,5 +1,13 @@
 # Unreleased
 
+**Breaking Changes**
+
+# 0.11.0
+
+- Update `tower-sessions` to 0.8.0; this introduces lazy sessions.
+
+This is a significant update to the session API, which now requires awaiting its methods. That said, changes to this crate are fairly minimal.
+
 # 0.10.2
 
 - Ensure `http` is referenced apropriately in macros.
