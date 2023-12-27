@@ -27,9 +27,8 @@ pub fn router() -> Router<()> {
 }
 
 mod get {
-    use crate::users::GitCred;
-
     use super::*;
+    use crate::users::OAuthCreds;
 
     pub async fn callback(
         mut auth_session: AuthSession,
@@ -43,13 +42,11 @@ mod get {
             return StatusCode::BAD_REQUEST.into_response();
         };
 
-        let creds = Credentials::GitCred(
-            GitCred{
-                code,
-                old_state,
-                new_state
-            }
-        );
+        let creds = Credentials::OAuth(OAuthCreds {
+            code,
+            old_state,
+            new_state,
+        });
 
         let user = match auth_session.authenticate(creds).await {
             Ok(Some(user)) => user,

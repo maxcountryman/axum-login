@@ -8,9 +8,9 @@
     <span><strong>{{ message }}</strong></span>
     {% endif %}
 
-    <p>You can either log in using username and password or by git</p>
+    <p>Log in with either a username and password or OAuth (via GitHub)</p>
 
-    <form action="/basic_login" method="post">
+    <form action="/password_login" method="post">
       <fieldset>
         <legend>User login</legend>
         <p>
@@ -35,7 +35,7 @@
       {% endif %}
     </form>
 
-    <form action="/git_login" method="post">
+    <form action="/oauth_login" method="post">
       <input type="submit" value="GitHub Login" />
 
       {% if let Some(next) = next %}

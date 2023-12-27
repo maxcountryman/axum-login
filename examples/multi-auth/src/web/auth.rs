@@ -29,22 +29,24 @@ pub struct NextUrl {
 
 pub fn router() -> Router<()> {
     Router::new()
-        .route("/basic_login", post(self::post::basic_login))
-        .route("/git_login", post(self::post::git_login))
+        .route("/password_login", post(self::post::password_login))
+        .route("/oauth_login", post(self::post::oauth_login))
         .route("/login", get(self::get::login))
         .route("/logout", get(self::get::logout))
 }
 
 mod post {
-    use crate::users::{Credentials, BasicCred};
-
     use super::*;
+    use crate::users::{Credentials, PasswordCreds};
 
-    pub async fn basic_login(
+    pub async fn password_login(
         mut auth_session: AuthSession,
-        Form(creds): Form<BasicCred>,
+        Form(creds): Form<PasswordCreds>,
     ) -> impl IntoResponse {
-        let user = match auth_session.authenticate(Credentials::BasicCred(creds.clone())).await {
+        let user = match auth_session
+            .authenticate(Credentials::Password(creds.clone()))
+            .await
+        {
             Ok(Some(user)) => user,
             Ok(None) => {
                 return LoginTemplate {
@@ -67,7 +69,7 @@ mod post {
         }
     }
 
-    pub async fn git_login(
+    pub async fn oauth_login(
         auth_session: AuthSession,
         session: Session,
         Form(NextUrl { next }): Form<NextUrl>,

@@ -15,6 +15,7 @@ use sqlx::{FromRow, SqlitePool};
 pub struct User {
     id: i64,
     pub username: String,
+    pub password: String,
     pub access_token: String,
 }
 
@@ -25,6 +26,7 @@ impl std::fmt::Debug for User {
         f.debug_struct("User")
             .field("id", &self.id)
             .field("username", &self.username)
+            .field("password", &"[redacted]")
             .field("access_token", &"[redacted]")
             .finish()
     }
@@ -43,21 +45,20 @@ impl AuthUser for User {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub enum Credentials{
-    BasicCred(BasicCred),
-    GitCred(GitCred)
+pub enum Credentials {
+    Password(PasswordCreds),
+    OAuth(OAuthCreds),
 }
 
-// Stands for 
 #[derive(Debug, Clone, Deserialize)]
-pub struct BasicCred {
+pub struct PasswordCreds {
     pub username: String,
     pub password: String,
     pub next: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct GitCred {
+pub struct OAuthCreds {
     pub code: String,
     pub old_state: CsrfToken,
     pub new_state: CsrfToken,
@@ -107,33 +108,38 @@ impl AuthnBackend for Backend {
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
         match creds {
-            Self::Credentials::BasicCred(bcred) =>{
-                let user: Option<Self::User> = sqlx::query_as("select * from users where username = ? ")
-                    .bind(bcred.username)
-                    .fetch_optional(&self.db)
-                    .await
-                    .map_err(Self::Error::Sqlx)?;
+            Self::Credentials::Password(password_cred) => {
+                let user: Option<Self::User> =
+                    sqlx::query_as("select * from users where username = ? ")
+                        .bind(password_cred.username)
+                        .fetch_optional(&self.db)
+                        .await
+                        .map_err(Self::Error::Sqlx)?;
 
                 Ok(user.filter(|user| {
-                    // Here access_token column in the users table is holding both the encrypted passwords and the access tokens
-                    // For your production you should change this
-                    verify_password(bcred.password, &user.access_token)
+                    // Here access_token column in the users table is holding both the encrypted
+                    // passwords and the access tokens For your production you
+                    // should change this
+                    verify_password(password_cred.password, &user.password)
                         .ok()
-                        .is_some() // We're using password-based authentication--this
-                                // works by comparing our form input with an argon2
-                                // password hash.
+                        .is_some() // We're using password-based
+                                   // authentication--this
+                                   // works by comparing our form input with an
+                                   // argon2
+                                   // password hash.
                 }))
             }
-            Self::Credentials::GitCred(gitcred) => {
+
+            Self::Credentials::OAuth(git_creds) => {
                 // Ensure the CSRF state has not been tampered with.
-                if gitcred.old_state.secret() != gitcred.new_state.secret() {
+                if git_creds.old_state.secret() != git_creds.new_state.secret() {
                     return Ok(None);
                 };
 
                 // Process authorization code, expecting a token response back.
                 let token_res = self
                     .client
-                    .exchange_code(AuthorizationCode::new(gitcred.code))
+                    .exchange_code(AuthorizationCode::new(git_creds.code))
                     .request_async(async_http_client)
                     .await
                     .map_err(Self::Error::OAuth2)?;
@@ -172,7 +178,6 @@ impl AuthnBackend for Backend {
                 Ok(Some(user))
             }
         }
-        
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
