@@ -15,8 +15,8 @@ use sqlx::{FromRow, SqlitePool};
 pub struct User {
     id: i64,
     pub username: String,
-    pub password: String,
-    pub access_token: String,
+    pub password: Option<String>,
+    pub access_token: Option<String>,
 }
 
 // Here we've implemented `Debug` manually to avoid accidentally logging the
@@ -40,7 +40,15 @@ impl AuthUser for User {
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        self.access_token.as_bytes()
+        if let Some(access_token) = &self.access_token {
+            return access_token.as_bytes();
+        }
+
+        if let Some(password) = &self.password {
+            return password.as_bytes();
+        }
+
+        &[]
     }
 }
 
@@ -109,18 +117,21 @@ impl AuthnBackend for Backend {
     ) -> Result<Option<Self::User>, Self::Error> {
         match creds {
             Self::Credentials::Password(password_cred) => {
-                let user: Option<Self::User> =
-                    sqlx::query_as("select * from users where username = ? ")
-                        .bind(password_cred.username)
-                        .fetch_optional(&self.db)
-                        .await
-                        .map_err(Self::Error::Sqlx)?;
+                let user: Option<Self::User> = sqlx::query_as(
+                    "select * from users where username = ? and password is not null",
+                )
+                .bind(password_cred.username)
+                .fetch_optional(&self.db)
+                .await
+                .map_err(Self::Error::Sqlx)?;
 
                 Ok(user.filter(|user| {
-                    // Here access_token column in the users table is holding both the encrypted
-                    // passwords and the access tokens For your production you
-                    // should change this
-                    verify_password(password_cred.password, &user.password)
+                    // Password will not be `None` given our query above.
+                    let Some(user_password) = &user.password else {
+                        return false;
+                    };
+
+                    verify_password(password_cred.password, user_password)
                         .ok()
                         .is_some() // We're using password-based
                                    // authentication--this
@@ -130,16 +141,16 @@ impl AuthnBackend for Backend {
                 }))
             }
 
-            Self::Credentials::OAuth(git_creds) => {
+            Self::Credentials::OAuth(oauth_creds) => {
                 // Ensure the CSRF state has not been tampered with.
-                if git_creds.old_state.secret() != git_creds.new_state.secret() {
+                if oauth_creds.old_state.secret() != oauth_creds.new_state.secret() {
                     return Ok(None);
                 };
 
                 // Process authorization code, expecting a token response back.
                 let token_res = self
                     .client
-                    .exchange_code(AuthorizationCode::new(git_creds.code))
+                    .exchange_code(AuthorizationCode::new(oauth_creds.code))
                     .request_async(async_http_client)
                     .await
                     .map_err(Self::Error::OAuth2)?;
