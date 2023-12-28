@@ -10,7 +10,7 @@
 
     <p>Log in with either a username and password or OAuth (via GitHub)</p>
 
-    <form action="/password_login" method="post">
+    <form action="/login/password" method="post">
       <fieldset>
         <legend>User login</legend>
         <p>
@@ -35,7 +35,7 @@
       {% endif %}
     </form>
 
-    <form action="/oauth_login" method="post">
+    <form action="/login/oauth" method="post">
       <input type="submit" value="GitHub Login" />
 
       {% if let Some(next) = next %}
