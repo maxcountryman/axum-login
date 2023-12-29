@@ -18,7 +18,9 @@ readme = "../README.md"
 
 [dependencies]
 async-trait = "0.1.57"
-axum = { version = "0.7.1", default-features = false }
+axum = { version = "0.7.1", default-features = false, features = [
+    "original-uri",
+] }
 ring = "0.17.5"
 serde = "1"
 thiserror = "1.0.49"
