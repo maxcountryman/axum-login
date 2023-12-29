@@ -127,18 +127,22 @@ macro_rules! predicate_required {
 
     ($predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
         use $crate::axum::{
+            extract::OriginalUri,
             middleware::{from_fn, Next},
             response::{IntoResponse, Redirect},
         };
 
         from_fn(
-            |auth_session: $crate::AuthSession<_>, req, next: Next| async move {
+            |auth_session: $crate::AuthSession<_>,
+             OriginalUri(original_uri): OriginalUri,
+             req,
+             next: Next| async move {
                 if $predicate(auth_session).await {
                     next.run(req).await
                 } else {
-                    let uri = req.uri().to_string();
-                    let next = $crate::urlencoding::encode(&uri);
-                    let redirect_url = format!("{}?{}={}", $login_url, $redirect_field, next);
+                    let uri = original_uri.to_string();
+                    let next_uri = $crate::urlencoding::encode(&uri);
+                    let redirect_url = format!("{}?{}={}", $login_url, $redirect_field, next_uri);
                     Redirect::temporary(&redirect_url).into_response()
                 }
             },
