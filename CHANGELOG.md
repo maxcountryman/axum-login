@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.11.1
+
+- Address request URI prefix truncation in nested routes by using `OriginalUri` extractor. [#153](https://github.com/maxcountryman/axum-login/pull/153)
+
 # 0.11.0
 
 **Breaking Changes**
