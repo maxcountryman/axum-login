@@ -39,4 +39,4 @@ time = "0.3.31"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.4.13"
-tower-sessions = { versopn = "0.8.0", features = ["sqlite-store"] }
+tower-sessions = { version = "0.8.0", features = ["sqlite-store"] }
