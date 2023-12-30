@@ -60,7 +60,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run unit tests
         run: |
-          cargo test --all-features
+          cargo test --lib --all-features
 
   test-integration:
     needs: check
