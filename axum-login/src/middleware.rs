@@ -7,11 +7,7 @@ fn update_query(uri: &Uri, new_query: String) -> Result<Uri, http::Error> {
         .finish();
 
     let mut parts = uri.clone().into_parts();
-    parts.path_and_query = Some(
-        format!("{}?{}", uri.path(), updated_query)
-            .parse()
-            .expect("Failed to parse path_and_query"),
-    );
+    parts.path_and_query = Some(format!("{}?{}", uri.path(), updated_query).parse()?);
 
     Ok(Uri::from_parts(parts)?)
 }
