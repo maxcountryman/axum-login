@@ -26,6 +26,10 @@ pub fn url_with_redirect_query(
 ) -> Result<Uri, http::Error> {
     let uri = url.parse::<Uri>()?;
 
+    if uri.query().is_some_and(|q| q.contains(redirect_field)) {
+        return Ok(uri);
+    };
+
     let redirect_uri_string = redirect_uri.to_string();
     let redirect_uri_encoded = urlencoding::encode(&redirect_uri_string);
     let redirect_query = format!("{}={}", redirect_field, redirect_uri_encoded);
@@ -668,6 +672,26 @@ mod tests {
         assert_eq!(
             res.headers().get("location").and_then(|h| h.to_str().ok()),
             Some("/login?next=%2F%3Fa%3Db%26a%3Dc&foo=bar&foo=baz")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_login_url_explicit_redirect() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(
+                Backend,
+                login_url = "/login?next_url=%2Fdashboard",
+                redirect_field = "next_url"
+            ))
+            .layer(auth_service!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            Some("/login?next_url=%2Fdashboard")
         );
     }
 }
