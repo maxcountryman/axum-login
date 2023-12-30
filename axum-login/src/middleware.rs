@@ -1,3 +1,38 @@
+use axum::http::{self, Uri};
+
+fn update_query(uri: &Uri, new_query: String) -> Result<Uri, http::Error> {
+    let query = form_urlencoded::parse(uri.query().map(|q| q.as_bytes()).unwrap_or_default());
+    let updated_query = form_urlencoded::Serializer::new(new_query)
+        .extend_pairs(query)
+        .finish();
+
+    let mut parts = uri.clone().into_parts();
+    parts.path_and_query = Some(
+        format!("{}?{}", uri.path(), updated_query)
+            .parse()
+            .expect("Failed to parse path_and_query"),
+    );
+
+    Ok(Uri::from_parts(parts)?)
+}
+
+/// This is intended for internal use only and subject to change in the future
+/// without warning!
+#[doc(hidden)]
+pub fn url_with_redirect_query(
+    url: &str,
+    redirect_field: &str,
+    redirect_uri: Uri,
+) -> Result<Uri, http::Error> {
+    let uri = url.parse::<Uri>()?;
+
+    let redirect_uri_string = redirect_uri.to_string();
+    let redirect_uri_encoded = urlencoding::encode(&redirect_uri_string);
+    let redirect_query = format!("{}={}", redirect_field, redirect_uri_encoded);
+
+    update_query(&uri, redirect_query)
+}
+
 /// Login predicate middleware.
 ///
 /// Requires that the user is authenticated.
@@ -138,10 +173,20 @@ macro_rules! predicate_required {
                 if $predicate(auth_session).await {
                     next.run(req).await
                 } else {
-                    let uri = original_uri.to_string();
-                    let next_uri = $crate::urlencoding::encode(&uri);
-                    let redirect_url = format!("{}?{}={}", $login_url, $redirect_field, next_uri);
-                    Redirect::temporary(&redirect_url).into_response()
+                    match $crate::url_with_redirect_query(
+                        $login_url,
+                        $redirect_field,
+                        original_uri
+                    ) {
+                        Ok(login_url) => {
+                            Redirect::temporary(&login_url.to_string()).into_response()
+                        }
+
+                        Err(err) => {
+                            $crate::tracing::error!(err = %err);
+                            $crate::axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                        }
+                    }
                 }
             },
         )
@@ -575,5 +620,54 @@ mod tests {
             .unwrap();
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_redirect_uri_query() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(Backend, login_url = "/login"))
+            .layer(auth_service!());
+
+        let req = Request::builder()
+            .uri("/?foo=bar&foo=baz")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2F%3Ffoo%3Dbar%26foo%3Dbaz")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_login_url_query() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(
+                Backend,
+                login_url = "/login?foo=bar&foo=baz"
+            ))
+            .layer(auth_service!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2F&foo=bar&foo=baz")
+        );
+
+        let req = Request::builder()
+            .uri("/?a=b&a=c")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2F%3Fa%3Db%26a%3Dc&foo=bar&foo=baz")
+        );
     }
 }

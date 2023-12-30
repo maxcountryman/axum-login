@@ -30,6 +30,7 @@ tower-service = "0.3.2"
 tower-sessions = "0.8.0"
 tracing = { version = "0.1.40", features = ["log"] }
 urlencoding = "2.1.3"
+form_urlencoded = "1.2.1"
 
 [dev-dependencies]
 axum = "0.7.0"

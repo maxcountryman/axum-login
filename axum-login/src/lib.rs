@@ -395,10 +395,12 @@
 
 pub use axum;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
+#[doc(hidden)]
+pub use middleware::url_with_redirect_query;
 pub use service::{AuthManager, AuthManagerLayer, AuthManagerLayerBuilder};
 pub use session::{AuthSession, Error};
 pub use tower_sessions;
-pub use urlencoding;
+pub use tracing;
 
 mod backend;
 mod extract;
