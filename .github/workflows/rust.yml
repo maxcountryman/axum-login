@@ -50,6 +50,18 @@ jobs:
         run: |
           cargo test --all-features --doc
 
+  test-unit:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - name: Run unit tests
+        run: |
+          cargo test --all-features
+
   test-integration:
     needs: check
     runs-on: ubuntu-latest
