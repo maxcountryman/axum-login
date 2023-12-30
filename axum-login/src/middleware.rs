@@ -683,11 +683,50 @@ mod tests {
             .layer(auth_service!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
-        let res = app.clone().oneshot(req).await.unwrap();
+        let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
             res.headers().get("location").and_then(|h| h.to_str().ok()),
             Some("/login?next_url=%2Fdashboard")
+        );
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(
+                Backend,
+                login_url = "/login?next=%2Fdashboard"
+            ))
+            .layer(auth_service!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2Fdashboard")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_nested() {
+        let nested = Router::new()
+            .route("/foo", axum::routing::get(|| async {}))
+            .route_layer(login_required!(Backend, login_url = "/login"));
+        let app = Router::new().nest("/nested", nested).layer(auth_service!());
+
+        let req = Request::builder()
+            .uri("/nested/foo")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2Fnested%2Ffoo")
         );
     }
 }
