@@ -125,7 +125,7 @@ pub trait AuthnBackend: Clone + Send + Sync {
     type User: AuthUser;
 
     /// Credential type used for authentication.
-    type Credentials: Clone + Send + Sync;
+    type Credentials: Send + Sync;
 
     /// An error which can occur during authentication and authorization.
     type Error: std::error::Error + Send + Sync;
@@ -144,12 +144,12 @@ pub trait AuthnBackend: Clone + Send + Sync {
 ///
 /// Backends must implement `AuthnBackend`.
 #[async_trait]
-pub trait AuthzBackend: Clone + Send + Sync
+pub trait AuthzBackend
 where
     Self: AuthnBackend,
 {
     /// Permission type.
-    type Permission: Hash + Eq + Clone + Send + Sync;
+    type Permission: Hash + Eq + Send + Sync;
 
     /// Gets the permissions for the provided user.
     async fn get_user_permissions(
