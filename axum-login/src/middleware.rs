@@ -366,7 +366,9 @@ mod tests {
 
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/login?next=%2F")
         );
 
@@ -409,7 +411,9 @@ mod tests {
 
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/signin?next_uri=%2F")
         );
 
@@ -519,7 +523,9 @@ mod tests {
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/login?next=%2F")
         );
 
@@ -562,7 +568,9 @@ mod tests {
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/signin?next_uri=%2F")
         );
 
@@ -636,7 +644,9 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/login?next=%2F%3Ffoo%3Dbar%26foo%3Dbaz")
         );
     }
@@ -655,7 +665,9 @@ mod tests {
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/login?next=%2F&foo=bar&foo=baz")
         );
 
@@ -666,7 +678,9 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/login?next=%2F%3Fa%3Db%26a%3Dc&foo=bar&foo=baz")
         );
     }
@@ -686,7 +700,9 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
-            res.headers().get("location").and_then(|h| h.to_str().ok()),
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
             Some("/login?next_url=%2Fdashboard")
         );
 
