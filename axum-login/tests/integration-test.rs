@@ -21,11 +21,11 @@ impl Drop for ChildGuard {
     }
 }
 
-async fn start_example_binary() -> ChildGuard {
+async fn start_example_binary(binary_name: &str) -> ChildGuard {
     let child = Command::new("cargo")
         .arg("run")
         .arg("-p")
-        .arg("example-sqlite")
+        .arg(binary_name)
         .spawn()
         .expect("Failed to start example binary");
 
@@ -49,7 +49,7 @@ async fn start_example_binary() -> ChildGuard {
 
 #[tokio::test]
 async fn sqlite_example() {
-    let _child_guard = start_example_binary().await;
+    let _child_guard = start_example_binary("example-sqlite").await;
 
     let client = Client::builder().cookie_store(true).build().unwrap();
 
@@ -83,6 +83,89 @@ async fn sqlite_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{}/", WEBSERVER_URL));
+
+    // Log out and check the cookie has been removed in response.
+    let res = client
+        .get(format!("{}/logout", WEBSERVER_URL))
+        .send()
+        .await
+        .unwrap();
+    assert!(res
+        .cookies()
+        .find(|c| c.name() == "id")
+        .is_some_and(|c| c.value() == ""));
+}
+
+#[tokio::test]
+async fn permissions_example() {
+    let _child_guard = start_example_binary("example-permissions").await;
+
+    let client = Client::builder().cookie_store(true).build().unwrap();
+
+    // A logged out user is redirected to the login URL with a next query string.
+    let res = client.get(WEBSERVER_URL).send().await.unwrap();
+    assert_eq!(
+        res.url().to_string(),
+        format!("{}/login?next=%2F", WEBSERVER_URL)
+    );
+
+    // Log in with invalid credentials.
+    let mut form = HashMap::new();
+    form.insert("username", "ferris");
+    form.insert("password", "bogus");
+    let res = client
+        .post(format!("{}/login", WEBSERVER_URL))
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.url().to_string(), format!("{}/login", WEBSERVER_URL));
+
+    // Log in with valid credentials.
+    let mut form = HashMap::new();
+    form.insert("username", "ferris");
+    form.insert("password", "hunter42");
+    let res = client
+        .post(format!("{}/login", WEBSERVER_URL))
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.url().to_string(), format!("{}/", WEBSERVER_URL));
+
+    // Try to access restricted page.
+    let res = client
+        .get(format!("{}/restricted", WEBSERVER_URL))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.url().to_string(),
+        format!("{}/login?next=%2Frestricted", WEBSERVER_URL)
+    );
+
+    // Log in with valid credentials.
+    let mut form = HashMap::new();
+    form.insert("username", "admin");
+    form.insert("password", "hunter42");
+    let res = client
+        .post(format!("{}/login", WEBSERVER_URL))
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.url().to_string(), format!("{}/", WEBSERVER_URL));
+
+    // Now we should be able to access the restricted page.
+    let res = client
+        .get(format!("{}/restricted", WEBSERVER_URL))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.url().to_string(),
+        format!("{}/restricted", WEBSERVER_URL)
+    );
 
     // Log out and check the cookie has been removed in response.
     let res = client
