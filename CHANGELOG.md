@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.11.3
+
+- Relax trait bounds such that e.g. `Credentials` do not require `Clone`. #[#157](https://github.com/maxcountryman/axum-login/pull/157)
+
 # 0.11.2
 
 - Ensure correct redirect uri query handling. [#155](https://github.com/maxcountryman/axum-login/pull/155)
