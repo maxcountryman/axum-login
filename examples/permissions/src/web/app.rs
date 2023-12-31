@@ -1,4 +1,3 @@
-use axum::{error_handling::HandleErrorLayer, http::StatusCode, BoxError};
 use axum_login::{
     permission_required,
     tower_sessions::{Expiry, MemoryStore, SessionManagerLayer},
@@ -6,7 +5,6 @@ use axum_login::{
 };
 use sqlx::SqlitePool;
 use time::Duration;
-use tower::ServiceBuilder;
 
 use crate::{
     users::Backend,
@@ -40,11 +38,7 @@ impl App {
         // This combines the session layer with our backend to establish the auth
         // service which will provide the auth session as a request extension.
         let backend = Backend::new(self.db);
-        let auth_service = ServiceBuilder::new()
-            .layer(HandleErrorLayer::new(|_: BoxError| async {
-                StatusCode::BAD_REQUEST
-            }))
-            .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
+        let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
         let app = restricted::router()
             .route_layer(permission_required!(
@@ -59,7 +53,7 @@ impl App {
                 "protected.read",
             ))
             .merge(auth::router())
-            .layer(auth_service);
+            .layer(auth_layer);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
         axum::serve(listener, app.into_make_service()).await?;
