@@ -1,5 +1,18 @@
 # Unreleased
 
+# 0.12.0
+
+**Breaking Changes**
+
+- Make service infallible.
+
+This follows along with the upstream changes to `tower-sessions`, where
+we made it such that the sessions middleware will not directly result in
+an error.
+
+Here we do the same and in doing so are able to use the layer directly
+with `axum`. This should reduce boilerplate.
+
 # 0.11.3
 
 - Relax trait bounds such that e.g. `Credentials` do not require `Clone`. #[#157](https://github.com/maxcountryman/axum-login/pull/157)
