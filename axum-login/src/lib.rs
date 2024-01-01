@@ -338,15 +338,14 @@
 //! #     }
 //! # }
 //! use axum::{
-//!     error_handling::HandleErrorLayer,
-//!     http::StatusCode,
-//!     response::{IntoResponse, Redirect},
 //!     routing::{get, post},
-//!     BoxError, Form, Router,
+//!     Router,
 //! };
-//! use axum_login::{login_required, AuthManagerLayerBuilder};
-//! use tower::ServiceBuilder;
-//! use tower_sessions::{MemoryStore, SessionManagerLayer};
+//! use axum_login::{
+//!     login_required,
+//!     tower_sessions::{MemoryStore, SessionManagerLayer},
+//!     AuthManagerLayerBuilder,
+//! };
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -356,18 +355,14 @@
 //!
 //!     // Auth service.
 //!     let backend = Backend::default();
-//!     let auth_service = ServiceBuilder::new()
-//!         .layer(HandleErrorLayer::new(|_: BoxError| async {
-//!             StatusCode::BAD_REQUEST
-//!         }))
-//!         .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
+//!     let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 //!
 //!     let app = Router::new()
 //!         .route("/protected", get(todo!()))
 //!         .route_layer(login_required!(Backend, login_url = "/login"))
 //!         .route("/login", post(todo!()))
 //!         .route("/login", get(todo!()))
-//!         .layer(auth_service);
+//!         .layer(auth_layer);
 //!
 //!     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 //!     axum::serve(listener, app.into_make_service()).await?;

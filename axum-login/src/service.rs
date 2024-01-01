@@ -5,11 +5,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use axum::http::{Request, Response};
+use axum::http::{self, Request, Response};
 use tower_cookies::CookieManager;
 use tower_layer::Layer;
 use tower_service::Service;
 use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore};
+use tracing::Instrument;
 
 use crate::{AuthSession, AuthnBackend};
 
@@ -35,42 +36,62 @@ impl<S, Backend: AuthnBackend> AuthManager<S, Backend> {
 impl<ReqBody, ResBody, S, Backend> Service<Request<ReqBody>> for AuthManager<S, Backend>
 where
     S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
-    S::Future: Send,
+    S::Future: Send + 'static,
     ReqBody: Send + 'static,
-    ResBody: Send,
+    ResBody: Default + Send,
     Backend: AuthnBackend + 'static,
 {
     type Response = S::Response;
-    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Error = S::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(Into::into)
+        self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        let backend = self.backend.clone();
+        let span = tracing::info_span!("call");
 
-        let clone = self.inner.clone();
-        let mut inner = std::mem::replace(&mut self.inner, clone);
+        let backend = self.backend.clone();
         let data_key = self.data_key;
 
-        Box::pin(async move {
-            let session = req
-                .extensions()
-                .get::<Session>()
-                .cloned()
-                .expect("Requests should have a `Session` extension via tower-sessions.");
+        // Because the inner service can panic until ready, we need to ensure we only
+        // use the ready service.
+        //
+        // See: https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
+        let clone = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, clone);
 
-            let auth_session =
-                AuthSession::from_session(session.clone(), backend, data_key).await?;
+        Box::pin(
+            async move {
+                let Some(session) = req.extensions().get::<Session>().cloned() else {
+                    tracing::error!("session not found in request extensions");
+                    let mut res = Response::default();
+                    *res.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+                    return Ok(res);
+                };
 
-            req.extensions_mut().insert(auth_session);
+                let auth_session = match AuthSession::from_session(session, backend, data_key).await
+                {
+                    Ok(auth_session) => auth_session,
+                    Err(err) => {
+                        tracing::error!(
+                            err = %err,
+                            "could not create auth session from session"
+                        );
+                        let mut res = Response::default();
+                        *res.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+                        return Ok(res);
+                    }
+                };
 
-            inner.call(req).await.map_err(Into::into)
-        })
+                req.extensions_mut().insert(auth_session);
+
+                inner.call(req).await
+            }
+            .instrument(span),
+        )
     }
 }
 

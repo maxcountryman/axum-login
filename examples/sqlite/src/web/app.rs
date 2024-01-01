@@ -1,12 +1,10 @@
-use axum::{error_handling::HandleErrorLayer, http::StatusCode, BoxError};
 use axum_login::{
     login_required,
-    tower_sessions::{Expiry, MemoryStore, SessionManagerLayer},
+    tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer, SqliteStore},
     AuthManagerLayerBuilder,
 };
 use sqlx::SqlitePool;
 use time::Duration;
-use tower::ServiceBuilder;
 
 use crate::{
     users::Backend,
@@ -30,7 +28,15 @@ impl App {
         //
         // This uses `tower-sessions` to establish a layer that will provide the session
         // as a request extension.
-        let session_store = MemoryStore::default();
+        let session_store = SqliteStore::new(self.db.clone());
+        session_store.migrate().await?;
+
+        let deletion_task = tokio::task::spawn(
+            session_store
+                .clone()
+                .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
+        );
+
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false)
             .with_expiry(Expiry::OnInactivity(Duration::days(1)));
@@ -40,19 +46,17 @@ impl App {
         // This combines the session layer with our backend to establish the auth
         // service which will provide the auth session as a request extension.
         let backend = Backend::new(self.db);
-        let auth_service = ServiceBuilder::new()
-            .layer(HandleErrorLayer::new(|_: BoxError| async {
-                StatusCode::BAD_REQUEST
-            }))
-            .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
+        let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
         let app = protected::router()
             .route_layer(login_required!(Backend, login_url = "/login"))
             .merge(auth::router())
-            .layer(auth_service);
+            .layer(auth_layer);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
         axum::serve(listener, app.into_make_service()).await?;
+
+        deletion_task.await??;
 
         Ok(())
     }

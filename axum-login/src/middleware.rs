@@ -200,11 +200,10 @@ mod tests {
     use async_trait::async_trait;
     use axum::{
         body::Body,
-        error_handling::HandleErrorLayer,
         http::{header, Request, Response, StatusCode},
-        BoxError, Router,
+        Router,
     };
-    use tower::{ServiceBuilder, ServiceExt};
+    use tower::ServiceExt;
     use tower_cookies::cookie;
     use tower_sessions::{sqlx::SqlitePool, SessionManagerLayer, SqliteStore};
 
@@ -288,7 +287,7 @@ mod tests {
         }
     }
 
-    macro_rules! auth_service {
+    macro_rules! auth_layer {
         () => {{
             let pool = SqlitePool::connect(":memory:").await.unwrap();
             let session_store = SqliteStore::new(pool.clone());
@@ -296,11 +295,7 @@ mod tests {
 
             let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
 
-            ServiceBuilder::new()
-                .layer(HandleErrorLayer::new(|_: BoxError| async {
-                    StatusCode::BAD_REQUEST
-                }))
-                .layer(AuthManagerLayerBuilder::new(Backend, session_layer).build())
+            AuthManagerLayerBuilder::new(Backend, session_layer).build()
         }};
     }
 
@@ -325,7 +320,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -359,7 +354,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -404,7 +399,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -445,7 +440,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -479,7 +474,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -517,7 +512,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -562,7 +557,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -607,7 +602,7 @@ mod tests {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -635,7 +630,7 @@ mod tests {
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(login_required!(Backend, login_url = "/login"))
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder()
             .uri("/?foo=bar&foo=baz")
@@ -659,7 +654,7 @@ mod tests {
                 Backend,
                 login_url = "/login?foo=bar&foo=baz"
             ))
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
@@ -694,7 +689,7 @@ mod tests {
                 login_url = "/login?next_url=%2Fdashboard",
                 redirect_field = "next_url"
             ))
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.oneshot(req).await.unwrap();
@@ -712,7 +707,7 @@ mod tests {
                 Backend,
                 login_url = "/login?next=%2Fdashboard"
             ))
-            .layer(auth_service!());
+            .layer(auth_layer!());
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.oneshot(req).await.unwrap();
@@ -730,7 +725,7 @@ mod tests {
         let nested = Router::new()
             .route("/foo", axum::routing::get(|| async {}))
             .route_layer(login_required!(Backend, login_url = "/login"));
-        let app = Router::new().nest("/nested", nested).layer(auth_service!());
+        let app = Router::new().nest("/nested", nested).layer(auth_layer!());
 
         let req = Request::builder()
             .uri("/nested/foo")

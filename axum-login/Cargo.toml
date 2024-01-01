@@ -7,10 +7,10 @@ homepage = "https://github.com/maxcountryman/axum-login"
 license = "MIT"
 keywords = ["authentication", "authorization", "login", "axum", "sessions"]
 categories = [
-    "web-programming::http-server",
-    "web-programming",
-    "database",
-    "asynchronous",
+  "web-programming::http-server",
+  "web-programming",
+  "database",
+  "asynchronous",
 ]
 repository = "https://github.com/maxcountryman/axum-login"
 documentation = "https://docs.rs/axum-login"
@@ -19,7 +19,7 @@ readme = "../README.md"
 [dependencies]
 async-trait = "0.1.57"
 axum = { version = "0.7.1", default-features = false, features = [
-    "original-uri",
+  "original-uri",
 ] }
 ring = "0.17.5"
 serde = "1"
@@ -27,7 +27,7 @@ thiserror = "1.0.49"
 tower-cookies = "0.10.0"
 tower-layer = "0.3.2"
 tower-service = "0.3.2"
-tower-sessions = "0.8.0"
+tower-sessions = "0.9.0"
 tracing = { version = "0.1.40", features = ["log"] }
 urlencoding = "2.1.3"
 form_urlencoded = "1.2.1"
@@ -35,8 +35,9 @@ form_urlencoded = "1.2.1"
 [dev-dependencies]
 axum = "0.7.0"
 reqwest = { version = "0.11.22", features = ["cookies"] }
+serial_test = "2.0.0"
 time = "0.3.31"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.4.13"
-tower-sessions = { version = "0.8.0", features = ["sqlite-store"] }
+tower-sessions = { version = "0.9.0", features = ["sqlite-store"] }

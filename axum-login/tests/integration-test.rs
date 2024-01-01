@@ -5,6 +5,7 @@ use std::{
 };
 
 use reqwest::Client;
+use serial_test::serial;
 
 const WEBSERVER_URL: &str = "http://localhost:3000";
 
@@ -48,6 +49,7 @@ async fn start_example_binary(binary_name: &str) -> ChildGuard {
 }
 
 #[tokio::test]
+#[serial]
 async fn sqlite_example() {
     let _child_guard = start_example_binary("example-sqlite").await;
 
@@ -97,6 +99,7 @@ async fn sqlite_example() {
 }
 
 #[tokio::test]
+#[serial]
 async fn permissions_example() {
     let _child_guard = start_example_binary("example-permissions").await;
 
