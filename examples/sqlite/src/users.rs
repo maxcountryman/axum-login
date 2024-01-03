@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+use axum::extract::FromRequestParts;
 use axum_login::{AuthUser, AuthnBackend, UserId};
+use http::{request::Parts, StatusCode};
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
@@ -35,6 +37,28 @@ impl AuthUser for User {
                                  // hash--what this means
                                  // is when the user changes their password the
                                  // auth session becomes invalid.
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for User
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let Some(auth_session) = parts.extensions.get::<AuthSession>().cloned() else {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Can't extract auth session. Is `AuthManagerLayer` enabled?",
+            ));
+        };
+
+        auth_session.user.ok_or((
+            StatusCode::UNAUTHORIZED,
+            "Expected a user but none was found.",
+        ))
     }
 }
 
