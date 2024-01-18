@@ -10,9 +10,13 @@
   </head>
 
   <body>
-    {% if let Some(message) = message %}
-    <span><strong>{{ message }}</strong></span>
-    {% endif %}
+    <ul>
+      {% for message in messages %}
+      <li>
+        <span><strong>{{ message }}</strong></span>
+      </li>
+      {% endfor %}
+    </ul>
 
     <form method="post">
       <fieldset>

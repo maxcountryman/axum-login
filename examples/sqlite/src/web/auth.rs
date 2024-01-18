@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
     Form, Router,
 };
+use axum_messages::{Message, Messages};
 use serde::Deserialize;
 
 use crate::users::{AuthSession, Credentials};
@@ -13,7 +14,7 @@ use crate::users::{AuthSession, Credentials};
 #[derive(Template)]
 #[template(path = "login.html")]
 pub struct LoginTemplate {
-    message: Option<String>,
+    messages: Vec<Message>,
     next: Option<String>,
 }
 
@@ -36,16 +37,20 @@ mod post {
 
     pub async fn login(
         mut auth_session: AuthSession,
+        messages: Messages,
         Form(creds): Form<Credentials>,
     ) -> impl IntoResponse {
         let user = match auth_session.authenticate(creds.clone()).await {
             Ok(Some(user)) => user,
             Ok(None) => {
-                return LoginTemplate {
-                    message: Some("Invalid credentials.".to_string()),
-                    next: creds.next,
-                }
-                .into_response()
+                messages.error("Invalid credentials");
+
+                let mut login_url = "/login".to_string();
+                if let Some(next) = creds.next {
+                    login_url = format!("{}?next={}", login_url, next);
+                };
+
+                return Redirect::to(&login_url).into_response();
             }
             Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         };
@@ -54,20 +59,26 @@ mod post {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
 
+        messages.success(format!("Successfully logged in as {}", user.username));
+
         if let Some(ref next) = creds.next {
-            Redirect::to(next).into_response()
+            Redirect::to(next)
         } else {
-            Redirect::to("/").into_response()
+            Redirect::to("/")
         }
+        .into_response()
     }
 }
 
 mod get {
     use super::*;
 
-    pub async fn login(Query(NextUrl { next }): Query<NextUrl>) -> LoginTemplate {
+    pub async fn login(
+        messages: Messages,
+        Query(NextUrl { next }): Query<NextUrl>,
+    ) -> LoginTemplate {
         LoginTemplate {
-            message: None,
+            messages: messages.into_iter().collect(),
             next,
         }
     }
