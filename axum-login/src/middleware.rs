@@ -205,7 +205,8 @@ mod tests {
     };
     use tower::ServiceExt;
     use tower_cookies::cookie;
-    use tower_sessions::{sqlx::SqlitePool, SessionManagerLayer, SqliteStore};
+    use tower_sessions::SessionManagerLayer;
+    use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 

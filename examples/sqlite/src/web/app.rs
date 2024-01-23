@@ -1,11 +1,12 @@
 use axum_login::{
     login_required,
-    tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer, SqliteStore},
+    tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
 use axum_messages::MessagesManagerLayer;
 use sqlx::SqlitePool;
 use time::Duration;
+use tower_sessions_sqlx_store::SqliteStore;
 
 use crate::{
     users::Backend,
