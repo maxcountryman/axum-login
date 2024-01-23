@@ -1,5 +1,15 @@
 # Unreleased
 
+0.13.0
+
+**Breaking Changes**
+
+- Update `tower-sessions` to 0.10.0
+
+This updates `tower-sessions` to its latest release, which itself contains breaking changes, especially with regard to previously-bundled session stores.
+
+Please review [those changes](https://github.com/maxcountryman/tower-sessions/blob/main/CHANGELOG.md#0100) for more details.
+
 # 0.12.0
 
 **Breaking Changes**
