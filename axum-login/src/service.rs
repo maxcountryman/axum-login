@@ -12,7 +12,7 @@ use tower_service::Service;
 use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore};
 use tracing::Instrument;
 
-use crate::{AuthSession, AuthnBackend};
+use crate::{AuthSession, AuthUser, AuthnBackend};
 
 /// A middleware that provides [`AuthSession`] as a request extension.
 #[derive(Debug, Clone)]
@@ -51,7 +51,7 @@ where
     }
 
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        let span = tracing::info_span!("call");
+        let span = tracing::info_span!("call", user.id = tracing::field::Empty);
 
         let backend = self.backend.clone();
         let data_key = self.data_key;
@@ -85,6 +85,10 @@ where
                         return Ok(res);
                     }
                 };
+
+                if let Some(ref user) = auth_session.user {
+                    tracing::Span::current().record("user.id", &user.id().to_string());
+                }
 
                 req.extensions_mut().insert(auth_session);
 
