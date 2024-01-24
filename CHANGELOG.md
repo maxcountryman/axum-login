@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.13.1
+
+- Record user id on span when available. [#160](https://github.com/maxcountryman/axum-login/pull/160)
+
 # 0.13.0
 
 **Breaking Changes**
