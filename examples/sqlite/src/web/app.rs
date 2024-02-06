@@ -41,6 +41,7 @@ impl App {
         );
 
         let session_layer = SessionManagerLayer::new(session_store)
+            .with_domain(".example.localhost".into())
             .with_secure(false)
             .with_expiry(Expiry::OnInactivity(Duration::days(1)));
 

@@ -7,7 +7,7 @@ use std::{
 use reqwest::Client;
 use serial_test::serial;
 
-const WEBSERVER_URL: &str = "http://localhost:3000";
+const WEBSERVER_URL: &str = "http://auth.example.localhost:3000";
 
 struct ChildGuard {
     child: Child,
@@ -95,7 +95,7 @@ async fn sqlite_example() {
     assert!(res
         .cookies()
         .find(|c| c.name() == "id")
-        .is_some_and(|c| c.value() == ""));
+        .is_some_and(|c| c.value() == "" && c.domain() == Some(".example.localhost")));
 }
 
 #[tokio::test]
@@ -179,5 +179,5 @@ async fn permissions_example() {
     assert!(res
         .cookies()
         .find(|c| c.name() == "id")
-        .is_some_and(|c| c.value() == ""));
+        .is_some_and(|c| c.value() == "" && c.domain() == Some(".example.localhost")));
 }
