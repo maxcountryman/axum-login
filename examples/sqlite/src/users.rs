@@ -3,6 +3,7 @@ use axum_login::{AuthUser, AuthnBackend, UserId};
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
+use tokio::task;
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -58,11 +59,20 @@ impl Backend {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
+
+    #[error(transparent)]
+    TaskJoin(#[from] task::JoinError),
+}
+
 #[async_trait]
 impl AuthnBackend for Backend {
     type User = User;
     type Credentials = Credentials;
-    type Error = sqlx::Error;
+    type Error = Error;
 
     async fn authenticate(
         &self,
@@ -73,13 +83,14 @@ impl AuthnBackend for Backend {
             .fetch_optional(&self.db)
             .await?;
 
-        Ok(user.filter(|user| {
-            verify_password(creds.password, &user.password)
-                .ok()
-                .is_some() // We're using password-based authentication--this
-                           // works by comparing our form input with an argon2
-                           // password hash.
-        }))
+        // Verifying the password is blocking and potentially slow, so we'll do so via
+        // `spawn_blocking`.
+        task::spawn_blocking(|| {
+            // We're using password-based authentication--this works by comparing our form
+            // input with an argon2 password hash.
+            Ok(user.filter(|user| verify_password(creds.password, &user.password).is_ok()))
+        })
+        .await?
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {

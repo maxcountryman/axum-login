@@ -10,6 +10,7 @@ use oauth2::{
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
+use tokio::task;
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -87,6 +88,9 @@ pub enum BackendError {
 
     #[error(transparent)]
     OAuth2(BasicRequestTokenError<AsyncHttpClientError>),
+
+    #[error(transparent)]
+    TaskJoin(#[from] task::JoinError),
 }
 
 #[derive(Debug, Clone)]
@@ -125,20 +129,19 @@ impl AuthnBackend for Backend {
                 .await
                 .map_err(Self::Error::Sqlx)?;
 
-                Ok(user.filter(|user| {
-                    // Password will not be `None` given our query above.
-                    let Some(user_password) = &user.password else {
-                        return false;
-                    };
-
-                    verify_password(password_cred.password, user_password)
-                        .ok()
-                        .is_some() // We're using password-based
-                                   // authentication--this
-                                   // works by comparing our form input with an
-                                   // argon2
-                                   // password hash.
-                }))
+                // Verifying the password is blocking and potentially slow, so we'll do so via
+                // `spawn_blocking`.
+                task::spawn_blocking(|| {
+                    // We're using password-based authentication: this works by comparing our form
+                    // input with an argon2 password hash.
+                    Ok(user.filter(|user| {
+                        let Some(ref password) = user.password else {
+                            return false;
+                        };
+                        verify_password(password_cred.password, password).is_ok()
+                    }))
+                })
+                .await?
             }
 
             Self::Credentials::OAuth(oauth_creds) => {

@@ -22,3 +22,4 @@ tower = "0.4.13"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tower-sessions = { version = "0.10.0", default-features = false }
 tower-sessions-sqlx-store = { version = "0.10.0", features = ["sqlite"] }
+thiserror = "1.0.56"
