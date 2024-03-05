@@ -1,6 +1,6 @@
 [package]
 name = "axum-login"
-version = "0.13.1"
+version = "0.14.0"
 description = "🪪 User identification, authentication, and authorization for Axum."
 edition = "2021"
 homepage = "https://github.com/maxcountryman/axum-login"
@@ -27,7 +27,7 @@ thiserror = "1.0.49"
 tower-cookies = "0.10.0"
 tower-layer = "0.3.2"
 tower-service = "0.3.2"
-tower-sessions = "0.10.0"
+tower-sessions = "0.11.0"
 tracing = { version = "0.1.40", features = ["log"] }
 urlencoding = "2.1.3"
 form_urlencoded = "1.2.1"
@@ -40,5 +40,5 @@ time = "0.3.31"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.4.13"
-tower-sessions = { version = "0.10.0" }
-tower-sessions-sqlx-store = { version = "0.10.0", features = ["sqlite"] }
+tower-sessions = { version = "0.11.0" }
+tower-sessions-sqlx-store = { version = "0.11.0", features = ["sqlite"] }

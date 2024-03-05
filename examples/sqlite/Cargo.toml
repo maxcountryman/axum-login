@@ -10,7 +10,7 @@ askama_axum = "0.4.0"
 async-trait = "0.1.74"
 axum = "0.7.0"
 axum-login = { path = "../../axum-login" }
-axum-messages = "0.3.0"
+axum-messages = "0.4.0"
 http = "1.0.0"
 hyper = "1.0.1"
 password-auth = "1.0.0"
@@ -20,6 +20,6 @@ time = "0.3.30"
 tokio = { version = "1.34.0", features = ["full"] }
 tower = "0.4.13"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tower-sessions = { version = "0.10.0", default-features = false }
-tower-sessions-sqlx-store = { version = "0.10.0", features = ["sqlite"] }
+tower-sessions = { version = "0.11.0", default-features = false }
+tower-sessions-sqlx-store = { version = "0.11.0", features = ["sqlite"] }
 thiserror = "1.0.56"
