@@ -1,5 +1,13 @@
 # Unreleased
 
+# 0.14.0
+
+- Update `tower-sessions` to 0.11.0
+
+This updates `tower-sessions` to its latest release, which itself contains breaking changes.
+
+Please review [those changes](https://github.com/maxcountryman/tower-sessions/blob/main/CHANGELOG.md#0110) for more details.
+
 # 0.13.1
 
 - Record user id on span when available. [#160](https://github.com/maxcountryman/axum-login/pull/160)
