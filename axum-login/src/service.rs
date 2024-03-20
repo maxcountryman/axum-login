@@ -9,7 +9,10 @@ use axum::http::{self, Request, Response};
 use tower_cookies::CookieManager;
 use tower_layer::Layer;
 use tower_service::Service;
-use tower_sessions::{Session, SessionManager, SessionManagerLayer, SessionStore};
+use tower_sessions::{
+    service::{CookieController, PlaintextCookie},
+    Session, SessionManager, SessionManagerLayer, SessionStore,
+};
 use tracing::Instrument;
 
 use crate::{AuthSession, AuthUser, AuthnBackend};
@@ -101,18 +104,24 @@ where
 
 /// A layer for providing [`AuthSession`] as a request extension.
 #[derive(Debug, Clone)]
-pub struct AuthManagerLayer<Backend: AuthnBackend, Sessions: SessionStore> {
+pub struct AuthManagerLayer<
+    Backend: AuthnBackend,
+    Sessions: SessionStore,
+    C: CookieController = PlaintextCookie,
+> {
     backend: Backend,
-    session_manager_layer: SessionManagerLayer<Sessions>,
+    session_manager_layer: SessionManagerLayer<Sessions, C>,
     data_key: &'static str,
 }
 
-impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Sessions> {
+impl<Backend: AuthnBackend, Sessions: SessionStore, C: CookieController>
+    AuthManagerLayer<Backend, Sessions, C>
+{
     /// Create a new [`AuthManagerLayer`] with the provided access controller.
     pub(crate) fn new(
         backend: Backend,
         data_key: &'static str,
-        session_manager_layer: SessionManagerLayer<Sessions>,
+        session_manager_layer: SessionManagerLayer<Sessions, C>,
     ) -> Self {
         Self {
             backend,
@@ -122,10 +131,10 @@ impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayer<Backend, Se
     }
 }
 
-impl<S, Backend: AuthnBackend, Sessions: SessionStore> Layer<S>
-    for AuthManagerLayer<Backend, Sessions>
+impl<S, Backend: AuthnBackend, Sessions: SessionStore, C: CookieController> Layer<S>
+    for AuthManagerLayer<Backend, Sessions, C>
 {
-    type Service = CookieManager<SessionManager<AuthManager<S, Backend>, Sessions>>;
+    type Service = CookieManager<SessionManager<AuthManager<S, Backend>, Sessions, C>>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let login_manager = AuthManager {
@@ -140,16 +149,22 @@ impl<S, Backend: AuthnBackend, Sessions: SessionStore> Layer<S>
 
 /// Builder for the [`AuthManagerLayer`].
 #[derive(Debug, Clone)]
-pub struct AuthManagerLayerBuilder<Backend: AuthnBackend, Sessions: SessionStore> {
+pub struct AuthManagerLayerBuilder<
+    Backend: AuthnBackend,
+    Sessions: SessionStore,
+    C: CookieController = PlaintextCookie,
+> {
     backend: Backend,
-    session_manager_layer: SessionManagerLayer<Sessions>,
+    session_manager_layer: SessionManagerLayer<Sessions, C>,
     data_key: Option<&'static str>,
 }
 
-impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayerBuilder<Backend, Sessions> {
+impl<Backend: AuthnBackend, Sessions: SessionStore, C: CookieController>
+    AuthManagerLayerBuilder<Backend, Sessions, C>
+{
     /// Create a new [`AuthManagerLayerBuilder`] with the provided access
     /// controller.
-    pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions>) -> Self {
+    pub fn new(backend: Backend, session_manager_layer: SessionManagerLayer<Sessions, C>) -> Self {
         Self {
             backend,
             session_manager_layer,
@@ -162,13 +177,13 @@ impl<Backend: AuthnBackend, Sessions: SessionStore> AuthManagerLayerBuilder<Back
     pub fn with_data_key(
         mut self,
         data_key: &'static str,
-    ) -> AuthManagerLayerBuilder<Backend, Sessions> {
+    ) -> AuthManagerLayerBuilder<Backend, Sessions, C> {
         self.data_key = Some(data_key);
         self
     }
 
     /// Build the [`AuthManagerLayer`].
-    pub fn build(self) -> AuthManagerLayer<Backend, Sessions> {
+    pub fn build(self) -> AuthManagerLayer<Backend, Sessions, C> {
         AuthManagerLayer::new(
             self.backend,
             self.data_key.unwrap_or("axum-login.data"),
