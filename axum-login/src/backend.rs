@@ -493,5 +493,11 @@ mod tests {
 
         let permissions = backend.get_user_permissions(&user).await.unwrap();
         assert!(permissions.is_empty());
+
+        let permissions = backend.get_group_permissions(&user).await.unwrap();
+        assert!(permissions.is_empty());
+
+        let permissions = backend.get_all_permissions(&user).await.unwrap();
+        assert!(permissions.is_empty());
     }
 }
