@@ -50,17 +50,25 @@ jobs:
         run: |
           cargo test --all-features --doc
 
-  test-unit:
+  test-lib:
     needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: |
-          rustup toolchain install stable --profile minimal
+          rustup toolchain install nightly --profile minimal
+          cargo install cargo-tarpaulin
       - uses: Swatinem/rust-cache@v2
-      - name: Run unit tests
+      - name: Run lib tests
         run: |
-          cargo test --lib --all-features
+          cargo test --workspace --all-features --lib
+          cargo tarpaulin --workspace --all-features --lib -olcov
+      - name: Upload coverage data to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   test-integration:
     needs: check
