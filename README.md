@@ -16,6 +16,9 @@
     <a href="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml">
         <img src="https://github.com/maxcountryman/axum-login/actions/workflows/rust.yml/badge.svg" />
     </a>
+    <a href="https://codecov.io/gh/maxcountryman/axum-login" > 
+        <img src="https://codecov.io/gh/maxcountryman/axum-login/graph/badge.svg?token=4WKTLPEGJC"/> 
+    </a>
 </div>
 
 ## 🎨 Overview

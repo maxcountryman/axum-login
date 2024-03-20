@@ -126,7 +126,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
     /// Updates the session such that the user is logged out.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
     pub async fn logout(&mut self) -> Result<Option<Backend::User>, Error<Backend>> {
-        let user = self.user.clone();
+        let user = self.user.take();
 
         if let Some(ref user) = user {
             tracing::Span::current().record("user.id", user.id().to_string());
@@ -173,5 +173,148 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             session,
             data_key,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use mockall::{predicate::*, *};
+    use tower_sessions::MemoryStore;
+
+    use super::*;
+
+    mock! {
+        #[derive(Debug)]
+        Backend {}
+
+        impl Clone for Backend {
+            fn clone(&self) -> Self;
+        }
+
+        #[async_trait]
+        impl AuthnBackend for Backend {
+            type User = MockUser;
+            type Credentials = MockCredentials;
+            type Error = MockError;
+
+            async fn authenticate(&self, creds: MockCredentials) -> Result<Option<MockUser>, MockError>;
+            async fn get_user(&self, user_id: &i64) -> Result<Option<MockUser>, MockError>;
+
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct MockUser {
+        id: i64,
+        auth_hash: Vec<u8>,
+    }
+
+    impl AuthUser for MockUser {
+        type Id = i64;
+
+        fn id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn session_auth_hash(&self) -> &[u8] {
+            &self.auth_hash
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct MockCredentials;
+
+    #[derive(Debug)]
+    struct MockError;
+
+    impl std::fmt::Display for MockError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Mock error")
+        }
+    }
+
+    impl std::error::Error for MockError {}
+
+    #[tokio::test]
+    async fn test_authenticate() {
+        let mut mock_backend = MockBackend::default();
+        let mock_user = MockUser {
+            id: 42,
+            auth_hash: Default::default(),
+        };
+        let creds = MockCredentials;
+
+        mock_backend
+            .expect_authenticate()
+            .with(eq(creds.clone()))
+            .times(1)
+            .returning(move |_| Ok(Some(mock_user.clone())));
+
+        let store = Arc::new(MemoryStore::default());
+
+        let session = Session::new(None, store, None);
+        let auth_session = AuthSession {
+            user: None,
+            backend: mock_backend,
+            data: Data::default(),
+            session,
+            data_key: "auth_data",
+        };
+
+        let result = auth_session.authenticate(creds).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_login() {
+        let mock_backend = MockBackend::default();
+        let mock_user = MockUser {
+            id: 42,
+            auth_hash: Default::default(),
+        };
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        let original_session_id = session.id();
+        let mut auth_session = AuthSession {
+            user: None,
+            backend: mock_backend,
+            data: Data::default(),
+            session,
+            data_key: "auth_data",
+        };
+
+        auth_session.login(&mock_user).await.unwrap();
+        assert!(auth_session.user.is_some());
+        assert_eq!(auth_session.user.unwrap().id(), 42);
+        assert_ne!(original_session_id, auth_session.session.id());
+    }
+
+    #[tokio::test]
+    async fn test_logout() {
+        let mock_backend = MockBackend::default();
+        let mock_user = MockUser {
+            id: 42,
+            auth_hash: Default::default(),
+        };
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        let mut auth_session = AuthSession {
+            user: Some(mock_user.clone()),
+            backend: mock_backend,
+            data: Data::default(),
+            session,
+            data_key: "auth_data",
+        };
+
+        let logged_out_user = auth_session.logout().await.unwrap();
+        assert!(logged_out_user.is_some());
+        assert_eq!(logged_out_user.unwrap().id(), 42);
+        assert!(auth_session.user.is_none());
     }
 }
