@@ -1,5 +1,11 @@
 # Unreleased
 
+# 0.15.0
+
+- Update `tower-sessions` to 0.12.0
+
+As of this update, signed and encrypted session cookies are supported.
+
 # 0.14.0
 
 - Update `tower-sessions` to 0.11.0

@@ -7,6 +7,7 @@ use axum_messages::MessagesManagerLayer;
 use sqlx::SqlitePool;
 use time::Duration;
 use tokio::{signal, task::AbortHandle};
+use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
 use crate::{
@@ -40,9 +41,13 @@ impl App {
                 .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
         );
 
+        // Generate a cryptographic key to sign the session cookie.
+        let key = Key::generate();
+
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false)
-            .with_expiry(Expiry::OnInactivity(Duration::days(1)));
+            .with_expiry(Expiry::OnInactivity(Duration::days(1)))
+            .with_signed(key);
 
         // Auth service.
         //
