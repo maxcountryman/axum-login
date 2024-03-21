@@ -317,4 +317,69 @@ mod tests {
         assert_eq!(logged_out_user.unwrap().id(), 42);
         assert!(auth_session.user.is_none());
     }
+
+    #[tokio::test]
+    async fn test_from_session() {
+        let mut mock_backend = MockBackend::default();
+        let mock_user = MockUser {
+            id: 42,
+            auth_hash: vec![1, 2, 3, 4],
+        };
+
+        mock_backend
+            .expect_get_user()
+            .with(eq(mock_user.id))
+            .times(1)
+            .returning(move |_| Ok(Some(mock_user.clone())));
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store.clone(), None);
+        let data_key = "auth_data";
+
+        // Simulate a user being logged in
+        let data = Data {
+            user_id: Some(42),
+            auth_hash: Some(vec![1, 2, 3, 4]),
+        };
+        session.insert(data_key, &data).await.unwrap();
+
+        let auth_session = AuthSession::from_session(session, mock_backend, data_key)
+            .await
+            .unwrap();
+
+        assert!(auth_session.user.is_some());
+        assert_eq!(auth_session.user.unwrap().id(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_from_session_bad_auth_hash() {
+        let mut mock_backend = MockBackend::default();
+        let mock_user = MockUser {
+            id: 42,
+            auth_hash: vec![1, 2, 3, 4],
+        };
+
+        mock_backend
+            .expect_get_user()
+            .with(eq(mock_user.id))
+            .times(1)
+            .returning(move |_| Ok(Some(mock_user.clone())));
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store.clone(), None);
+        let data_key = "auth_data";
+
+        // Try to use a malformed auth hash.
+        let data = Data {
+            user_id: Some(42),
+            auth_hash: Some(vec![4, 3, 2, 1]),
+        };
+        session.insert(data_key, &data).await.unwrap();
+
+        let auth_session = AuthSession::from_session(session, mock_backend, data_key)
+            .await
+            .unwrap();
+
+        assert!(auth_session.user.is_none());
+    }
 }
