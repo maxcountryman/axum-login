@@ -270,6 +270,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_authenticate_bad_credentials() {
+        let mut mock_backend = MockBackend::default();
+        let bad_creds = MockCredentials;
+
+        mock_backend
+            .expect_authenticate()
+            .with(eq(bad_creds.clone()))
+            .times(1)
+            .returning(|_| Ok(None));
+
+        let store = Arc::new(MemoryStore::default());
+
+        let session = Session::new(None, store, None);
+        let auth_session = AuthSession {
+            user: None,
+            backend: mock_backend,
+            data: Data::default(),
+            session,
+            data_key: "auth_data",
+        };
+
+        let result = auth_session.authenticate(bad_creds).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
     async fn test_login() {
         let mock_backend = MockBackend::default();
         let mock_user = MockUser {
