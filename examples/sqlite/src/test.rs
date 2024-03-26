@@ -44,9 +44,7 @@ async fn test_login_logout(pool: SqlitePool) {
     let login_request = {
         let credentials = Credentials {
             username: "ferris".to_string(),
-            password: "$argon2id$v=19$m=19456,t=2,\
-                       p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw"
-                .to_string(),
+            password: "hunter42".to_string(),
             next: None,
         };
         // todo: unclear how to instatiate or add to request; no tests in axum-messages
@@ -64,6 +62,8 @@ async fn test_login_logout(pool: SqlitePool) {
     let login_response = app.clone().oneshot(login_request).await.unwrap();
     dbg!(&login_response);
     assert!(login_response.status().is_redirection());
+
+    // todo: how to verify that the user is logged in?
 
     // why is logout a get request instead of a post in the example?
     let logout_request = Request::builder()
