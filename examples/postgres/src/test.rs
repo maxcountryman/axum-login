@@ -58,17 +58,15 @@ async fn test_login_logout(pool: PgPool) {
     };
     let login_response = app.clone().oneshot(login_request).await.unwrap();
     dbg!(&login_response);
+    // todo(failing): can't connect to db?
     assert!(login_response.status().is_redirection());
 
-    // todo: how to verify that the user is logged in?
-
-    // // why is logout a get request instead of a post in the example?
-    // let logout_request = Request::builder()
-    //     .uri("/logout")
-    //     .method("GET")
-    //     .body(Body::empty())
-    //     .unwrap();
-    // let logout_response = app.clone().oneshot(logout_request).await.unwrap();
-    // dbg!(&logout_response);
-    // assert!(logout_response.status().is_redirection());
+    let logout_request = Request::builder()
+        .uri("/logout")
+        .method("GET")
+        .body(Body::empty())
+        .unwrap();
+    let logout_response = app.clone().oneshot(logout_request).await.unwrap();
+    dbg!(&logout_response);
+    assert!(logout_response.status().is_redirection());
 }

@@ -21,7 +21,8 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let db = PgPool::connect(":memory:").await?;
+        let db = PgPool::connect("postgres://postgres:postgres@localhost:5432/axum-login-postgres")
+            .await?;
         sqlx::migrate!().run(&db).await?;
 
         Ok(Self { db })
