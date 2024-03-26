@@ -1,8 +1,8 @@
 use std::error::Error;
 
-use axum::Router;
+use axum::{body::Body, Router};
 use axum_login::{login_required, AuthManagerLayerBuilder};
-use axum_messages::{Messages, MessagesManagerLayer};
+use axum_messages::MessagesManagerLayer;
 use http::{header::CONTENT_TYPE, Request};
 use sqlx::SqlitePool;
 use time::Duration;
@@ -64,4 +64,14 @@ async fn test_login_logout(pool: SqlitePool) {
     let login_response = app.clone().oneshot(login_request).await.unwrap();
     dbg!(&login_response);
     assert!(login_response.status().is_redirection());
+
+    // why is logout a get request instead of a post in the example?
+    let logout_request = Request::builder()
+        .uri("/logout")
+        .method("GET")
+        .body(Body::empty())
+        .unwrap();
+    let logout_response = app.clone().oneshot(logout_request).await.unwrap();
+    dbg!(&logout_response);
+    assert!(logout_response.status().is_redirection());
 }
