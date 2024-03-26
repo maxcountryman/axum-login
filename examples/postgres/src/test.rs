@@ -4,14 +4,14 @@ use axum::{body::Body, Router};
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
 use http::{header::CONTENT_TYPE, Request};
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool};
 use time::Duration;
 use tower::ServiceExt;
 use tower_sessions::{cookie::Key, Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
-    users::{Backend, Credentials},
+    users::{Backend, Credentials, User},
     web::{auth, protected},
 };
 
@@ -38,6 +38,19 @@ async fn setup_app(pool: PgPool) -> Result<Router, Box<dyn Error>> {
 }
 
 #[sqlx::test]
+async fn test_db(pool: PgPool) {
+    let mut conn = pool.acquire().await.unwrap();
+
+    let users = sqlx::query("SELECT * FROM users where username = $1")
+        .bind("ferris")
+        .fetch_one(&mut *conn)
+        .await
+        .unwrap();
+    let ferris: User = User::from_row(&users).unwrap();
+    assert!(ferris.username == "ferris");
+}
+
+#[sqlx::test]
 async fn test_login_logout(pool: PgPool) {
     let app = setup_app(pool).await.unwrap();
 
@@ -59,6 +72,7 @@ async fn test_login_logout(pool: PgPool) {
     let login_response = app.clone().oneshot(login_request).await.unwrap();
     dbg!(&login_response);
     // todo(failing): can't connect to db?
+    // See
     assert!(login_response.status().is_redirection());
 
     let logout_request = Request::builder()

@@ -40,6 +40,13 @@ mod post {
         messages: Messages,
         Form(creds): Form<Credentials>,
     ) -> impl IntoResponse {
+        // todo: see auth session:
+        // auth session thinks a table called tower_sessions exists:
+        // schema_name: "tower_sessions",
+        // table_name: "session",
+        #[cfg(test)]
+        dbg!(auth_session.clone());
+
         let user = match auth_session.authenticate(creds.clone()).await {
             Ok(Some(user)) => user,
             Ok(None) => {
