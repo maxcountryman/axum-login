@@ -1,0 +1,17 @@
+<html>
+  <head>
+    <title>Protected</title>
+  </head>
+
+  <body>
+    <ul>
+      {% for message in messages %}
+      <li>
+        <span><strong>{{ message }}</strong></span>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <p>Logged in as {{username}}</p>
+  </body>
+</html>
