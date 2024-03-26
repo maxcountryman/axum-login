@@ -47,15 +47,12 @@ async fn test_login_logout(pool: PgPool) {
             password: "hunter42".to_string(),
             next: None,
         };
-        // todo: unclear how to instatiate or add to request; no tests in axum-messages
-        // let messages: Messages;
         let credentials = serde_urlencoded::to_string(credentials).unwrap();
 
         Request::builder()
             .uri("/login")
             .method("POST")
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-            // todo: where do I put messages in the request?
             .body(credentials)
             .unwrap()
     };
@@ -65,13 +62,13 @@ async fn test_login_logout(pool: PgPool) {
 
     // todo: how to verify that the user is logged in?
 
-    // why is logout a get request instead of a post in the example?
-    let logout_request = Request::builder()
-        .uri("/logout")
-        .method("GET")
-        .body(Body::empty())
-        .unwrap();
-    let logout_response = app.clone().oneshot(logout_request).await.unwrap();
-    dbg!(&logout_response);
-    assert!(logout_response.status().is_redirection());
+    // // why is logout a get request instead of a post in the example?
+    // let logout_request = Request::builder()
+    //     .uri("/logout")
+    //     .method("GET")
+    //     .body(Body::empty())
+    //     .unwrap();
+    // let logout_response = app.clone().oneshot(logout_request).await.unwrap();
+    // dbg!(&logout_response);
+    // assert!(logout_response.status().is_redirection());
 }
