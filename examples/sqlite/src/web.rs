@@ -1,5 +1,5 @@
 pub use app::App;
 
 mod app;
-mod auth;
-mod protected;
+pub(crate) mod auth;
+pub(crate) mod protected;

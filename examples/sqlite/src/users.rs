@@ -41,7 +41,7 @@ impl AuthUser for User {
 
 // This allows us to extract the authentication fields from forms. We use this
 // to authenticate requests with the backend.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
