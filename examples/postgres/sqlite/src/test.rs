@@ -4,19 +4,19 @@ use axum::{body::Body, Router};
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
 use http::{header::CONTENT_TYPE, Request};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use time::Duration;
 use tower::ServiceExt;
 use tower_sessions::{cookie::Key, Expiry, SessionManagerLayer};
-use tower_sessions_sqlx_store::SqliteStore;
+use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
     users::{Backend, Credentials},
     web::{auth, protected},
 };
 
-async fn setup_app(pool: SqlitePool) -> Result<Router, Box<dyn Error>> {
-    let session_store = SqliteStore::new(pool.clone());
+async fn setup_app(pool: PgPool) -> Result<Router, Box<dyn Error>> {
+    let session_store = PostgresStore::new(pool.clone());
     session_store.migrate().await?;
 
     // Generate a cryptographic key to sign the session cookie.
@@ -38,7 +38,7 @@ async fn setup_app(pool: SqlitePool) -> Result<Router, Box<dyn Error>> {
 }
 
 #[sqlx::test]
-async fn test_login_logout(pool: SqlitePool) {
+async fn test_login_logout(pool: PgPool) {
     let app = setup_app(pool).await.unwrap();
 
     let login_request = {
