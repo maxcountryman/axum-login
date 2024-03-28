@@ -1,6 +1,7 @@
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
+    tracing::info,
     AuthManagerLayerBuilder,
 };
 use axum_messages::MessagesManagerLayer;
@@ -64,6 +65,9 @@ impl App {
             .layer(auth_layer);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+
+        info!("server running! ctrl-c to stop.");
+        info!("try logging in: `curl -X POST -H \"Content-Type: application/x-www-form-urlencoded\" -d \"username=your_username&password=your_password\" http://localhost:3000/login`");
 
         // Ensure we use a shutdown signal to abort the deletion task.
         axum::serve(listener, app.into_make_service())

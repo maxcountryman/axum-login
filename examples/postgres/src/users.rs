@@ -78,7 +78,7 @@ impl AuthnBackend for Backend {
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let user: Option<Self::User> = sqlx::query_as("select * from users where username = ? ")
+        let user: Option<Self::User> = sqlx::query_as("select * from users where username = $1")
             .bind(creds.username)
             .fetch_optional(&self.db)
             .await?;
@@ -94,7 +94,7 @@ impl AuthnBackend for Backend {
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = sqlx::query_as("select * from users where id = ?")
+        let user = sqlx::query_as("select * from users where id = $1")
             .bind(user_id)
             .fetch_optional(&self.db)
             .await?;
