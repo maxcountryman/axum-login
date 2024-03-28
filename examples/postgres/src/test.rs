@@ -3,7 +3,7 @@ use std::error::Error;
 use axum::{body::Body, Router};
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
-use http::{header::CONTENT_TYPE, Request};
+use http::{header::CONTENT_TYPE, Request, StatusCode};
 use sqlx::{FromRow, PgPool};
 use time::Duration;
 use tower::ServiceExt;
@@ -37,6 +37,7 @@ async fn setup_app(pool: PgPool) -> Result<Router, Box<dyn Error>> {
     Ok(app)
 }
 
+// we can fetch the default user, ferris
 #[sqlx::test]
 async fn test_db(pool: PgPool) {
     let mut conn = pool.acquire().await.unwrap();
@@ -54,10 +55,10 @@ async fn test_db(pool: PgPool) {
 async fn test_login_logout(pool: PgPool) {
     let app = setup_app(pool).await.unwrap();
 
-    let login_request = {
+    let make_login_request = |username: &str, password: &str| {
         let credentials = Credentials {
-            username: "ferris".to_string(),
-            password: "hunter42".to_string(),
+            username: username.to_string(),
+            password: password.to_string(),
             next: None,
         };
         let credentials = serde_urlencoded::to_string(credentials).unwrap();
@@ -69,11 +70,17 @@ async fn test_login_logout(pool: PgPool) {
             .body(credentials)
             .unwrap()
     };
-    let login_response = app.clone().oneshot(login_request).await.unwrap();
+
+    let valid_login_request = make_login_request("ferris", "hunter42");
+    let login_response = app.clone().oneshot(valid_login_request).await.unwrap();
     dbg!(&login_response);
-    // todo(failing): can't connect to db?
-    // See
-    assert!(login_response.status().is_redirection());
+    assert_eq!(login_response.status(), StatusCode::SEE_OTHER);
+
+    // login with invalid credentials
+    let invalid_login_request = make_login_request("ferris", "huntouer24");
+    let login_response = app.clone().oneshot(invalid_login_request).await.unwrap();
+    dbg!(&login_response);
+    assert_eq!(login_response.status(), StatusCode::SEE_OTHER);
 
     let logout_request = Request::builder()
         .uri("/logout")
@@ -82,5 +89,5 @@ async fn test_login_logout(pool: PgPool) {
         .unwrap();
     let logout_response = app.clone().oneshot(logout_request).await.unwrap();
     dbg!(&logout_response);
-    assert!(logout_response.status().is_redirection());
+    assert_eq!(logout_response.status(), StatusCode::SEE_OTHER);
 }
