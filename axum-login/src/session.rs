@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-use subtle::ConstantTimeEq;
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use tower_sessions::{session, Session};
 
 use crate::{
@@ -156,9 +156,10 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
 
         if let Some(ref authed_user) = user {
             let session_auth_hash = authed_user.session_auth_hash();
-            let session_verified = &data.auth_hash.clone().is_some_and(|auth_hash| {
-                auth_hash.ct_eq(session_auth_hash).into()
-            });
+            let session_verified = &data
+                .auth_hash
+                .clone()
+                .is_some_and(|auth_hash| auth_hash.ct_eq(session_auth_hash).into());
             if !session_verified {
                 user = None;
                 data = Data::default();
