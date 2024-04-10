@@ -311,14 +311,22 @@ mod tests {
             user: None,
             backend: mock_backend,
             data: Data::default(),
-            session,
+            session: session.clone(),
             data_key: "auth_data",
         };
 
         auth_session.login(&mock_user).await.unwrap();
         assert!(auth_session.user.is_some());
         assert_eq!(auth_session.user.unwrap().id(), 42);
-        assert_ne!(original_session_id, auth_session.session.id());
+
+        // Simulate request persisting session.
+        session.save().await.unwrap();
+
+        // We were provided no session initially.
+        assert!(original_session_id.is_none());
+
+        // We have a session ID after saving.
+        assert!(session.id().is_some());
     }
 
     #[tokio::test]
