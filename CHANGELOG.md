@@ -1,5 +1,11 @@
 # Unreleased
 
+# 0.15.1
+
+- Replace `ring` with `subtle` #216
+
+This makes using `axum-login` with targets like `wasm32-unknown-unknown` easier, as `ring` required C and assembly whereas `subtle` is a pure Rust constant time comparator.
+
 # 0.15.0
 
 - Update `tower-sessions` to 0.12.0
