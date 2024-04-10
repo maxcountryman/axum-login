@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use ring::constant_time::verify_slices_are_equal;
+use subtle::ConstantTimeEq;
 use serde::{Deserialize, Serialize};
 use tower_sessions::{session, Session};
 
@@ -157,7 +157,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         if let Some(ref authed_user) = user {
             let session_auth_hash = authed_user.session_auth_hash();
             let session_verified = &data.auth_hash.clone().is_some_and(|auth_hash| {
-                verify_slices_are_equal(&auth_hash[..], session_auth_hash).is_ok()
+                auth_hash.ct_eq(&session_auth_hash).into()
             });
             if !session_verified {
                 user = None;
