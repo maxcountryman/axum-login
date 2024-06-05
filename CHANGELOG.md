@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.15.2
+
+- Avoid unnecessary clone #225
+
 # 0.15.1
 
 - Replace `ring` with `subtle` #216
