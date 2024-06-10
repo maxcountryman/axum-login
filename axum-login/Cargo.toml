@@ -35,9 +35,9 @@ form_urlencoded = "1.2.1"
 [dev-dependencies]
 axum = "0.7.0"
 mockall = "0.12"
-reqwest = { version = "0.11.22", features = ["cookies"] }
+reqwest = { version = "0.12", features = ["cookies"] }
 serial_test = "3.0.0"
-time = "=0.3.34"
+time = "0.3.36"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.4.13"
