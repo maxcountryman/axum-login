@@ -90,7 +90,7 @@ where
                 };
 
                 if let Some(ref user) = auth_session.user {
-                    tracing::Span::current().record("user.id", &user.id().to_string());
+                    tracing::Span::current().record("user.id", user.id().to_string());
                 }
 
                 req.extensions_mut().insert(auth_session);

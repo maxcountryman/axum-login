@@ -27,12 +27,6 @@ pub struct NextUrl {
     next: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct Credentials {
-    pub client_id: String,
-    pub client_secret: String,
-}
-
 pub fn router() -> Router<()> {
     Router::new()
         .route("/login", post(self::post::login))
