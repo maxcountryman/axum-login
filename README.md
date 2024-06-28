@@ -26,7 +26,7 @@
 This crate provides user identification, authentication, and authorization
 as a `tower` middleware for `axum`.
 
-If offers:
+It offers:
 
 - **User Identification, Authentication, and Authorization**: Leverage
   `AuthSession` to easily manage authentication and authorization. This is
