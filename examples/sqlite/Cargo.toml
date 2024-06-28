@@ -25,3 +25,6 @@ tower-sessions = { version = "0.12.0", default-features = false, features = [
 ] }
 tower-sessions-sqlx-store = { version = "0.12.0", features = ["sqlite"] }
 thiserror = "1.0.56"
+
+[dev-dependencies]
+serde_urlencoded = "0.7.1"

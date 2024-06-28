@@ -7,6 +7,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use crate::web::App;
 
+#[cfg(test)]
+mod test;
 mod users;
 mod web;
 
