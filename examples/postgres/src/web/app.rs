@@ -5,11 +5,11 @@ use axum_login::{
     AuthManagerLayerBuilder,
 };
 use axum_messages::MessagesManagerLayer;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tower_sessions::cookie::Key;
-use tower_sessions_sqlx_store::SqliteStore;
+use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
     users::Backend,
@@ -17,12 +17,13 @@ use crate::{
 };
 
 pub struct App {
-    db: SqlitePool,
+    db: PgPool,
 }
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let db = SqlitePool::connect(":memory:").await?;
+        let db = PgPool::connect("postgres://postgres:postgres@localhost:5432/axum-login-postgres")
+            .await?;
         sqlx::migrate!().run(&db).await?;
 
         Ok(Self { db })
@@ -33,7 +34,7 @@ impl App {
         //
         // This uses `tower-sessions` to establish a layer that will provide the session
         // as a request extension.
-        let session_store = SqliteStore::new(self.db.clone());
+        let session_store = PostgresStore::new(self.db.clone());
         session_store.migrate().await?;
 
         let deletion_task = tokio::task::spawn(
@@ -66,7 +67,7 @@ impl App {
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
         info!("server running! ctrl-c to stop.");
-        info!("try logging in: `curl -X POST -H \"Content-Type: application/x-www-form-urlencoded\" -d \"username=your_username&password=your_password\" http://localhost:.000/login`");
+        info!("try logging in: `curl -X POST -H \"Content-Type: application/x-www-form-urlencoded\" -d \"username=your_username&password=your_password\" http://localhost:3000/login`");
 
         // Ensure we use a shutdown signal to abort the deletion task.
         axum::serve(listener, app.into_make_service())

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use axum_login::{AuthUser, AuthnBackend, UserId};
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, PgPool};
 use tokio::task;
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -50,11 +50,11 @@ pub struct Credentials {
 
 #[derive(Debug, Clone)]
 pub struct Backend {
-    db: SqlitePool,
+    db: PgPool,
 }
 
 impl Backend {
-    pub fn new(db: SqlitePool) -> Self {
+    pub fn new(db: PgPool) -> Self {
         Self { db }
     }
 }
@@ -78,7 +78,7 @@ impl AuthnBackend for Backend {
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let user: Option<Self::User> = sqlx::query_as("select * from users where username = ? ")
+        let user: Option<Self::User> = sqlx::query_as("select * from users where username = $1")
             .bind(creds.username)
             .fetch_optional(&self.db)
             .await?;
@@ -94,7 +94,7 @@ impl AuthnBackend for Backend {
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = sqlx::query_as("select * from users where id = ?")
+        let user = sqlx::query_as("select * from users where id = $1")
             .bind(user_id)
             .fetch_optional(&self.db)
             .await?;
