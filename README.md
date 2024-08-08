@@ -56,7 +56,7 @@ axum-login = "0.15.3"
 
 ## 🤸 Usage
 
-We recommend reviewing our [`sqlite` example][sqlite-example].
+We recommend reviewing our [`sqlite` example][sqlite-example]. There is also a [template for `cargo-generate` using postgres](https://gitlab.com/maxhambraeus/axum-login-postgres-template).
 
 > [!NOTE]
 > See the [crate documentation][docs] for usage information.
