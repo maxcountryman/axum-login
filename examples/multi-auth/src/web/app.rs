@@ -21,8 +21,6 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        dotenvy::dotenv()?;
-
         let client_id = env::var("CLIENT_ID")
             .map(ClientId::new)
             .expect("CLIENT_ID should be provided.");
