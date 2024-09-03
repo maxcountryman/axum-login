@@ -42,4 +42,4 @@ tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.4.13"
 tower-sessions = { version = "0.13.0" }
-tower-sessions-sqlx-store = { version = "0.13.0", features = ["sqlite"] }
+tower-sessions-sqlx-store = { version = "0.14.0", features = ["sqlite"] }
