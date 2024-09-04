@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.16.0
+
+- Update `tower-sessions` to 0.13.0
+
 # 0.15.3
 
 - Update dev dependencies; placate docs.rs
