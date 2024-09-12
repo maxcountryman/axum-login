@@ -179,7 +179,7 @@ macro_rules! predicate_required {
                         original_uri
                     ) {
                         Ok(login_url) => {
-                            Redirect::temporary(&login_url.to_string()).into_response()
+                            Redirect::to(&login_url.to_string()).into_response()
                         }
 
                         Err(err) => {
@@ -360,7 +360,7 @@ mod tests {
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
 
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -405,7 +405,7 @@ mod tests {
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
 
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -517,7 +517,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -562,7 +562,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -638,7 +638,7 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -659,7 +659,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -672,7 +672,7 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -694,7 +694,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -712,7 +712,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
@@ -733,7 +733,7 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
