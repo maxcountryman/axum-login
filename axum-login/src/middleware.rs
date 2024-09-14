@@ -49,7 +49,7 @@ macro_rules! login_required {
         )
     }};
 
-    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
+    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, redirect_status_code = $redirect_status_code:expr) => {{
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
             auth_session.user.is_some()
         }
@@ -57,7 +57,8 @@ macro_rules! login_required {
         $crate::predicate_required!(
             is_authenticated,
             login_url = $login_url,
-            redirect_field = $redirect_field
+            redirect_field = $redirect_field,
+            redirect_status_code = $redirect_status_code
         )
     }};
 
@@ -65,7 +66,17 @@ macro_rules! login_required {
         $crate::login_required!(
             $backend_type,
             login_url = $login_url,
-            redirect_field = "next"
+            redirect_field = "next",
+            redirect_status_code = $crate::axum::http::StatusCode::TEMPORARY_REDIRECT
+        )
+    };
+
+    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {
+        $crate::login_required!(
+            $backend_type,
+            login_url = $login_url,
+            redirect_field = $redirect_field,
+            redirect_status_code = $crate::axum::http::StatusCode::TEMPORARY_REDIRECT
         )
     };
 }
@@ -76,7 +87,7 @@ macro_rules! login_required {
 /// all assigned to the user.
 #[macro_export]
 macro_rules! permission_required {
-    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+ $(,)?) => {{
+    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, redirect_status_code = $redirect_status_code:expr, $($perm:expr),+ $(,)?) => {{
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
@@ -95,15 +106,27 @@ macro_rules! permission_required {
         $crate::predicate_required!(
             is_authorized,
             login_url = $login_url,
-            redirect_field = $redirect_field
+            redirect_field = $redirect_field,
+            redirect_status_code = $redirect_status_code
         )
     }};
+
+    ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+ $(,)?) => {
+        $crate::permission_required!(
+            $backend_type,
+            login_url = $login_url,
+            redirect_field = $redirect_field,
+            redirect_status_code = $crate::axum::http::StatusCode::TEMPORARY_REDIRECT,
+            $($perm),+
+        )
+    };
 
     ($backend_type:ty, login_url = $login_url:expr, $($perm:expr),+ $(,)?) => {
         $crate::permission_required!(
             $backend_type,
             login_url = $login_url,
             redirect_field = "next",
+            redirect_status_code = $crate::axum::http::StatusCode::TEMPORARY_REDIRECT,
             $($perm),+
         )
     };
@@ -158,7 +181,7 @@ macro_rules! predicate_required {
         )
     }};
 
-    ($predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
+    ($predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr, redirect_status_code = $redirect_status_code:expr) => {{
         use $crate::axum::{
             extract::OriginalUri,
             middleware::{from_fn, Next},
@@ -179,7 +202,14 @@ macro_rules! predicate_required {
                         original_uri
                     ) {
                         Ok(login_url) => {
-                            Redirect::temporary(&login_url.to_string()).into_response()
+                            if $redirect_status_code == $crate::axum::http::StatusCode::TEMPORARY_REDIRECT {
+                                Redirect::temporary(&login_url.to_string()).into_response()
+                            } else if $redirect_status_code == $crate::axum::http::StatusCode::SEE_OTHER {
+                                Redirect::to(&login_url.to_string()).into_response()
+                            } else {
+                                $crate::tracing::error!(err = "Unsupported redirect status code. Only 303 and 307 supported.");
+                                $crate::axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                            }
                         }
 
                         Err(err) => {
@@ -191,6 +221,15 @@ macro_rules! predicate_required {
             },
         )
     }};
+
+    ($predicate:expr, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {
+        $crate::predicate_required!(
+            $predicate,
+            login_url = $login_url,
+            redirect_field = $redirect_field,
+            redirect_status_code = $crate::axum::http::StatusCode::TEMPORARY_REDIRECT
+        )
+    };
 }
 
 #[cfg(test)]
@@ -431,6 +470,98 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_login_required_with_login_url_redirect_field_and_redirect_status_code() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(
+                Backend,
+                login_url = "/signin",
+                redirect_field = "next_uri",
+                redirect_status_code = StatusCode::SEE_OTHER
+            ))
+            .route(
+                "/signin",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/signin?next_uri=%2F")
+        );
+
+        let req = Request::builder()
+            .uri("/signin")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_login_required_unsupported_redirect_status_code() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(
+                Backend,
+                login_url = "/signin",
+                redirect_field = "next_uri",
+                redirect_status_code = StatusCode::USE_PROXY
+            ))
+            .route(
+                "/signin",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            None
+        );
+
+        let req = Request::builder()
+            .uri("/signin")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn test_permission_required() {
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -563,6 +694,52 @@ mod tests {
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/signin?next_uri=%2F")
+        );
+
+        let req = Request::builder()
+            .uri("/signin")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_with_login_url_redirect_field_and_redirect_status_code() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(permission_required!(
+                Backend,
+                login_url = "/signin",
+                redirect_field = "next_uri",
+                redirect_status_code = StatusCode::SEE_OTHER,
+                "test.read"
+            ))
+            .route(
+                "/signin",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
         assert_eq!(
             res.headers()
                 .get(header::LOCATION)
