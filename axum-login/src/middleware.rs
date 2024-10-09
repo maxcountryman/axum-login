@@ -39,13 +39,19 @@ pub fn url_with_redirect_query(
 #[macro_export]
 macro_rules! login_required {
     ($backend_type:ty) => {{
+        use $crate::axum::{extract::Request, response::IntoResponse};
+
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
             auth_session.user.is_some()
         }
 
+        async fn alternate(_req: Request) -> impl IntoResponse {
+            crate::axum::http::StatusCode::UNAUTHORIZED.into_response()
+        }
+
         $crate::predicate_required!(
             is_authenticated,
-            $crate::axum::http::StatusCode::UNAUTHORIZED
+            alternate
         )
     }};
 
@@ -76,7 +82,7 @@ macro_rules! login_required {
 
         $crate::predicate_required!(
             is_authenticated,
-            failed_predicate_callback = $failed_predicate_callback
+            $failed_predicate_callback
         )
     }};
 }
@@ -137,11 +143,12 @@ macro_rules! permission_required {
 
         $crate::predicate_required!(
             is_authorized,
-            failed_predicate_callback = $failed_predicate_callback
+            $failed_predicate_callback
         )
     }};
 
     ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
+        use $crate::axum::{extract::Request, response::IntoResponse};
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
@@ -157,9 +164,13 @@ macro_rules! permission_required {
             }
         }
 
+        async fn alternate(_req: Request) -> impl IntoResponse {
+            crate::axum::http::StatusCode::FORBIDDEN.into_response()
+        }
+
         $crate::predicate_required!(
             is_authorized,
-            $crate::axum::http::StatusCode::FORBIDDEN
+            alternate
         )
     }};
 }
@@ -174,27 +185,6 @@ macro_rules! permission_required {
 /// used as the response.
 #[macro_export]
 macro_rules! predicate_required {
-    ($predicate:expr, failed_predicate_callback = $failed_predicate_callback:expr) => {{
-        use $crate::axum::{
-            extract::OriginalUri,
-            middleware::{from_fn, Next},
-            response::IntoResponse,
-        };
-
-        from_fn(
-            |auth_session: $crate::AuthSession<_>,
-             OriginalUri(original_uri): OriginalUri,
-             req,
-             next: Next| async move {
-                if $predicate(auth_session).await {
-                    next.run(req).await
-                } else {
-                    $failed_predicate_callback(original_uri).await.into_response()
-                }
-            },
-        )
-    }};
-
     ($predicate:expr, $alternative:expr) => {{
         use $crate::axum::{
             middleware::{from_fn, Next},
@@ -206,7 +196,7 @@ macro_rules! predicate_required {
                 if $predicate(auth_session).await {
                     next.run(req).await
                 } else {
-                    $alternative.into_response()
+                    $alternative(req).await.into_response()
                 }
             },
         )
@@ -487,15 +477,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_required_with_failed_predicate_callback() {
+        use axum::extract::Request;
+
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(login_required!(
                 Backend,
-                failed_predicate_callback = |original_uri: axum::http::Uri| async move {
+                failed_predicate_callback = |req: Request| async move {
                     let login_url = "/login";
                     let redirect_field = "next";
+                    let original_uri = req.uri();
 
-                    let encoded_uri = form_urlencoded::byte_serialize(original_uri.to_string().as_bytes()).collect::<String>();
+                    let encoded_uri =
+                        form_urlencoded::byte_serialize(original_uri.to_string().as_bytes())
+                            .collect::<String>();
                     let redirect_url = format!("{}?{}={}", login_url, redirect_field, encoded_uri);
 
                     Redirect::temporary(redirect_url.as_str()).into_response()
@@ -696,15 +691,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_permission_required_with_failed_predicate_callback() {
+        use axum::extract::Request;
+
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(permission_required!(
                 Backend,
-                failed_predicate_callback = |original_uri: axum::http::Uri| async move {
+                failed_predicate_callback = |req: Request| async move {
                     let login_url = "/login";
                     let redirect_field = "next";
+                    let original_uri = req.uri();
 
-                    let encoded_uri = form_urlencoded::byte_serialize(original_uri.to_string().as_bytes()).collect::<String>();
+                    let encoded_uri =
+                        form_urlencoded::byte_serialize(original_uri.to_string().as_bytes())
+                            .collect::<String>();
                     let redirect_url = format!("{}?{}={}", login_url, redirect_field, encoded_uri);
 
                     Redirect::temporary(redirect_url.as_str()).into_response()
