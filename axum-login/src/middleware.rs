@@ -484,14 +484,11 @@ mod tests {
             .route_layer(login_required!(
                 Backend,
                 failed_predicate_callback = |req: Request| async move {
-                    let login_url = "/login";
-                    let redirect_field = "next";
                     let original_uri = req.uri();
-
                     let encoded_uri =
                         form_urlencoded::byte_serialize(original_uri.to_string().as_bytes())
                             .collect::<String>();
-                    let redirect_url = format!("{}?{}={}", login_url, redirect_field, encoded_uri);
+                    let redirect_url = format!("/login?next={}", encoded_uri);
 
                     Redirect::temporary(redirect_url.as_str()).into_response()
                 }
@@ -698,14 +695,11 @@ mod tests {
             .route_layer(permission_required!(
                 Backend,
                 failed_predicate_callback = |req: Request| async move {
-                    let login_url = "/login";
-                    let redirect_field = "next";
                     let original_uri = req.uri();
-
                     let encoded_uri =
                         form_urlencoded::byte_serialize(original_uri.to_string().as_bytes())
                             .collect::<String>();
-                    let redirect_url = format!("{}?{}={}", login_url, redirect_field, encoded_uri);
+                    let redirect_url = format!("/login?next={}", encoded_uri);
 
                     Redirect::temporary(redirect_url.as_str()).into_response()
                 },
