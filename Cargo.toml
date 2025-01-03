@@ -2,3 +2,7 @@
 default-members = ["axum-login"]
 resolver = "2"
 members = ["axum-login", "examples/*"]
+
+[patch.crates-io]
+askama = { git = "https://github.com/rinja-rs/askama", branch = "dependabot/cargo/axum-core-0.5" }
+askama_axum = { git = "https://github.com/rinja-rs/askama", branch = "dependabot/cargo/axum-core-0.5" }
