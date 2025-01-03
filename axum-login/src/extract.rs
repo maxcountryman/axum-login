@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use axum::{
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
@@ -6,7 +5,6 @@ use axum::{
 
 use crate::{AuthSession, AuthnBackend};
 
-#[async_trait]
 impl<S, Backend> FromRequestParts<S> for AuthSession<Backend>
 where
     S: Send + Sync,
