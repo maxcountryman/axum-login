@@ -40,6 +40,6 @@ serial_test = "3.0.0"
 time = "0.3.36"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
-tower = "0.4.13"
+tower = { version = "0.4.13", features = ["util"] }
 tower-sessions = { version = "0.13.0" }
 tower-sessions-sqlx-store = { version = "0.14.0", features = ["sqlite"] }
