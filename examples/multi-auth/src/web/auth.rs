@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     extract::Query,
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
     routing::{get, post},
     Form, Router,
 };
@@ -52,10 +52,14 @@ mod post {
             {
                 Ok(Some(user)) => user,
                 Ok(None) => {
-                    return LoginTemplate {
-                        message: Some("Invalid credentials.".to_string()),
-                        next: creds.next,
-                    }
+                    return Html(
+                        LoginTemplate {
+                            message: Some("Invalid credentials.".to_string()),
+                            next: creds.next,
+                        }
+                        .render()
+                        .unwrap(),
+                    )
                     .into_response()
                 }
                 Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -97,11 +101,15 @@ mod post {
 mod get {
     use super::*;
 
-    pub async fn login(Query(NextUrl { next }): Query<NextUrl>) -> LoginTemplate {
-        LoginTemplate {
-            message: None,
-            next,
-        }
+    pub async fn login(Query(NextUrl { next }): Query<NextUrl>) -> Html<String> {
+        Html(
+            LoginTemplate {
+                message: None,
+                next,
+            }
+            .render()
+            .unwrap(),
+        )
     }
 
     pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {

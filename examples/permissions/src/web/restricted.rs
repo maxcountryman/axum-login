@@ -21,6 +21,8 @@ mod get {
             Some(user) => RestrictedTemplate {
                 username: &user.username,
             }
+            .render()
+            .unwrap()
             .into_response(),
 
             None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

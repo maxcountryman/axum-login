@@ -1,5 +1,10 @@
 use askama::Template;
-use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
+use axum::{
+    http::StatusCode,
+    response::{Html, IntoResponse},
+    routing::get,
+    Router,
+};
 use axum_messages::{Message, Messages};
 
 use crate::users::AuthSession;
@@ -20,10 +25,14 @@ mod get {
 
     pub async fn protected(auth_session: AuthSession, messages: Messages) -> impl IntoResponse {
         match auth_session.user {
-            Some(user) => ProtectedTemplate {
-                messages: messages.into_iter().collect(),
-                username: &user.username,
-            }
+            Some(user) => Html(
+                ProtectedTemplate {
+                    messages: messages.into_iter().collect(),
+                    username: &user.username,
+                }
+                .render()
+                .unwrap(),
+            )
             .into_response(),
 
             None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

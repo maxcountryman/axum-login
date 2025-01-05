@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     extract::Query,
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
     routing::{get, post},
     Form, Router,
 };
@@ -76,11 +76,15 @@ mod get {
     pub async fn login(
         messages: Messages,
         Query(NextUrl { next }): Query<NextUrl>,
-    ) -> LoginTemplate {
-        LoginTemplate {
-            messages: messages.into_iter().collect(),
-            next,
-        }
+    ) -> Html<String> {
+        Html(
+            LoginTemplate {
+                messages: messages.into_iter().collect(),
+                next,
+            }
+            .render()
+            .unwrap(),
+        )
     }
 
     pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
