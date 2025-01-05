@@ -1,7 +1,8 @@
+use askama::Template;
 use axum::{
     extract::Query,
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
     routing::get,
     Router,
 };
@@ -52,10 +53,14 @@ mod get {
             Ok(None) => {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    LoginTemplate {
-                        message: Some("Invalid CSRF state.".to_string()),
-                        next: None,
-                    },
+                    Html(
+                        LoginTemplate {
+                            message: Some("Invalid CSRF state.".to_string()),
+                            next: None,
+                        }
+                        .render()
+                        .unwrap(),
+                    ),
                 )
                     .into_response()
             }

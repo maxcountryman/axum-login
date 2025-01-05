@@ -14,13 +14,19 @@ pub fn router() -> Router<()> {
 }
 
 mod get {
+    use axum::response::Html;
+
     use super::*;
 
     pub async fn protected(auth_session: AuthSession) -> impl IntoResponse {
         match auth_session.user {
-            Some(user) => ProtectedTemplate {
-                username: &user.username,
-            }
+            Some(user) => Html(
+                ProtectedTemplate {
+                    username: &user.username,
+                }
+                .render()
+                .unwrap(),
+            )
             .into_response(),
 
             None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
