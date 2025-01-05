@@ -1,5 +1,11 @@
 # Unreleased
 
+# 0.17.0
+
+- Update `tower-sessions` to 0.14.0
+
+This release updates Axum to 0.8 as well.
+
 # 0.16.0
 
 - Update `tower-sessions` to 0.13.0
