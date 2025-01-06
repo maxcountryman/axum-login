@@ -187,6 +187,28 @@ where
     ) -> Result<bool, Self::Error> {
         Ok(self.get_all_permissions(user).await?.contains(&perm))
     }
+
+    /// Returns a result which is `true` when the provided user has all the provided
+    /// permissions and otherwise is `false`.
+    async fn has_all_perm(
+        &self,
+        user: &Self::User,
+        mut permissions: Vec<Self::Permission>,
+    ) -> Result<bool, Self::Error> {
+        if permissions.is_empty() {
+            return Ok(true);
+        }
+
+        if permissions.len() == 1 {
+            return self.has_perm(user, permissions.remove(0)).await;
+        }
+
+        let db_permissions = self.get_all_permissions(user).await?;
+
+        let has_all = permissions.iter().all(|p| db_permissions.contains(&p));
+
+        Ok(has_all)
+    }
 }
 
 #[cfg(test)]
@@ -499,5 +521,35 @@ mod tests {
 
         let permissions = backend.get_all_permissions(&user).await.unwrap();
         assert!(permissions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_has_all_perm() {
+        let user = TestUser {
+            id: 1,
+            pw_hash: vec![1, 2, 3, 4],
+        };
+        let mut backend = TestBackend::new();
+        backend.add_user(user.clone(), vec!["write".to_string(), "read".to_string()]);
+        let permissions = vec!["write".to_string(), "read".to_string()];
+
+        let has_read_and_write_perms = backend.has_all_perm(&user, permissions).await.unwrap()
+            && backend.has_perm(&user, "write".to_string()).await.unwrap();
+        assert!(has_read_and_write_perms);
+    }
+
+    #[tokio::test]
+    async fn test_user_without_all_perm() {
+        let user = TestUser {
+            id: 1,
+            pw_hash: vec![1, 2, 3, 4],
+        };
+        let mut backend = TestBackend::new();
+        backend.add_user(user.clone(), vec!["read".to_string()]);
+        let permissions = vec!["write".to_string(), "read".to_string()];
+
+        let has_read_and_write_perms = backend.has_all_perm(&user, permissions).await.unwrap()
+            && backend.has_perm(&user, "write".to_string()).await.unwrap();
+        assert!(!has_read_and_write_perms);
     }
 }
