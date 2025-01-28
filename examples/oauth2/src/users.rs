@@ -137,11 +137,11 @@ impl AuthnBackend for Backend {
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        Ok(sqlx::query_as("select * from users where id = ?")
+        sqlx::query_as("select * from users where id = ?")
             .bind(user_id)
             .fetch_optional(&self.db)
             .await
-            .map_err(Self::Error::Sqlx)?)
+            .map_err(Self::Error::Sqlx)
     }
 }
 
