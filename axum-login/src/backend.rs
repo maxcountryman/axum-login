@@ -1,10 +1,10 @@
 use std::{
     collections::HashSet,
     fmt::{Debug, Display},
+    future::Future,
     hash::Hash,
 };
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 /// Type alias for the backend user's ID.
@@ -67,7 +67,6 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 /// ```rust
 /// use std::collections::HashMap;
 ///
-/// use async_trait::async_trait;
 /// use axum_login::{AuthUser, AuthnBackend, UserId};
 ///
 /// #[derive(Debug, Clone)]
@@ -98,7 +97,6 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 ///     user_id: i64,
 /// }
 ///
-/// #[async_trait]
 /// impl AuthnBackend for Backend {
 ///     type User = User;
 ///     type Credentials = Credentials;
@@ -119,7 +117,6 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 ///     }
 /// }
 /// ```
-#[async_trait]
 pub trait AuthnBackend: Clone + Send + Sync {
     /// Authenticating user type.
     type User: AuthUser;
@@ -131,19 +128,21 @@ pub trait AuthnBackend: Clone + Send + Sync {
     type Error: std::error::Error + Send + Sync;
 
     /// Authenticates the given credentials with the backend.
-    async fn authenticate(
+    fn authenticate(
         &self,
         creds: Self::Credentials,
-    ) -> Result<Option<Self::User>, Self::Error>;
+    ) -> impl Future<Output = Result<Option<Self::User>, Self::Error>> + Send;
 
     /// Gets the user by provided ID from the backend.
-    async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error>;
+    fn get_user(
+        &self,
+        user_id: &UserId<Self>,
+    ) -> impl Future<Output = Result<Option<Self::User>, Self::Error>> + Send;
 }
 
 /// A backend which can authorize users.
 ///
 /// Backends must implement `AuthnBackend`.
-#[async_trait]
 pub trait AuthzBackend
 where
     Self: AuthnBackend,
@@ -152,40 +151,42 @@ where
     type Permission: Hash + Eq + Send + Sync;
 
     /// Gets the permissions for the provided user.
-    async fn get_user_permissions(
+    fn get_user_permissions(
         &self,
         _user: &Self::User,
-    ) -> Result<HashSet<Self::Permission>, Self::Error> {
-        Ok(HashSet::new())
+    ) -> impl Future<Output = Result<HashSet<Self::Permission>, Self::Error>> + Send {
+        async { Ok(HashSet::new()) }
     }
 
     /// Gets the group permissions for the provided user.
-    async fn get_group_permissions(
+    fn get_group_permissions(
         &self,
         _user: &Self::User,
-    ) -> Result<HashSet<Self::Permission>, Self::Error> {
-        Ok(HashSet::new())
+    ) -> impl Future<Output = Result<HashSet<Self::Permission>, Self::Error>> + Send {
+        async { Ok(HashSet::new()) }
     }
 
     /// Gets all permissions for the provided user.
-    async fn get_all_permissions(
+    fn get_all_permissions(
         &self,
         user: &Self::User,
-    ) -> Result<HashSet<Self::Permission>, Self::Error> {
-        let mut all_perms = HashSet::new();
-        all_perms.extend(self.get_user_permissions(user).await?);
-        all_perms.extend(self.get_group_permissions(user).await?);
-        Ok(all_perms)
+    ) -> impl Future<Output = Result<HashSet<Self::Permission>, Self::Error>> + Send {
+        async {
+            let mut all_perms = HashSet::new();
+            all_perms.extend(self.get_user_permissions(user).await?);
+            all_perms.extend(self.get_group_permissions(user).await?);
+            Ok(all_perms)
+        }
     }
 
     /// Returns a result which is `true` when the provided user has the provided
     /// permission and otherwise is `false`.
-    async fn has_perm(
+    fn has_perm(
         &self,
         user: &Self::User,
         perm: Self::Permission,
-    ) -> Result<bool, Self::Error> {
-        Ok(self.get_all_permissions(user).await?.contains(&perm))
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send {
+        async move { Ok(self.get_all_permissions(user).await?.contains(&perm)) }
     }
 }
 
@@ -252,7 +253,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl AuthnBackend for TestBackend {
         type User = TestUser;
         type Credentials = i64; // Simplified for testing
@@ -273,7 +273,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl AuthzBackend for TestBackend {
         type Permission = String;
 

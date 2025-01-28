@@ -33,7 +33,6 @@
 //! ```rust
 //! use std::collections::HashMap;
 //!
-//! use async_trait::async_trait;
 //! use axum_login::{AuthUser, AuthnBackend, UserId};
 //!
 //! #[derive(Debug, Clone)]
@@ -64,7 +63,6 @@
 //!     user_id: i64,
 //! }
 //!
-//! #[async_trait]
 //! impl AuthnBackend for Backend {
 //!     type User = User;
 //!     type Credentials = Credentials;
@@ -114,7 +112,6 @@
 //! ```rust
 //! # use std::collections::HashMap;
 //! #
-//! # use async_trait::async_trait;
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
 //! #
 //! # #[derive(Debug, Clone)]
@@ -145,7 +142,6 @@
 //! #     user_id: i64,
 //! # }
 //! #
-//! # #[async_trait]
 //! # impl AuthnBackend for Backend {
 //! #     type User = User;
 //! #     type Credentials = Credentials;
@@ -205,7 +201,6 @@
 //! ```rust
 //! # use std::collections::HashMap;
 //! #
-//! # use async_trait::async_trait;
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
 //! #
 //! # #[derive(Debug, Clone)]
@@ -236,7 +231,6 @@
 //! #     user_id: i64,
 //! # }
 //! #
-//! # #[async_trait]
 //! # impl AuthnBackend for Backend {
 //! #     type User = User;
 //! #     type Credentials = Credentials;
@@ -285,7 +279,6 @@
 //! ```rust,no_run
 //! # use std::collections::HashMap;
 //! #
-//! # use async_trait::async_trait;
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
 //! #
 //! # #[derive(Debug, Clone)]
@@ -316,7 +309,6 @@
 //! #     user_id: i64,
 //! # }
 //! #
-//! # #[async_trait]
 //! # impl AuthnBackend for Backend {
 //! #     type User = User;
 //! #     type Credentials = Credentials;
