@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 askama = { version = "0.12.1" }
-async-trait = "0.1.74"
 axum = "0.8.1"
 axum-login = { path = "../../axum-login" }
 axum-messages = "0.8.0"

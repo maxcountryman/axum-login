@@ -181,7 +181,6 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
 mod tests {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
     use mockall::{predicate::*, *};
     use tower_sessions::MemoryStore;
 
@@ -195,7 +194,6 @@ mod tests {
             fn clone(&self) -> Self;
         }
 
-        #[async_trait]
         impl AuthnBackend for Backend {
             type User = MockUser;
             type Credentials = MockCredentials;

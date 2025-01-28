@@ -17,7 +17,6 @@ documentation = "https://docs.rs/axum-login"
 readme = "../README.md"
 
 [dependencies]
-async-trait = "0.1.57"
 axum = { version = "0.8.1", default-features = false, features = [
   "original-uri",
 ] }

@@ -197,7 +197,6 @@ macro_rules! predicate_required {
 mod tests {
     use std::collections::HashSet;
 
-    use async_trait::async_trait;
     use axum::{
         body::Body,
         http::{header, Request, Response, StatusCode},
@@ -240,7 +239,6 @@ mod tests {
     #[derive(Clone)]
     struct Backend;
 
-    #[async_trait]
     impl AuthnBackend for Backend {
         type User = User;
         type Credentials = Credentials;
@@ -274,7 +272,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl AuthzBackend for Backend {
         type Permission = Permission;
 
