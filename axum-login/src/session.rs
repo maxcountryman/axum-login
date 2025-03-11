@@ -79,8 +79,10 @@ pub struct AuthSession<Backend: AuthnBackend> {
     /// The authentication and authorization backend.
     pub backend: Backend,
 
+    /// The underyling session.
+    pub session: Session,
+
     data: Data<UserId<Backend>>,
-    session: Session,
     data_key: &'static str,
 }
 
