@@ -31,7 +31,7 @@ pub fn router() -> Router<()> {
     Router::new()
         .route("/login", post(self::post::login))
         .route("/login", get(self::get::login))
-        .route("/logout", get(self::get::logout))
+        .route("/logout", get(self::post::logout))
 }
 
 mod post {
@@ -56,6 +56,13 @@ mod post {
 
         Redirect::to(auth_url.as_str()).into_response()
     }
+
+    pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
+        match auth_session.logout().await {
+            Ok(_) => Redirect::to("/login").into_response(),
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
 }
 
 mod get {
@@ -70,12 +77,5 @@ mod get {
             .render()
             .unwrap(),
         )
-    }
-
-    pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
-        match auth_session.logout().await {
-            Ok(_) => Redirect::to("/login").into_response(),
-            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-        }
     }
 }

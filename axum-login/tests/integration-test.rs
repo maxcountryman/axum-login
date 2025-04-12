@@ -88,7 +88,7 @@ async fn sqlite_example() {
 
     // Log out and check the cookie has been removed in response.
     let res = client
-        .get(format!("{}/logout", WEBSERVER_URL))
+        .post(format!("{}/logout", WEBSERVER_URL))
         .send()
         .await
         .unwrap();
@@ -172,7 +172,7 @@ async fn permissions_example() {
 
     // Log out and check the cookie has been removed in response.
     let res = client
-        .get(format!("{}/logout", WEBSERVER_URL))
+        .post(format!("{}/logout", WEBSERVER_URL))
         .send()
         .await
         .unwrap();
