@@ -165,10 +165,7 @@ async fn permissions_example() {
         .send()
         .await
         .unwrap();
-    assert_eq!(
-        res.url().to_string(),
-        format!("{WEBSERVER_URL}/restricted")
-    );
+    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/restricted"));
 
     // Log out and check the cookie has been removed in response.
     let res = client
