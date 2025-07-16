@@ -59,7 +59,7 @@ async fn sqlite_example() {
     let res = client.get(WEBSERVER_URL).send().await.unwrap();
     assert_eq!(
         res.url().to_string(),
-        format!("{}/login?next=%2F", WEBSERVER_URL)
+        format!("{WEBSERVER_URL}/login?next=%2F")
     );
 
     // Log in with invalid credentials.
@@ -67,28 +67,28 @@ async fn sqlite_example() {
     form.insert("username", "ferris");
     form.insert("password", "bogus");
     let res = client
-        .post(format!("{}/login", WEBSERVER_URL))
+        .post(format!("{WEBSERVER_URL}/login"))
         .form(&form)
         .send()
         .await
         .unwrap();
-    assert_eq!(res.url().to_string(), format!("{}/login", WEBSERVER_URL));
+    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/login"));
 
     // Log in with valid credentials.
     let mut form = HashMap::new();
     form.insert("username", "ferris");
     form.insert("password", "hunter42");
     let res = client
-        .post(format!("{}/login", WEBSERVER_URL))
+        .post(format!("{WEBSERVER_URL}/login"))
         .form(&form)
         .send()
         .await
         .unwrap();
-    assert_eq!(res.url().to_string(), format!("{}/", WEBSERVER_URL));
+    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
 
     // Log out and check the cookie has been removed in response.
     let res = client
-        .get(format!("{}/logout", WEBSERVER_URL))
+        .get(format!("{WEBSERVER_URL}/logout"))
         .send()
         .await
         .unwrap();
@@ -109,7 +109,7 @@ async fn permissions_example() {
     let res = client.get(WEBSERVER_URL).send().await.unwrap();
     assert_eq!(
         res.url().to_string(),
-        format!("{}/login?next=%2F", WEBSERVER_URL)
+        format!("{WEBSERVER_URL}/login?next=%2F")
     );
 
     // Log in with invalid credentials.
@@ -117,34 +117,34 @@ async fn permissions_example() {
     form.insert("username", "ferris");
     form.insert("password", "bogus");
     let res = client
-        .post(format!("{}/login", WEBSERVER_URL))
+        .post(format!("{WEBSERVER_URL}/login"))
         .form(&form)
         .send()
         .await
         .unwrap();
-    assert_eq!(res.url().to_string(), format!("{}/login", WEBSERVER_URL));
+    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/login"));
 
     // Log in with valid credentials.
     let mut form = HashMap::new();
     form.insert("username", "ferris");
     form.insert("password", "hunter42");
     let res = client
-        .post(format!("{}/login", WEBSERVER_URL))
+        .post(format!("{WEBSERVER_URL}/login"))
         .form(&form)
         .send()
         .await
         .unwrap();
-    assert_eq!(res.url().to_string(), format!("{}/", WEBSERVER_URL));
+    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
 
     // Try to access restricted page.
     let res = client
-        .get(format!("{}/restricted", WEBSERVER_URL))
+        .get(format!("{WEBSERVER_URL}/restricted"))
         .send()
         .await
         .unwrap();
     assert_eq!(
         res.url().to_string(),
-        format!("{}/login?next=%2Frestricted", WEBSERVER_URL)
+        format!("{WEBSERVER_URL}/login?next=%2Frestricted")
     );
 
     // Log in with valid credentials.
@@ -152,27 +152,27 @@ async fn permissions_example() {
     form.insert("username", "admin");
     form.insert("password", "hunter42");
     let res = client
-        .post(format!("{}/login", WEBSERVER_URL))
+        .post(format!("{WEBSERVER_URL}/login"))
         .form(&form)
         .send()
         .await
         .unwrap();
-    assert_eq!(res.url().to_string(), format!("{}/", WEBSERVER_URL));
+    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
 
     // Now we should be able to access the restricted page.
     let res = client
-        .get(format!("{}/restricted", WEBSERVER_URL))
+        .get(format!("{WEBSERVER_URL}/restricted"))
         .send()
         .await
         .unwrap();
     assert_eq!(
         res.url().to_string(),
-        format!("{}/restricted", WEBSERVER_URL)
+        format!("{WEBSERVER_URL}/restricted")
     );
 
     // Log out and check the cookie has been removed in response.
     let res = client
-        .get(format!("{}/logout", WEBSERVER_URL))
+        .get(format!("{WEBSERVER_URL}/logout"))
         .send()
         .await
         .unwrap();

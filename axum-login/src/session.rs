@@ -24,8 +24,8 @@ pub enum Error<Backend: AuthnBackend> {
 impl<Backend: AuthnBackend> Debug for Error<Backend> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Session(err) => write!(f, "{:?}", err)?,
-            Error::Backend(err) => write!(f, "{:?}", err)?,
+            Error::Session(err) => write!(f, "{err:?}")?,
+            Error::Backend(err) => write!(f, "{err:?}")?,
         };
 
         Ok(())

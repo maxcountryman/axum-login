@@ -28,7 +28,7 @@ pub fn url_with_redirect_query(
 
     let redirect_uri_string = redirect_uri.to_string();
     let redirect_uri_encoded = urlencoding::encode(&redirect_uri_string);
-    let redirect_query = format!("{}={}", redirect_field, redirect_uri_encoded);
+    let redirect_query = format!("{redirect_field}={redirect_uri_encoded}");
 
     update_query(&uri, redirect_query)
 }

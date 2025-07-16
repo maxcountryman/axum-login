@@ -47,7 +47,7 @@ mod post {
 
                 let mut login_url = "/login".to_string();
                 if let Some(next) = creds.next {
-                    login_url = format!("{}?next={}", login_url, next);
+                    login_url = format!("{login_url}?next={next}");
                 };
 
                 return Redirect::to(&login_url).into_response();
