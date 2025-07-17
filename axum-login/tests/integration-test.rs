@@ -160,6 +160,7 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
+    dbg!(res.headers().get_all("set-cookie"));
 
     // Now we should be able to access the restricted page.
     let res = client
@@ -175,6 +176,11 @@ async fn permissions_example() {
         .send()
         .await
         .unwrap();
+
+    dbg!(res.headers().get_all("set-cookie"));
+    for value in res.headers().get_all("set-cookie") {
+        eprintln!("Set-Cookie: {:?}", value);
+    }
 
     let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
         val.to_str().unwrap_or("").contains("id=")
