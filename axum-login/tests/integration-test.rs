@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serial_test::serial;
 
 const WEBSERVER_URL: &str = "http://localhost:3000";
@@ -105,7 +105,11 @@ async fn sqlite_example() {
 async fn permissions_example() {
     let _child_guard = start_example_binary("example-permissions").await;
 
-    let client = Client::builder().cookie_store(true).build().unwrap();
+    let cookie_jar = reqwest::cookie::Jar::default();
+    let client = Client::builder()
+        .cookie_provider(cookie_jar.into())
+        .build()
+        .unwrap();
 
     // A logged out user is redirected to the login URL with a next query string.
     let res = client.get(WEBSERVER_URL).send().await.unwrap();
@@ -137,6 +141,7 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
+    dbg!(res.headers().get_all("set-cookie"));
 
     // Try to access restricted page.
     let res = client
@@ -169,6 +174,7 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/restricted"));
+    assert_eq!(res.status(), StatusCode::OK);
 
     // Log out and check the cookie has been removed in response.
     let res = client
@@ -176,6 +182,7 @@ async fn permissions_example() {
         .send()
         .await
         .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
 
     dbg!(res.headers().get_all("set-cookie"));
     for value in res.headers().get_all("set-cookie") {
