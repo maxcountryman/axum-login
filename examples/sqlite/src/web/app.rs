@@ -1,10 +1,12 @@
+use std::str::FromStr;
+
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
 use axum_messages::MessagesManagerLayer;
-use sqlx::SqlitePool;
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tower_sessions::cookie::Key;
@@ -21,7 +23,8 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let db = SqlitePool::connect(":memory:").await?;
+        let opts = SqliteConnectOptions::from_str("sqlite://example-sqlite.db?mode=rwc")?;
+        let db = SqlitePool::connect_with(opts).await?;
         sqlx::migrate!().run(&db).await?;
 
         Ok(Self { db })
