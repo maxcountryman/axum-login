@@ -92,10 +92,12 @@ async fn sqlite_example() {
         .send()
         .await
         .unwrap();
-    assert!(res
-        .cookies()
-        .find(|c| c.name() == "id")
-        .is_some_and(|c| c.value() == ""));
+    let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
+        val.to_str().unwrap_or("").contains("id=")
+            && val.to_str().unwrap_or("").contains("Max-Age=0")
+    });
+
+    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
 }
 
 #[tokio::test]
@@ -173,8 +175,11 @@ async fn permissions_example() {
         .send()
         .await
         .unwrap();
-    assert!(res
-        .cookies()
-        .find(|c| c.name() == "id")
-        .is_some_and(|c| c.value() == ""));
+
+    let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
+        val.to_str().unwrap_or("").contains("id=")
+            && val.to_str().unwrap_or("").contains("Max-Age=0")
+    });
+
+    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
 }
