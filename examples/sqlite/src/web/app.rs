@@ -46,6 +46,7 @@ impl App {
 
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false)
+            .with_same_site(tower_sessions::cookie::SameSite::Lax)
             .with_expiry(Expiry::OnInactivity(Duration::days(1)))
             .with_signed(key);
 
