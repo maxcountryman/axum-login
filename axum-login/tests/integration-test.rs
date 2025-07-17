@@ -117,6 +117,7 @@ async fn permissions_example() {
         res.url().to_string(),
         format!("{WEBSERVER_URL}/login?next=%2F")
     );
+    dbg!(res.headers().get_all("set-cookie"));
 
     // Log in with invalid credentials.
     let mut form = HashMap::new();
@@ -129,6 +130,7 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/login"));
+    dbg!(res.headers().get_all("set-cookie"));
 
     // Log in with valid credentials.
     let mut form = HashMap::new();
