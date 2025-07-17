@@ -179,7 +179,7 @@ async fn permissions_example() {
 
     dbg!(res.headers().get_all("set-cookie"));
     for value in res.headers().get_all("set-cookie") {
-        eprintln!("Set-Cookie: {:?}", value);
+        eprintln!("Set-Cookie: {value:?}");
     }
 
     let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
