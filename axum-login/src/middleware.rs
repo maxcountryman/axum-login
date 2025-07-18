@@ -142,11 +142,10 @@ macro_rules! login_and_permission_required {
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> std::result::Result<(), $crate::axum::http::StatusCode> {
             if let Some(ref user) = auth_session.user {
-                let mut has_all_permissions = true;
-                $(
-                    has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
-                )+
+                let has_all_permissions = $(
+                    auth_session.backend.has_perm(user, $perm.into()).await.map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+                )&&+;
+                
                 if has_all_permissions {
                     Ok(())
                 } else {
