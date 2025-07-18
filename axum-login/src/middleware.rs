@@ -131,6 +131,36 @@ macro_rules! permission_required {
     }};
 }
 
+/// Login and permission predicate middleware.
+///
+/// Firstly requires that the user is authenticated, and then requires that the
+/// specified permissions, either user or group or both, are all assigned to the user.
+#[macro_export]
+macro_rules! login_and_permission_required {
+    ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
+        use $crate::AuthzBackend;
+
+        async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> std::result::Result<(), $crate::axum::http::StatusCode> {
+            if let Some(ref user) = auth_session.user {
+                let mut has_all_permissions = true;
+                $(
+                    has_all_permissions = has_all_permissions &&
+                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                )+
+                if has_all_permissions {
+                    Ok(())
+                } else {
+                    Err($crate::axum::http::StatusCode::FORBIDDEN)
+                }
+            } else {
+                Err($crate::axum::http::StatusCode::UNAUTHORIZED)
+            }
+        }
+
+        $crate::predicate_required!(is_authorized)
+    }};
+}
+
 /// Predicate middleware.
 ///
 /// Can be specified with a login URL and next redirect field or an alternative
@@ -141,6 +171,24 @@ macro_rules! permission_required {
 /// used as the response.
 #[macro_export]
 macro_rules! predicate_required {
+    // expect user to pass a function that returns a Result
+    // type inside the `Err` variant should implement `IntoResponse`
+    ($predicate:expr) => {{
+        use $crate::axum::{
+            middleware::{from_fn, Next},
+            response::IntoResponse,
+        };
+
+        from_fn(
+            |auth_session: $crate::AuthSession<_>, req, next: Next| async move {
+                match $predicate(auth_session).await {
+                    Ok(_) => next.run(req).await,
+                    Err(e) => e.into_response(),
+                }
+            },
+        )
+    }};
+
     ($predicate:expr, $alternative:expr) => {{
         use $crate::axum::{
             middleware::{from_fn, Next},
@@ -605,6 +653,79 @@ mod tests {
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_login_and_permission_required() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_and_permission_required!(Backend, "test.read"))
+            .route(
+                "/login",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_login_and_permission_required_missing_permissions() {
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_and_permission_required!(
+                Backend,
+                "test.read",
+                "test.write",
+                "admin.read"
+            ))
+            .route(
+                "/login",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
         let req = Request::builder()
             .uri("/login")

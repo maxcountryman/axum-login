@@ -1,5 +1,7 @@
 # Unreleased
 
+- Added `login_and_permission_required` middleware.
+
 # 0.17.0
 
 - Update `tower-sessions` to 0.14.0
