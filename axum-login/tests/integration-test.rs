@@ -203,23 +203,9 @@ async fn permissions_example() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
-    dbg!(res.headers().get_all("set-cookie"));
-    for value in res.headers().get_all("set-cookie") {
-        eprintln!("Set-Cookie: {value:?}");
-    }
-
-    //let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
-    //    val.to_str().unwrap_or("").contains("id=")
-    //        && val.to_str().unwrap_or("").contains("Max-Age=0")
-    //});
-
-    dbg!(cookie_jar.cookies(&url).iter().len());
-    for cookie in cookie_jar.cookies(&url).iter() {
-        eprintln!("Client cookie: {}", cookie.to_str().unwrap());
-    }
-
     assert_eq!(
-        cookie_jar.cookies(&url).iter().len(), 0,
+        cookie_jar.cookies(&url).iter().len(),
+        0,
         "Expected 'id' cookie to be removed"
     );
 }
