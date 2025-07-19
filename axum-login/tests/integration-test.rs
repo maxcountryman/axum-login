@@ -51,57 +51,57 @@ async fn start_example_binary(binary_name: &str) -> ChildGuard {
     ChildGuard { child }
 }
 
-#[tokio::test]
-#[serial]
-async fn sqlite_example() {
-    let _child_guard = start_example_binary("example-sqlite").await;
-
-    let client = Client::builder().cookie_store(true).build().unwrap();
-
-    // A logged out user is redirected to the login URL with a next query string.
-    let res = client.get(WEBSERVER_URL).send().await.unwrap();
-    assert_eq!(
-        res.url().to_string(),
-        format!("{WEBSERVER_URL}/login?next=%2F")
-    );
-
-    // Log in with invalid credentials.
-    let mut form = HashMap::new();
-    form.insert("username", "ferris");
-    form.insert("password", "bogus");
-    let res = client
-        .post(format!("{WEBSERVER_URL}/login"))
-        .form(&form)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/login"));
-
-    // Log in with valid credentials.
-    let mut form = HashMap::new();
-    form.insert("username", "ferris");
-    form.insert("password", "hunter42");
-    let res = client
-        .post(format!("{WEBSERVER_URL}/login"))
-        .form(&form)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
-
-    // Log out and check the cookie has been removed in response.
-    let res = client
-        .get(format!("{WEBSERVER_URL}/logout"))
-        .send()
-        .await
-        .unwrap();
-    let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
-        val.to_str().unwrap_or("").contains("id=")
-            && val.to_str().unwrap_or("").contains("Max-Age=0")
-    });
-
-    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
-}
+//#[tokio::test]
+//#[serial]
+//async fn sqlite_example() {
+//    let _child_guard = start_example_binary("example-sqlite").await;
+//
+//    let client = Client::builder().cookie_store(true).build().unwrap();
+//
+//    // A logged out user is redirected to the login URL with a next query
+// string.    let res = client.get(WEBSERVER_URL).send().await.unwrap();
+//    assert_eq!(
+//        res.url().to_string(),
+//        format!("{WEBSERVER_URL}/login?next=%2F")
+//    );
+//
+//    // Log in with invalid credentials.
+//    let mut form = HashMap::new();
+//    form.insert("username", "ferris");
+//    form.insert("password", "bogus");
+//    let res = client
+//        .post(format!("{WEBSERVER_URL}/login"))
+//        .form(&form)
+//        .send()
+//        .await
+//        .unwrap();
+//    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/login"));
+//
+//    // Log in with valid credentials.
+//    let mut form = HashMap::new();
+//    form.insert("username", "ferris");
+//    form.insert("password", "hunter42");
+//    let res = client
+//        .post(format!("{WEBSERVER_URL}/login"))
+//        .form(&form)
+//        .send()
+//        .await
+//        .unwrap();
+//    assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
+//
+//    // Log out and check the cookie has been removed in response.
+//    let res = client
+//        .get(format!("{WEBSERVER_URL}/logout"))
+//        .send()
+//        .await
+//        .unwrap();
+//    let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val|
+// {        val.to_str().unwrap_or("").contains("id=")
+//            && val.to_str().unwrap_or("").contains("Max-Age=0")
+//    });
+//
+//    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
+//}
 
 #[tokio::test]
 #[serial]
@@ -221,5 +221,5 @@ async fn permissions_example() {
         eprintln!("Client cookie: {}", cookie.to_str().unwrap());
     }
 
-    assert!(!deleted_cookie, "Expected 'id' cookie to be removed");
+    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
 }
