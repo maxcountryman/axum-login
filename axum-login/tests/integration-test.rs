@@ -153,10 +153,7 @@ async fn permissions_example() {
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
     assert_eq!(res.status(), StatusCode::OK);
     dbg!(res.headers().get_all("set-cookie"));
-    let url = WEBSERVER_URL.parse().unwrap();
-    for cookie in cookie_jar.cookies(&url).iter() {
-        eprintln!("Client cookie: {}", cookie.to_str().unwrap());
-    }
+
     let url = WEBSERVER_URL.parse().unwrap();
     for cookie in cookie_jar.cookies(&url).iter() {
         eprintln!("Client cookie: {}", cookie.to_str().unwrap());
@@ -211,15 +208,18 @@ async fn permissions_example() {
         eprintln!("Set-Cookie: {value:?}");
     }
 
-    let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
-        val.to_str().unwrap_or("").contains("id=")
-            && val.to_str().unwrap_or("").contains("Max-Age=0")
-    });
+    //let deleted_cookie = res.headers().get_all("set-cookie").iter().any(|val| {
+    //    val.to_str().unwrap_or("").contains("id=")
+    //        && val.to_str().unwrap_or("").contains("Max-Age=0")
+    //});
 
     dbg!(cookie_jar.cookies(&url).iter().len());
     for cookie in cookie_jar.cookies(&url).iter() {
         eprintln!("Client cookie: {}", cookie.to_str().unwrap());
     }
 
-    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
+    assert_eq!(
+        cookie_jar.cookies(&url).iter().len(), 0,
+        "Expected 'id' cookie to be removed"
+    );
 }
