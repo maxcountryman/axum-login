@@ -40,5 +40,5 @@ time = "0.3.36"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.5.2"
-tower-sessions = { version = "0.14.0" }
+tower-sessions = { version = "0.14.0", features = ["memory-store"] }
 tower-sessions-sqlx-store = { version = "0.15.0", features = ["sqlite"] }
