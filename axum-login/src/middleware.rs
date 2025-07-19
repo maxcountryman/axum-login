@@ -166,7 +166,7 @@ macro_rules! predicate_required {
         };
 
         from_fn(
-            |auth_session: $crate::AuthSession<_>,
+            move |auth_session: $crate::AuthSession<_>,
              OriginalUri(original_uri): OriginalUri,
              req,
              next: Next| async move {
@@ -346,6 +346,49 @@ mod tests {
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(login_required!(Backend, login_url = "/login"))
+            .route(
+                "/login",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2F")
+        );
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_login_required_with_configured_login_url() {
+        // let tes_login_url: &'static str = Box::leak("/login".to_string().into_boxed_str());
+        let test_login_url: &'static str = "/login";
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(Backend, login_url = test_login_url))
             .route(
                 "/login",
                 axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
