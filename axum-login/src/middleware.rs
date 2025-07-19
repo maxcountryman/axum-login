@@ -39,13 +39,19 @@ pub fn url_with_redirect_query(
 #[macro_export]
 macro_rules! login_required {
     ($backend_type:ty) => {{
+        use $crate::axum::{extract::Request, response::IntoResponse};
+
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
             auth_session.user.is_some()
         }
 
+        async fn alternate(_req: Request) -> impl IntoResponse {
+            crate::axum::http::StatusCode::UNAUTHORIZED.into_response()
+        }
+
         $crate::predicate_required!(
             is_authenticated,
-            $crate::axum::http::StatusCode::UNAUTHORIZED
+            alternate
         )
     }};
 
@@ -68,6 +74,17 @@ macro_rules! login_required {
             redirect_field = "next"
         )
     };
+
+    ($backend_type:ty, failed_predicate_callback = $failed_predicate_callback:expr) => {{
+        async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
+            auth_session.user.is_some()
+        }
+
+        $crate::predicate_required!(
+            is_authenticated,
+            $failed_predicate_callback
+        )
+    }};
 }
 
 /// Permission predicate middleware.
@@ -108,7 +125,7 @@ macro_rules! permission_required {
         )
     };
 
-    ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
+    ($backend_type:ty, failed_predicate_callback = $failed_predicate_callback:expr, $($perm:expr),+ $(,)?) => {{
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
@@ -126,7 +143,34 @@ macro_rules! permission_required {
 
         $crate::predicate_required!(
             is_authorized,
-            $crate::axum::http::StatusCode::FORBIDDEN
+            $failed_predicate_callback
+        )
+    }};
+
+    ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
+        use $crate::axum::{extract::Request, response::IntoResponse};
+        use $crate::AuthzBackend;
+
+        async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
+            if let Some(ref user) = auth_session.user {
+                let mut has_all_permissions = true;
+                $(
+                    has_all_permissions = has_all_permissions &&
+                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                )+
+                has_all_permissions
+            } else {
+                false
+            }
+        }
+
+        async fn alternate(_req: Request) -> impl IntoResponse {
+            crate::axum::http::StatusCode::FORBIDDEN.into_response()
+        }
+
+        $crate::predicate_required!(
+            is_authorized,
+            alternate
         )
     }};
 }
@@ -152,7 +196,7 @@ macro_rules! predicate_required {
                 if $predicate(auth_session).await {
                     next.run(req).await
                 } else {
-                    $alternative.into_response()
+                    $alternative(req).await.into_response()
                 }
             },
         )
@@ -200,6 +244,7 @@ mod tests {
     use axum::{
         body::Body,
         http::{header, Request, Response, StatusCode},
+        response::Redirect,
         Router,
     };
     use tower::ServiceExt;
@@ -428,6 +473,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_login_required_with_failed_predicate_callback() {
+        use axum::extract::Request;
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(login_required!(
+                Backend,
+                failed_predicate_callback = |req: Request| async move {
+                    let original_uri = req.uri();
+                    let encoded_uri =
+                        form_urlencoded::byte_serialize(original_uri.to_string().as_bytes())
+                            .collect::<String>();
+                    let redirect_url = format!("/login?next={}", encoded_uri);
+
+                    Redirect::temporary(redirect_url.as_str()).into_response()
+                }
+            ))
+            .route(
+                "/login",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2F")
+        );
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn test_permission_required() {
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -569,6 +668,60 @@ mod tests {
 
         let req = Request::builder()
             .uri("/signin")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_with_failed_predicate_callback() {
+        use axum::extract::Request;
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(permission_required!(
+                Backend,
+                failed_predicate_callback = |req: Request| async move {
+                    let original_uri = req.uri();
+                    let encoded_uri =
+                        form_urlencoded::byte_serialize(original_uri.to_string().as_bytes())
+                            .collect::<String>();
+                    let redirect_url = format!("/login?next={}", encoded_uri);
+
+                    Redirect::temporary(redirect_url.as_str()).into_response()
+                },
+                "test.read"
+            ))
+            .route(
+                "/login",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            res.headers()
+                .get(header::LOCATION)
+                .and_then(|h| h.to_str().ok()),
+            Some("/login?next=%2F")
+        );
+
+        let req = Request::builder()
+            .uri("/login")
             .body(Body::empty())
             .unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
