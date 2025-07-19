@@ -4,7 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use reqwest::{Client, StatusCode};
+use reqwest::{
+    cookie::{CookieStore, Jar},
+    Client, StatusCode,
+};
 use serial_test::serial;
 
 const WEBSERVER_URL: &str = "http://localhost:3000";
@@ -105,9 +108,9 @@ async fn sqlite_example() {
 async fn permissions_example() {
     let _child_guard = start_example_binary("example-permissions").await;
 
-    let cookie_jar = reqwest::cookie::Jar::default();
+    let cookie_jar = std::sync::Arc::new(Jar::default());
     let client = Client::builder()
-        .cookie_provider(cookie_jar.into())
+        .cookie_provider(cookie_jar.clone())
         .build()
         .unwrap();
 
@@ -117,8 +120,12 @@ async fn permissions_example() {
         res.url().to_string(),
         format!("{WEBSERVER_URL}/login?next=%2F")
     );
+    assert_eq!(res.status(), StatusCode::OK);
     dbg!(res.headers().get_all("set-cookie"));
-
+    let url = WEBSERVER_URL.parse().unwrap();
+    for cookie in cookie_jar.cookies(&url).iter() {
+        eprintln!("Client cookie: {}", cookie.to_str().unwrap());
+    }
     // Log in with invalid credentials.
     let mut form = HashMap::new();
     form.insert("username", "ferris");
@@ -130,6 +137,7 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/login"));
+    assert_eq!(res.status(), StatusCode::OK);
     dbg!(res.headers().get_all("set-cookie"));
 
     // Log in with valid credentials.
@@ -143,7 +151,16 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
+    assert_eq!(res.status(), StatusCode::OK);
     dbg!(res.headers().get_all("set-cookie"));
+    let url = WEBSERVER_URL.parse().unwrap();
+    for cookie in cookie_jar.cookies(&url).iter() {
+        eprintln!("Client cookie: {}", cookie.to_str().unwrap());
+    }
+    let url = WEBSERVER_URL.parse().unwrap();
+    for cookie in cookie_jar.cookies(&url).iter() {
+        eprintln!("Client cookie: {}", cookie.to_str().unwrap());
+    }
 
     // Try to access restricted page.
     let res = client
@@ -155,6 +172,8 @@ async fn permissions_example() {
         res.url().to_string(),
         format!("{WEBSERVER_URL}/login?next=%2Frestricted")
     );
+    assert_eq!(res.status(), StatusCode::OK);
+    dbg!(res.headers().get_all("set-cookie"));
 
     // Log in with valid credentials.
     let mut form = HashMap::new();
@@ -167,6 +186,7 @@ async fn permissions_example() {
         .await
         .unwrap();
     assert_eq!(res.url().to_string(), format!("{WEBSERVER_URL}/"));
+    assert_eq!(res.status(), StatusCode::OK);
     dbg!(res.headers().get_all("set-cookie"));
 
     // Now we should be able to access the restricted page.
@@ -196,5 +216,10 @@ async fn permissions_example() {
             && val.to_str().unwrap_or("").contains("Max-Age=0")
     });
 
-    assert!(deleted_cookie, "Expected 'id' cookie to be removed");
+    dbg!(cookie_jar.cookies(&url).iter().len());
+    for cookie in cookie_jar.cookies(&url).iter() {
+        eprintln!("Client cookie: {}", cookie.to_str().unwrap());
+    }
+
+    assert!(!deleted_cookie, "Expected 'id' cookie to be removed");
 }
