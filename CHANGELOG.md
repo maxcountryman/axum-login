@@ -1,5 +1,11 @@
 # Unreleased
 
+# 0.18.0
+
+- Disable default features for `tower-sessions`. #287
+- Make `session` public. #276
+- Remove `async-trait` dependency. #269
+
 # 0.17.0
 
 - Update `tower-sessions` to 0.14.0
