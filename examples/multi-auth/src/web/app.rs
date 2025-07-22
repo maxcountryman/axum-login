@@ -10,13 +10,13 @@ use sqlx::SqlitePool;
 use time::Duration;
 
 use crate::{
-    users::Backend,
+    users::{Backend, BasicClientSet},
     web::{auth, oauth, protected},
 };
 
 pub struct App {
     db: SqlitePool,
-    client: BasicClient,
+    client: BasicClientSet,
 }
 
 impl App {
@@ -32,7 +32,10 @@ impl App {
 
         let auth_url = AuthUrl::new("https://github.com/login/oauth/authorize".to_string())?;
         let token_url = TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?;
-        let client = BasicClient::new(client_id, Some(client_secret), auth_url, Some(token_url));
+        let client = BasicClient::new(client_id)
+            .set_client_secret(client_secret)
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url);
 
         let db = SqlitePool::connect(":memory:").await?;
         sqlx::migrate!().run(&db).await?;
