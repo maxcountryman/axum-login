@@ -5,13 +5,13 @@ edition = "2021"
 publish = false
 
 [dependencies]
-askama = { version = "0.12.1" }
+askama = { version = "0.14.0" }
 axum = "0.8.1"
 axum-login = { path = "../../axum-login" }
 dotenvy = "0.15.7"
 http = "1.0.0"
 hyper = "1.0.1"
-oauth2 = "4.4.2"
+oauth2 = "5.0.0"
 reqwest = { version = "0.12.12", features = ["json"] }
 serde = "1"
 sqlx = { version = "0.8.1", features = ["sqlite", "time", "runtime-tokio"] }
