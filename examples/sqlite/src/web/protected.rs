@@ -24,7 +24,7 @@ mod get {
     use super::*;
 
     pub async fn protected(auth_session: AuthSession, messages: Messages) -> impl IntoResponse {
-        match auth_session.user {
+        match auth_session.user().await {
             Some(user) => Html(
                 ProtectedTemplate {
                     messages: messages.into_iter().collect(),

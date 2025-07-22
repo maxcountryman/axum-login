@@ -1,7 +1,8 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
+use tokio::sync::Mutex;
 use tower_sessions::{session, Session};
 
 use crate::{
@@ -53,6 +54,14 @@ impl<UserId: Clone> Default for Data<UserId> {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Inner<Backend: AuthnBackend> {
+    session: Session,
+    user: Option<Backend::User>,
+    data: Data<UserId<Backend>>,
+    data_key: &'static str,
+}
+
 /// A specialized session for identification, authentication, and authorization
 /// of users associated with a backend.
 ///
@@ -73,20 +82,21 @@ impl<UserId: Clone> Default for Data<UserId> {
 /// so that the user is logged in.
 #[derive(Debug, Clone)]
 pub struct AuthSession<Backend: AuthnBackend> {
-    /// The user associated by the backend. `None` when not logged in.
-    pub user: Option<Backend::User>,
-
-    /// The authentication and authorization backend.
-    pub backend: Backend,
-
-    /// The underlying session.
-    pub session: Session,
-
-    data: Data<UserId<Backend>>,
-    data_key: &'static str,
+    backend: Backend,
+    inner: Arc<Mutex<Inner<Backend>>>,
 }
 
 impl<Backend: AuthnBackend> AuthSession<Backend> {
+    /// Returns the backend associated wih his auth session.
+    pub fn backend(&self) -> &Backend {
+        &self.backend
+    }
+
+    /// Returns the user that's authenicated to this session otherwise `None`.
+    pub async fn user(&self) -> Option<Backend::User> {
+        self.inner.lock().await.user.clone()
+    }
+
     /// Verifies the provided credentials via the backend returning the
     /// authenticated user if valid and otherwise `None`.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
@@ -110,15 +120,17 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
     /// Updates the session such that the user is logged in.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id = user.id().to_string()), ret, err)]
     pub async fn login(&mut self, user: &Backend::User) -> Result<(), Error<Backend>> {
-        self.user = Some(user.clone());
+        {
+            let mut inner = self.inner.lock().await;
+            inner.user = Some(user.clone());
 
-        if self.data.auth_hash.is_none() {
-            self.session.cycle_id().await?; // Session-fixation
-                                            // mitigation.
+            if inner.data.auth_hash.is_none() {
+                inner.session.cycle_id().await?; // Session-fixation mitigation.
+            }
+
+            inner.data.user_id = Some(user.id());
+            inner.data.auth_hash = Some(user.session_auth_hash().to_owned());
         }
-
-        self.data.user_id = Some(user.id());
-        self.data.auth_hash = Some(user.session_auth_hash().to_owned());
 
         self.update_session().await?;
 
@@ -128,19 +140,24 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
     /// Updates the session such that the user is logged out.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
     pub async fn logout(&mut self) -> Result<Option<Backend::User>, Error<Backend>> {
-        let user = self.user.take();
+        let mut inner = self.inner.lock().await;
+        let user = inner.user.take();
 
         if let Some(ref user) = user {
             tracing::Span::current().record("user.id", user.id().to_string());
         }
 
-        self.session.flush().await?;
+        inner.session.flush().await?;
 
         Ok(user)
     }
 
     async fn update_session(&mut self) -> Result<(), session::Error> {
-        self.session.insert(self.data_key, self.data.clone()).await
+        let inner = self.inner.lock().await;
+        inner
+            .session
+            .insert(inner.data_key, inner.data.clone())
+            .await
     }
 
     pub(crate) async fn from_session(
@@ -169,13 +186,14 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
             }
         }
 
-        Ok(Self {
+        let inner = Arc::new(Mutex::new(Inner {
             user,
-            data,
-            backend,
             session,
+            data,
             data_key,
-        })
+        }));
+
+        Ok(Self { backend, inner })
     }
 }
 
@@ -257,12 +275,15 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
 
         let session = Session::new(None, store, None);
-        let auth_session = AuthSession {
+        let inner = Inner {
             user: None,
-            backend: mock_backend,
-            data: Data::default(),
             session,
+            data: Data::default(),
             data_key: "auth_data",
+        };
+        let auth_session = AuthSession {
+            backend: mock_backend,
+            inner: Arc::new(Mutex::new(inner)),
         };
 
         let result = auth_session.authenticate(creds).await;
@@ -284,14 +305,16 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
 
         let session = Session::new(None, store, None);
-        let auth_session = AuthSession {
+        let inner = Inner {
             user: None,
-            backend: mock_backend,
-            data: Data::default(),
             session,
+            data: Data::default(),
             data_key: "auth_data",
         };
-
+        let auth_session = AuthSession {
+            backend: mock_backend,
+            inner: Arc::new(Mutex::new(inner)),
+        };
         let result = auth_session.authenticate(bad_creds).await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -308,17 +331,20 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let session = Session::new(None, store, None);
         let original_session_id = session.id();
-        let mut auth_session = AuthSession {
+        let inner = Inner {
             user: None,
-            backend: mock_backend,
-            data: Data::default(),
             session: session.clone(),
+            data: Data::default(),
             data_key: "auth_data",
+        };
+        let mut auth_session = AuthSession {
+            backend: mock_backend,
+            inner: Arc::new(Mutex::new(inner)),
         };
 
         auth_session.login(&mock_user).await.unwrap();
-        assert!(auth_session.user.is_some());
-        assert_eq!(auth_session.user.unwrap().id(), 42);
+        assert!(auth_session.user().await.is_some());
+        assert_eq!(auth_session.user().await.unwrap().id(), 42);
 
         // Simulate request persisting session.
         session.save().await.unwrap();
@@ -340,18 +366,20 @@ mod tests {
 
         let store = Arc::new(MemoryStore::default());
         let session = Session::new(None, store, None);
-        let mut auth_session = AuthSession {
-            user: Some(mock_user.clone()),
-            backend: mock_backend,
-            data: Data::default(),
+        let inner = Inner {
+            user: Some(mock_user),
             session,
+            data: Data::default(),
             data_key: "auth_data",
         };
-
+        let mut auth_session = AuthSession {
+            backend: mock_backend,
+            inner: Arc::new(Mutex::new(inner)),
+        };
         let logged_out_user = auth_session.logout().await.unwrap();
         assert!(logged_out_user.is_some());
         assert_eq!(logged_out_user.unwrap().id(), 42);
-        assert!(auth_session.user.is_none());
+        assert!(auth_session.user().await.is_none());
     }
 
     #[tokio::test]
@@ -383,8 +411,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(auth_session.user.is_some());
-        assert_eq!(auth_session.user.unwrap().id(), 42);
+        assert!(auth_session.user().await.is_some());
+        assert_eq!(auth_session.user().await.unwrap().id(), 42);
     }
 
     #[tokio::test]
@@ -416,6 +444,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(auth_session.user.is_none());
+        assert!(auth_session.user().await.is_none());
     }
 }

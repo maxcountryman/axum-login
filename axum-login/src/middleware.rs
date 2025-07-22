@@ -40,7 +40,7 @@ pub fn url_with_redirect_query(
 macro_rules! login_required {
     ($backend_type:ty) => {{
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            auth_session.user.is_some()
+            auth_session.user().await.is_some()
         }
 
         $crate::predicate_required!(
@@ -51,7 +51,7 @@ macro_rules! login_required {
 
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            auth_session.user.is_some()
+            auth_session.user().await.is_some()
         }
 
         $crate::predicate_required!(
@@ -80,11 +80,11 @@ macro_rules! permission_required {
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user {
+            if let Some(ref user) = auth_session.user().await {
                 let mut has_all_permissions = true;
                 $(
                     has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                        auth_session.backend().has_perm(user, $perm.into()).await.unwrap_or(false);
                 )+
                 has_all_permissions
             } else {
@@ -112,11 +112,11 @@ macro_rules! permission_required {
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user {
+            if let Some(ref user) = auth_session.user().await {
                 let mut has_all_permissions = true;
                 $(
                     has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                        auth_session.backend().has_perm(user, $perm.into()).await.unwrap_or(false);
                 )+
                 has_all_permissions
             } else {

@@ -30,14 +30,18 @@ async fn sqlite_example() {
     assert_eq!(*res.url(), url("/login?next=%2F"));
     assert_eq!(res.status(), StatusCode::OK);
 
-    assert!(
-        cookie_jar.cookies(&url("/")).is_none(),
-        "Expected 'id' cookie to not be set after failed login"
-    );
-
     // Log in with invalid credentials.
     let res = login(&client, "ferris", "bogus").await;
     assert_eq!(*res.url(), url("/login"));
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(
+        cookie_jar.cookies(&url("/")).is_some(),
+        "Expected cookies (i.e. for flash messages)"
+    );
+
+    // Log in with valid credentials.
+    let res = login(&client, "ferris", "hunter42").await;
+    assert_eq!(*res.url(), url("/"));
     assert_eq!(res.status(), StatusCode::OK);
 
     let cookies = cookie_jar
@@ -45,13 +49,8 @@ async fn sqlite_example() {
         .expect("A cookie should be set");
     assert!(
         cookies.to_str().unwrap_or("").contains("id="),
-        "Expected 'id' cookie to be set after login"
+        "Expected 'id' cookie to be set after successful login"
     );
-
-    // Log in with valid credentials.
-    let res = login(&client, "ferris", "hunter42").await;
-    assert_eq!(*res.url(), url("/"));
-    assert_eq!(res.status(), StatusCode::OK);
 
     // Log out and check the cookie has been removed in response.
     let res = client.get(url("/logout")).send().await.unwrap();
@@ -85,10 +84,9 @@ async fn permissions_example() {
 
     assert_eq!(*res.url(), url("/login"));
     assert_eq!(res.status(), StatusCode::OK);
-
     assert!(
         cookie_jar.cookies(&url("/")).is_none(),
-        "Expected 'id' cookie to not be set after failed login"
+        "Expected no cookies"
     );
 
     // Log in with valid credentials.
@@ -102,7 +100,7 @@ async fn permissions_example() {
         .expect("A cookie should be set");
     assert!(
         cookies.to_str().unwrap_or("").contains("id="),
-        "Expected 'id' cookie to be set after login"
+        "Expected 'id' cookie to be set after successful login"
     );
 
     // Try to access restricted page.
