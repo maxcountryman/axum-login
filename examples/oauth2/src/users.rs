@@ -2,9 +2,8 @@ use axum::http::header::{AUTHORIZATION, USER_AGENT};
 use axum_login::{AuthUser, AuthnBackend, UserId};
 use oauth2::{
     basic::{BasicClient, BasicRequestTokenError},
-    reqwest::{async_http_client, AsyncHttpClientError},
     url::Url,
-    AuthorizationCode, CsrfToken, TokenResponse,
+    AuthorizationCode, CsrfToken, EndpointNotSet, EndpointSet, TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
@@ -61,17 +60,20 @@ pub enum BackendError {
     Reqwest(reqwest::Error),
 
     #[error(transparent)]
-    OAuth2(BasicRequestTokenError<AsyncHttpClientError>),
+    OAuth2(BasicRequestTokenError<<reqwest::Client as oauth2::AsyncHttpClient<'static>>::Error>),
 }
+
+pub type BasicClientSet =
+    BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 
 #[derive(Debug, Clone)]
 pub struct Backend {
     db: SqlitePool,
-    client: BasicClient,
+    client: BasicClientSet,
 }
 
 impl Backend {
-    pub fn new(db: SqlitePool, client: BasicClient) -> Self {
+    pub fn new(db: SqlitePool, client: BasicClientSet) -> Self {
         Self { db, client }
     }
 
@@ -93,12 +95,17 @@ impl AuthnBackend for Backend {
         if creds.old_state.secret() != creds.new_state.secret() {
             return Ok(None);
         };
+        let http_client = reqwest::ClientBuilder::new()
+            // Following redirects opens the client up to SSRF vulnerabilities.
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("Client should build");
 
         // Process authorization code, expecting a token response back.
         let token_res = self
             .client
             .exchange_code(AuthorizationCode::new(creds.code))
-            .request_async(async_http_client)
+            .request_async(&http_client)
             .await
             .map_err(Self::Error::OAuth2)?;
 
