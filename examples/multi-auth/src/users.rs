@@ -98,11 +98,21 @@ pub type BasicClientSet =
 pub struct Backend {
     db: SqlitePool,
     client: BasicClientSet,
+    http_client: reqwest::Client,
 }
 
 impl Backend {
     pub fn new(db: SqlitePool, client: BasicClientSet) -> Self {
-        Self { db, client }
+        let http_client: reqwest::Client = reqwest::ClientBuilder::new()
+            // Following redirects opens the client up to SSRF vulnerabilities.
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("Client should build");
+        Self {
+            db,
+            client,
+            http_client,
+        }
     }
 
     pub fn authorize_url(&self) -> (Url, CsrfToken) {
@@ -150,17 +160,11 @@ impl AuthnBackend for Backend {
                     return Ok(None);
                 };
 
-                let http_client = reqwest::ClientBuilder::new()
-                    // Following redirects opens the client up to SSRF vulnerabilities.
-                    .redirect(reqwest::redirect::Policy::none())
-                    .build()
-                    .expect("Client should build");
-
                 // Process authorization code, expecting a token response back.
                 let token_res = self
                     .client
                     .exchange_code(AuthorizationCode::new(oauth_creds.code))
-                    .request_async(&http_client)
+                    .request_async(&self.http_client)
                     .await
                     .map_err(Self::Error::OAuth2)?;
 
