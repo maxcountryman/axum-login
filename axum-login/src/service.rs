@@ -89,7 +89,7 @@ where
                     }
                 };
 
-                if let Some(ref user) = auth_session.user {
+                if let Some(ref user) = auth_session.user().await {
                     tracing::Span::current().record("user.id", user.id().to_string());
                 }
 
