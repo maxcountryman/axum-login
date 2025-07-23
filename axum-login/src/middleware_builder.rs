@@ -1,4 +1,5 @@
 use crate::{AuthSession, AuthnBackend, AuthzBackend};
+use axum::body::Body;
 use axum::extract::{OriginalUri, Request};
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -7,10 +8,11 @@ use std::future::{ready, Future};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use axum::body::Body;
 use tower_layer::Layer;
 use tower_service::Service;
 
+const DEFAULT_LOGIN_URL: &str = "/signin";
+const DEFAULT_REDIRECT_FIELD: &str = "next_uri";
 // TODO: I am not sure if the current type implementation of these functions is great.
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type PredicateStateFn<B, ST> =
@@ -26,9 +28,9 @@ pub struct RequireService<S, B: AuthnBackend, ST: Clone, T> {
     /// State of the application
     state: ST,
     /// Field used to redirect unauthorized user
-    redirect_field: Option<String>,
+    redirect_field: String,
     /// Login url used to redirect unauthorized user
-    login_url: Option<String>,
+    login_url: String,
 }
 
 //umm, manual clone, yes
@@ -71,22 +73,20 @@ where
         let original_uri = req.extensions().get::<OriginalUri>().cloned();
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
 
-        //Later
         let fallback = self.fallback.clone();
         let predicate = self.predicate.clone();
         let state = self.state.clone();
-        let mut inner = self.inner.clone(); // TODO: Cloning this is bad
-        let redirect_field = self
-            .redirect_field
-            .as_deref()
-            .unwrap_or("next_uri")
-            .to_string();
-        let login_url = self.login_url.as_deref().unwrap_or("/signin").to_string();
+        let redirect_field = self.redirect_field.clone();
+        let login_url = self.login_url.clone();
+
+        // This should help
+        let clone = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
             match (original_uri, auth_session) {
                 (
-                    Some(_), // TODO: remove
+                    _,
                     Some(AuthSession {
                         user: Some(user),
                         backend,
@@ -106,15 +106,15 @@ where
                 }
                 (Some(original_uri), Some(_auth_session)) => {
                     // No user in session, redirect to login
+
+                    // TODO: maybe separate handler for redirects. The builder could create
+                    // one from login_url and redirect_uri or takes a custom one from user
                     match crate::url_with_redirect_query(
                         &login_url,
                         &redirect_field,
                         original_uri.0,
                     ) {
                         Ok(login_url) => {
-                            // TODO: separate handler for redirects mayybe
-                            // req.extensions_mut().insert(login_url);
-                            // let response = (fallback)(req).await;
                             let response =
                                 Redirect::temporary(&login_url.to_string()).into_response();
 
@@ -140,8 +140,8 @@ pub struct Require<B: AuthnBackend, ST = (), T = Body> {
     pub predicate: PredicateStateFn<B, ST>, // Should depend on state availability
     pub fallback: FallbackFn<T>,
     pub state: ST,
-    pub redirect_field: Option<String>,
-    pub login_url: Option<String>,
+    pub redirect_field: String,
+    pub login_url: String,
 }
 
 //umm, manual clone, because of Body
@@ -259,18 +259,27 @@ impl<B: AuthnBackend, ST: Clone, T> RequireBuilder<B, ST, T> {
         self
     }
     pub fn build(self) -> Require<B, ST, T> {
+        let redirect_field = self
+            .redirect_field
+            .as_deref()
+            .unwrap_or(DEFAULT_REDIRECT_FIELD)
+            .to_string();
+        let login_url = self
+            .login_url
+            .as_deref()
+            .unwrap_or(DEFAULT_LOGIN_URL)
+            .to_string();
         Require {
             predicate: self.predicate.unwrap_or_else(Self::default_predicate),
             fallback: self.fallback.unwrap_or_else(Self::default_fallback),
             state: self
                 .state
                 .expect("You must provide state with `.state(...)`"),
-            redirect_field: self.redirect_field,
-            login_url: self.login_url,
+            redirect_field,
+            login_url,
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -286,7 +295,7 @@ mod tests {
     use tower_sessions::SessionManagerLayer;
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
-    use crate::middleware_builder::{RequireBuilder, Require};
+    use crate::middleware_builder::{Require, RequireBuilder};
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 
     macro_rules! auth_layer {
@@ -405,7 +414,6 @@ mod tests {
             })
     }
 
-
     #[test]
     fn test_require_builder_type_definitions() {
         let state = TestState {
@@ -448,7 +456,6 @@ mod tests {
 
         assert!(true)
     }
-
 
     //TODO: Add much more tests
     #[tokio::test]
