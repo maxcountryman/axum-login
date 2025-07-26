@@ -383,11 +383,11 @@ pub use axum;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 #[doc(hidden)]
 pub use middleware::url_with_redirect_query;
+pub use middleware_builder::*;
 pub use service::{AuthManager, AuthManagerLayer, AuthManagerLayerBuilder};
 pub use session::{AuthSession, Error};
 pub use tower_sessions;
 pub use tracing;
-pub use middleware_builder::*;
 
 mod backend;
 mod extract;

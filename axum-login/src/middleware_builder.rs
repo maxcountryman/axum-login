@@ -25,7 +25,7 @@ type FallbackFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Se
 
 /// A Tower service that enforces authentication and authorization requirements.
 ///
-/// This service checks for authentication, if it fails, it responds with fallback  applies a
+/// This service checks for authentication, if it fails, it responds with fallback applies a
 /// predicate function to determine if
 /// the request should
 /// be
@@ -77,7 +77,7 @@ where
     }
 }
 
-impl<T, S, B, ST> Service<Request<T>> for RequireService<S, B, ST, T>
+impl<S, B, ST, T> Service<Request<T>> for RequireService<S, B, ST, T>
 where
     S: Service<Request<T>, Response = Response> + Send + Clone + 'static,
     S::Future: Send + 'static,
@@ -458,7 +458,7 @@ where
                 redirect_field,
                 login_url,
                 ..
-            } =>  {
+            } => {
                 //TODO: redundant
                 let login_url = login_url.unwrap_or(DEFAULT_LOGIN_URL.to_string());
                 let redirect_field = redirect_field.unwrap_or(DEFAULT_REDIRECT_FIELD.to_string());
@@ -492,6 +492,12 @@ where
                 })
             }
         }
+    }
+}
+
+impl<B: AuthnBackend, ST: Clone, T: 'static + Send> Default for RequireBuilder<B, ST, T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -558,6 +564,7 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     /// ```rust
     /// use axum_login::{RequireBuilder, Rstr};
     /// use axum::http::StatusCode;
+    /// use axum::response::IntoResponse;
     ///
     /// let builder = RequireBuilder::new()
     ///     .on_restrict(Rstr::from_closure(|_req| async {
@@ -628,6 +635,7 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
 
         let fallback = self.fallback.unwrap_or_else(Self::default_fallback);
         let perm_fallback = self.restrict.unwrap_or_else(Self::default_restrict);
+
 
         Require {
             predicate,
@@ -1374,7 +1382,9 @@ mod tests {
                     let fallback_resp = (require.fallback)(req).await;
                     assert!(matches!(
                         fallback_resp.status(),
-                        StatusCode::UNAUTHORIZED | StatusCode::TEMPORARY_REDIRECT | StatusCode::INTERNAL_SERVER_ERROR
+                        StatusCode::UNAUTHORIZED
+                            | StatusCode::TEMPORARY_REDIRECT
+                            | StatusCode::INTERNAL_SERVER_ERROR
                     ));
                 }
             }
