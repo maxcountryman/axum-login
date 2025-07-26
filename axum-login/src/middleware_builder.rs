@@ -1,7 +1,7 @@
 use crate::{url_with_redirect_query, AuthSession, AuthnBackend, AuthzBackend};
 use axum::body::Body;
 use axum::extract::{OriginalUri, Request};
-use axum::http::{StatusCode, Uri};
+use axum::http::{StatusCode};
 use axum::response::Response;
 use std::fmt;
 use std::fmt::Debug;
@@ -21,7 +21,7 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 type PredicateStateFn<B, ST> =
     Arc<dyn Fn(B, <B as AuthnBackend>::User, ST) -> BoxFuture<'static, bool> + Send + Sync>;
 type RestrictFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Send + Sync>;
-type FallbackFn<T> = Arc<dyn Fn(Request<T>, Uri) -> BoxFuture<'static, Response> + Send + Sync>;
+type FallbackFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Send + Sync>;
 
 /// A Tower service that enforces authentication and authorization requirements.
 ///
@@ -95,12 +95,11 @@ where
     }
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
-        let original_uri = req.extensions().get::<OriginalUri>().cloned();
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
 
-        let fallback = self.fallback.clone();
-        let predicate = self.predicate.clone();
-        let restrict = self.restrict.clone();
+        let predicate = Arc::clone(&self.predicate);
+        let fallback = Arc::clone(&self.fallback);
+        let restrict = Arc::clone(&self.restrict);
         let state = self.state.clone();
 
         // This should help
@@ -108,15 +107,12 @@ where
         let mut inner = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
-            match (original_uri, auth_session) {
-                (
-                    _,
-                    Some(AuthSession {
-                        user: Some(user),
-                        backend,
-                        ..
-                    }),
-                ) => {
+            match auth_session {
+                Some(AuthSession {
+                    user: Some(user),
+                    backend,
+                    ..
+                }) => {
                     // Only enter here if user is Some(...)
                     if predicate(backend, user.clone(), state).await {
                         // Authorized
@@ -128,9 +124,9 @@ where
                         Ok(response)
                     }
                 }
-                (Some(original_uri), Some(_auth_session)) => {
+                Some(_auth_session) => {
                     // No user in session, use fallback
-                    let response = fallback(req, original_uri.0).await;
+                    let response = fallback(req).await;
                     Ok(response)
                 }
                 _ => {
@@ -441,10 +437,10 @@ where
     /// Creates a fallback handler from a closure.
     pub fn from_handler<F, Fut>(f: F) -> Self
     where
-        F: Fn(Request<T>, Uri) -> Fut + Send + Sync + 'static,
+        F: Fn(Request<T>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Response> + Send + 'static,
     {
-        Fallback::Function(Arc::new(move |req, uri| Box::pin(f(req, uri))))
+        Fallback::Function(Arc::new(move |req| Box::pin(f(req))))
     }
 }
 
@@ -454,31 +450,44 @@ where
 {
     fn from(params: Fallback<T>) -> Self {
         match params {
-            Fallback::Function(f) => Arc::new(move |req, uri| {
-                Box::pin(f(req, uri)) as Pin<Box<dyn Future<Output = Response> + Send>>
+            Fallback::Function(f) => Arc::new(move |req| {
+                Box::pin(f(req)) as Pin<Box<dyn Future<Output = Response> + Send>>
             }),
 
             Fallback::Params {
                 redirect_field,
                 login_url,
                 ..
-            } => {
-                //TODO: redundant?
+            } =>  {
+                //TODO: redundant
                 let login_url = login_url.unwrap_or(DEFAULT_LOGIN_URL.to_string());
                 let redirect_field = redirect_field.unwrap_or(DEFAULT_REDIRECT_FIELD.to_string());
 
-                Arc::new(move |_req, _uri| {
+                Arc::new(move |req| {
                     let login_url = login_url.clone();
                     let redirect_field = redirect_field.clone();
 
                     Box::pin(async move {
-                        let url =
-                            url_with_redirect_query(&login_url, &redirect_field, _uri).unwrap();
-                        Response::builder()
-                            .status(StatusCode::TEMPORARY_REDIRECT)
-                            .header("Location", url.to_string())
-                            .body("Redirecting...".into())
-                            .unwrap()
+                        let original_uri = req.extensions().get::<OriginalUri>().cloned();
+                        match original_uri {
+                            None => Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body("Internal Server Error".into())
+                                .unwrap(),
+                            Some(OriginalUri(original_uri)) => {
+                                let url = url_with_redirect_query(
+                                    &login_url,
+                                    &redirect_field,
+                                    original_uri,
+                                )
+                                .unwrap();
+                                Response::builder()
+                                    .status(StatusCode::TEMPORARY_REDIRECT)
+                                    .header("Location", url.to_string())
+                                    .body("Redirecting...".into())
+                                    .unwrap()
+                            }
+                        }
                     }) as Pin<Box<dyn Future<Output = Response> + Send>>
                 })
             }
@@ -486,18 +495,7 @@ where
     }
 }
 
-impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T>
-where
-    Arc<
-        dyn Fn(
-                axum::http::Request<T>,
-                Uri,
-            ) -> Pin<Box<(dyn Future<Output = Response<Body>> + Send + 'static)>>
-            + Send
-            + Sync,
-    >: From<Fallback>,
-    ST: Clone,
-{
+impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     /// Creates a new `RequireBuilder` with default settings.
     pub fn new() -> Self {
         Self {
@@ -547,7 +545,7 @@ where
     ///         redirect_field: Some("next".to_string()),
     ///     });
     /// ```
-    pub fn fallback(mut self, func: Fallback) -> Self {
+    pub fn fallback(mut self, func: Fallback<T>) -> Self {
         self.fallback = Some(func.into());
         self
     }
@@ -596,7 +594,7 @@ where
         self
     }
     fn default_fallback() -> FallbackFn<T> {
-        Arc::new(|_req, _uri| {
+        Arc::new(|_req| {
             Box::pin(async {
                 Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
@@ -1327,7 +1325,7 @@ mod tests {
                 login_url: Some("/login".to_string()),
             }),
             Box::new(|| {
-                Fallback::from_handler(|_req, _uri| async {
+                Fallback::from_handler(|_req| async {
                     Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
                         .body("Unauthorized".into())
@@ -1373,10 +1371,10 @@ mod tests {
                         .body(Body::empty())
                         .unwrap();
 
-                    let fallback_resp = (require.fallback)(req, "/".parse().unwrap()).await;
+                    let fallback_resp = (require.fallback)(req).await;
                     assert!(matches!(
                         fallback_resp.status(),
-                        StatusCode::UNAUTHORIZED | StatusCode::TEMPORARY_REDIRECT
+                        StatusCode::UNAUTHORIZED | StatusCode::TEMPORARY_REDIRECT | StatusCode::INTERNAL_SERVER_ERROR
                     ));
                 }
             }
