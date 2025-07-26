@@ -14,23 +14,49 @@ use tower_service::Service;
 
 const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
-// TODO: I am not sure if the current type implementation of these functions is great.
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 //TODO: there is a mess with how to name different handlers and their wrappers
-pub type PredicateStateFn<B, ST> =
+//TODO: use own futures
+//TODO: The current implementation of Handlers is subject to change
+type PredicateStateFn<B, ST> =
     Arc<dyn Fn(B, <B as AuthnBackend>::User, ST) -> BoxFuture<'static, bool> + Send + Sync>;
-pub type RestrictFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Send + Sync>;
-pub type FallbackFn<T> = Arc<dyn Fn(Request<T>, Uri) -> BoxFuture<'static, Response> + Send + Sync>;
+type RestrictFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Send + Sync>;
+type FallbackFn<T> = Arc<dyn Fn(Request<T>, Uri) -> BoxFuture<'static, Response> + Send + Sync>;
 
+/// A Tower service that enforces authentication and authorization requirements.
+///
+/// This service checks for authentication, if it fails, it responds with fallback  applies a
+/// predicate function to determine if
+/// the request should
+/// be
+/// allowed to proceed. If the predicate fails, it applies either a restriction response or a fallback response.
 pub struct RequireService<S, B: AuthnBackend, ST: Clone, T> {
     inner: S,
     /// Function used to check user permissions or other requirements
     predicate: PredicateStateFn<B, ST>,
-    /// Handler used in case the user fails predicate check
+    /// Handler used in case the user fails authentication
     fallback: FallbackFn<T>,
     /// State of the application
     state: ST,
+    /// Handler used in case the user fails predicate check
     restrict: RestrictFn<T>,
+}
+
+impl<S, B, ST, T> fmt::Debug for RequireService<S, B, ST, T>
+where
+    S: fmt::Debug,
+    B: AuthnBackend,
+    ST: Clone + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RequireService")
+            .field("inner", &self.inner)
+            .field("predicate", &"<function>")
+            .field("fallback", &"<function>")
+            .field("state", &self.state)
+            .field("restrict", &"<function>")
+            .finish()
+    }
 }
 
 //umm, manual clone, yes
@@ -38,7 +64,7 @@ impl<S, B, ST, T> Clone for RequireService<S, B, ST, T>
 where
     S: Clone,
     ST: Clone,
-    B: AuthzBackend,
+    B: AuthnBackend,
 {
     fn clone(&self) -> Self {
         Self {
@@ -56,7 +82,7 @@ where
     S: Service<Request<T>, Response = Response> + Send + Clone + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
-    B: AuthnBackend + AuthzBackend + Clone + Send + 'static,
+    B: AuthnBackend + Clone + Send + 'static,
     ST: Clone + Send + 'static,
     T: Send + 'static,
 {
@@ -129,7 +155,7 @@ pub struct Require<B: AuthnBackend, ST = (), T = Body> {
 impl<B, ST, T> Clone for Require<B, ST, T>
 where
     ST: Clone,
-    B: AuthzBackend,
+    B: Clone + AuthnBackend,
 {
     fn clone(&self) -> Self {
         Self {
@@ -143,7 +169,7 @@ where
 
 impl<S, B, ST, T> Layer<S> for Require<B, ST, T>
 where
-    B: Clone + AuthzBackend,
+    B: Clone + AuthnBackend,
     ST: Clone,
 {
     type Service = RequireService<S, B, ST, T>;
@@ -162,7 +188,36 @@ where
 // --- The Builder
 
 //TODO: create Require without state (nullable state)
+
+/// A builder for creating [`Require`] layers with authentication and authorization requirements.
+///
+/// This builder provides a fluent interface for configuring how requests should be handled
+/// when they don't meet the specified authentication or authorization requirements.
+///
+/// # Type Parameters
+///
+/// * `B` - The authentication backend type that implements [`AuthnBackend`]
+/// * `ST` - The state type passed to the predicate function (defaults to `()`)
+/// * `T` - The request body type (defaults to [`Body`])
+///
+/// # Examples
+///
+/// ```rust
+/// use axum_login::{RequireBuilder, Predicate, Fallback};
+///
+/// let require_layer = RequireBuilder::new()
+///     .predicate(Predicate::from_closure(|backend, user, state| async move {
+///         // Custom authorization logic here
+///         true
+///     }))
+///     .fallback(Fallback::Params {
+///         login_url: Some("/login".to_string()),
+///         redirect_field: Some("next".to_string()),
+///     })
+///     .build();
+/// ```
 pub struct RequireBuilder<B: AuthnBackend, ST = (), T = Body> {
+    /// Function for checking user permissions
     predicate: Option<PredicateStateFn<B, ST>>,
     /// Handler for user lacking permissions
     restrict: Option<RestrictFn<T>>,
@@ -172,10 +227,26 @@ pub struct RequireBuilder<B: AuthnBackend, ST = (), T = Body> {
     state: Option<ST>,
 }
 
+/// Represents different types of predicates for authorization checks.
+/// A predicate determines whether a user should be allowed access to a protected resource.
+/// It can be either a custom function or a parameter-based check for specific permissions.
+///
+/// # Type Parameters
+/// * `B` - The authorization backend type that implements [`AuthzBackend`]
+/// * `ST` - The state type passed to the predicate function
 #[derive(Clone)]
 pub enum Predicate<B: AuthzBackend, ST> {
+    /// A custom function that performs authorization logic.
+    /// The function receives the backend, user, and state and returns whether
+    /// the user should be authorized.
     Function(PredicateStateFn<B, ST>),
-    Params { permissions: Vec<B::Permission> },
+
+    /// Parameter-based authorization that checks for specific permissions.
+    /// This variant automatically checks if the user has ALL the specified permissions.
+    Params {
+        /// The permissions required for access
+        permissions: Vec<B::Permission>,
+    },
 }
 
 impl<B, ST> fmt::Debug for Predicate<B, ST>
@@ -195,6 +266,20 @@ where
 }
 
 impl<B: AuthzBackend, ST> Predicate<B, ST> {
+    /// Creates a predicate from a closure.
+    /// # Parameters
+    ///
+    /// * `f` - A closure that takes the backend, user, and state, returning a future that resolves to a boolean
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use axum_login::Predicate;
+    ///
+    /// let predicate = Predicate::from_closure(|backend, user, state| async move {
+    ///     backend.has_perm(&user, "read".into()).await.unwrap_or(false)
+    /// });
+    /// ```
     pub fn from_closure<F, Fut>(f: F) -> Self
     where
         F: Fn(B, B::User, ST) -> Fut + Send + Sync + 'static,
@@ -221,7 +306,7 @@ where
                 permissions: req_perms,
                 ..
             } => {
-                //TODO: redundant?
+                //TODO: redundant
                 let req_perms = req_perms.clone();
                 Arc::new(move |backend: B, user: B::User, _state: ST| {
                     let req_perms = req_perms.clone();
@@ -238,10 +323,17 @@ where
     }
 }
 
+/// Represents different ways to specify a permission-restricted handler.
+///
+/// When a request fails authorization, but the user is authenticated, a restriction
+/// response is used instead of redirecting to login page.
 pub enum Rstr<T = Body> {
+    /// A custom function that generates the restriction response.
     Function(RestrictFn<T>),
+
+    /// Parameter-based restriction configuration.
     Params {
-        i_dunno: Option<String>, //TODO: haven't decided yet what parameters it should have
+        i_dunno: Option<String>, //TODO: haven't decidede yet
     },
 }
 impl<T> fmt::Debug for Rstr<T> {
@@ -280,6 +372,25 @@ impl<T> Rstr<T>
 where
     T: Send + 'static,
 {
+    /// Creates a restriction handler from a closure.
+    ///
+    /// # Parameters
+    ///
+    /// * `f` - A closure that takes a request and returns a future that resolves to a response
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use axum_login::Rstr;
+    /// use axum::http::{Response, StatusCode};
+    ///
+    /// let restriction = Rstr::from_closure(|_req| async {
+    ///     Response::builder()
+    ///         .status(StatusCode::FORBIDDEN)
+    ///         .body("Access denied".into())
+    ///         .unwrap()
+    /// });
+    /// ```
     pub fn from_closure<F, Fut>(f: F) -> Self
     where
         F: Fn(Request<T>) -> Fut + Send + Sync + 'static,
@@ -289,11 +400,20 @@ where
     }
 }
 
+/// Represents different ways to specify a fallback handler.
+///
+/// When a request requires authentication but the user is not authenticated,
+/// a fallback response is used.
 #[derive(Clone)]
 pub enum Fallback<T = Body> {
+    /// A custom function that generates the fallback response.
     Function(FallbackFn<T>),
+
+    /// Parameter-based fallback configuration for redirect-style authentication.
     Params {
+        /// The field name used for the redirect URL in the query string
         redirect_field: Option<String>,
+        /// The URL to redirect to for authentication
         login_url: Option<String>,
     },
 }
@@ -318,6 +438,7 @@ impl<T> Fallback<T>
 where
     T: Send + 'static,
 {
+    /// Creates a fallback handler from a closure.
     pub fn from_handler<F, Fut>(f: F) -> Self
     where
         F: Fn(Request<T>, Uri) -> Fut + Send + Sync + 'static,
@@ -365,20 +486,6 @@ where
     }
 }
 
-/// Always return Unauthorized
-// impl<T> Default for MissingAuthHandlerParams<T> {
-//     fn default() -> Self {
-//         Self::HandlerFunc(Arc::new(|_, _| {
-//             Box::pin(async {
-//                 Response::builder()
-//                     .status(StatusCode::UNAUTHORIZED)
-//                     .body("Unauthorized".into())
-//                     .unwrap()
-//             }) as Pin<Box<dyn Future<Output = Response> + Send>>
-//         }))
-//     }
-// }
-
 impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T>
 where
     Arc<
@@ -389,7 +496,9 @@ where
             + Send
             + Sync,
     >: From<Fallback>,
+    ST: Clone,
 {
+    /// Creates a new `RequireBuilder` with default settings.
     pub fn new() -> Self {
         Self {
             predicate: None,
@@ -399,6 +508,18 @@ where
         }
     }
 
+    /// Sets the custom predicate function for authorization checks.
+    /// The predicate determines whether a request should be allowed to proceed.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use axum_login::{RequireBuilder, Predicate};
+    ///
+    /// let builder = RequireBuilder::new()
+    ///     .predicate(Predicate::from_closure(|backend, user, state| async move {
+    ///         true
+    ///     }));
+    /// ```
     pub fn predicate(mut self, pred: Predicate<B, ST>) -> RequireBuilder<B, ST, T>
     where
         B: AuthnBackend + AuthzBackend + 'static,
@@ -411,13 +532,40 @@ where
         self
     }
 
-    /// Custom no auth fallback function, overrides default Unauthorized response
+    /// Sets the fallback response for unauthenticated requests.
+    /// When a request requires authentication but the user is not authenticated,
+    /// the fallback response is used.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use axum_login::{RequireBuilder, Fallback};
+    ///
+    /// let builder = RequireBuilder::new()
+    ///     .fallback(Fallback::Params {
+    ///         login_url: Some("/signin".to_string()),
+    ///         redirect_field: Some("next".to_string()),
+    ///     });
+    /// ```
     pub fn fallback(mut self, func: Fallback) -> Self {
         self.fallback = Some(func.into());
         self
     }
 
-    /// Custom missing permissions function, overrides default Forbidden response
+    /// Sets the restriction response for unauthorized requests.
+    /// When a request fails authorization but the user is authenticated,
+    /// the restriction response is used instead of redirecting.
+    /// # Examples
+    ///
+    /// ```rust
+    /// use axum_login::{RequireBuilder, Rstr};
+    /// use axum::http::StatusCode;
+    ///
+    /// let builder = RequireBuilder::new()
+    ///     .on_restrict(Rstr::from_closure(|_req| async {
+    ///         StatusCode::FORBIDDEN.into_response()
+    ///     }));
+    /// ```
     pub fn on_restrict(mut self, func: Rstr<T>) -> Self
     where
         T: Send + 'static,
@@ -426,6 +574,23 @@ where
         self
     }
 
+    /// Sets the state value passed to the predicate function.
+    /// # Examples
+    ///
+    /// ```rust
+    /// use axum_login::RequireBuilder;
+    ///
+    /// #[derive(Clone)]
+    /// struct MyState {
+    ///     required_role: String,
+    /// }
+    ///
+    /// let state = MyState {
+    ///     required_role: "admin".to_string(),
+    /// };
+    ///
+    /// let builder = RequireBuilder::new().state(state);
+    /// ```
     pub fn state(mut self, state: ST) -> Self {
         self.state = Some(state);
         self
@@ -459,6 +624,7 @@ where
         })
     }
 
+    /// Build the resulting middleware
     pub fn build(self) -> Require<B, ST, T> {
         let predicate = self.predicate.unwrap_or_else(Self::default_predicat);
 
