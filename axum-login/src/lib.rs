@@ -387,10 +387,11 @@ pub use service::{AuthManager, AuthManagerLayer, AuthManagerLayerBuilder};
 pub use session::{AuthSession, Error};
 pub use tower_sessions;
 pub use tracing;
+pub use middleware_builder::*;
 
 mod backend;
 mod extract;
 mod middleware;
+mod middleware_builder;
 mod service;
 mod session;
-mod middleware_builder;
