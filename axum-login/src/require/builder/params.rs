@@ -5,9 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::require::{
-    PredicateStateFn, RestrictFn,
-};
+use crate::require::{PredicateStateFn, RestrictFn};
 use crate::{AuthnBackend, AuthzBackend};
 use axum::extract::Request;
 use axum::http::StatusCode;

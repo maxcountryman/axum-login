@@ -14,7 +14,7 @@ mod tests {
 
     use crate::require::builder::params::{Predicate, Rstr};
     use crate::require::builder::RequireBuilder;
-    use crate::require::fallback::{  RedirectFallback};
+    use crate::require::fallback::RedirectFallback;
     use crate::require::Require;
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 
@@ -134,8 +134,7 @@ mod tests {
     // Classic Tests (no state)
     #[tokio::test]
     async fn test_login_required() {
-        let require_login: Require<Backend> = RequireBuilder::new()
-            .build();
+        let require_login: Require<Backend> = RequireBuilder::new().build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(require_login)
@@ -171,10 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_required_with_login_url() {
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login"))
             .build();
 
         let app = Router::new()
@@ -218,10 +214,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_required_with_login_url_and_redirect_field() {
-        let fallback = RedirectFallback {
-            redirect_field: Some("next_uri".to_string()),
-            login_url: Some("/signin".to_string()),
-        };
+        let fallback = RedirectFallback::new()
+            .redirect_field("next_uri")
+            .login_url("/signin");
+
         let require = RequireBuilder::<Backend>::new()
             .fallback(fallback)
             // .predicate(Predicate::Params {
@@ -266,7 +262,6 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
-
 
     #[tokio::test]
     async fn test_login_required_with_custom_fallback() {
@@ -408,10 +403,7 @@ mod tests {
     async fn test_permission_required_with_login_url() {
         let permissions: Vec<&str> = vec!["test.read"];
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login"))
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
@@ -459,10 +451,11 @@ mod tests {
     async fn test_permission_required_with_login_url_and_redirect_field() {
         let permissions: Vec<&str> = vec!["test.read"];
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: Some("next_uri".to_string()),
-                login_url: Some("/signin".to_string()),
-            })
+            .fallback(
+                RedirectFallback::new()
+                    .redirect_field("next_uri")
+                    .login_url("/signin"),
+            )
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
@@ -555,10 +548,7 @@ mod tests {
     #[tokio::test]
     async fn test_redirect_uri_query() {
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login"))
             .build();
 
         let app = Router::new()
@@ -583,10 +573,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_url_query() {
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login?foo=bar&foo=baz".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login?foo=bar&foo=baz"))
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -620,10 +607,11 @@ mod tests {
     #[tokio::test]
     async fn test_login_url_explicit_redirect() {
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: Some("next_url".to_string()),
-                login_url: Some("/login?next_url=%2Fdashboard".to_string()),
-            })
+            .fallback(
+                RedirectFallback::new()
+                    .redirect_field("next_url")
+                    .login_url("/login?next_url=%2Fdashboard"),
+            )
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -641,10 +629,7 @@ mod tests {
         );
 
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login?next=%2Fdashboard".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login?next=%2Fdashboard"))
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -665,10 +650,7 @@ mod tests {
     #[tokio::test]
     async fn test_nested() {
         let require = RequireBuilder::<Backend>::new()
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login"))
             .build();
         let nested = Router::new()
             .route("/foo", axum::routing::get(|| async {}))
@@ -774,10 +756,7 @@ mod tests {
 
         let f = |backend, user, state| verify_permissions(backend, user, state);
         let require_login = RequireBuilder::new_with_state(state.clone())
-            .fallback(RedirectFallback {
-                redirect_field: None,
-                login_url: Some("/login".to_string()),
-            })
+            .fallback(RedirectFallback::new().login_url("/login"))
             .predicate(Predicate::from_closure(f))
             .on_restrict(Rstr::from_closure(|_| async {
                 StatusCode::UNAUTHORIZED.into_response()
@@ -824,10 +803,11 @@ mod tests {
         };
 
         let require_login = RequireBuilder::new_with_state(state.clone())
-            .fallback(RedirectFallback {
-                redirect_field: Some("next_url".to_string()),
-                login_url: Some("/login?next_url=%2Fdashboard".to_string()),
-            })
+            .fallback(
+                RedirectFallback::new()
+                    .redirect_field("next_url")
+                    .login_url("/login?next_url=%2Fdashboard"),
+            )
             // .fallback(MissingAuthHandlerParams::from_handler(|_, _| async {
             //     StatusCode::UNAUTHORIZED.into_response()
             // }))

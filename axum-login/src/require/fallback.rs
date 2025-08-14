@@ -71,6 +71,22 @@ pub struct RedirectFallback {
     pub login_url: Option<String>,
 }
 
+impl RedirectFallback {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn redirect_field(mut self, field: impl Into<String>) -> Self {
+        self.redirect_field = Some(field.into());
+        self
+    }
+
+    pub fn login_url(mut self, url: impl Into<String>) -> Self {
+        self.login_url = Some(url.into());
+        self
+    }
+}
+
 impl<ReqInBody> AsyncFallback<ReqInBody> for RedirectFallback {
     type Future = Ready<axum::response::Response<Body>>; //TODO: currently have only async variant
     type Response = axum::response::Response<Body>;
