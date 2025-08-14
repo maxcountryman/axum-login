@@ -2,7 +2,7 @@ mod builder;
 mod fallback;
 mod service;
 
-use crate::require::fallback::{AsyncFallback, DefaultFallback};
+use crate::require::fallback::{DefaultFallback};
 use crate::require::service::RequireService;
 use crate::AuthnBackend;
 use axum::body::Body;
@@ -19,7 +19,6 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 //TODO: Builder should be a feature imho
 //TODO: there is a mess with how to name different handlers and their wrappers
-//TODO: use own futures
 //TODO: The current implementation of Handlers is subject to change
 pub type PredicateStateFn<B, ST> =
     Arc<dyn Fn(B, <B as AuthnBackend>::User, ST) -> BoxFuture<'static, bool> + Send + Sync>;

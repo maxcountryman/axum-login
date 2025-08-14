@@ -29,7 +29,7 @@ where
 }
 
 #[derive(Clone)]
-pub(crate) struct DefaultFallback;
+pub struct DefaultFallback;
 
 impl<ReqInBody> AsyncFallback<ReqInBody> for DefaultFallback
 where

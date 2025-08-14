@@ -10,7 +10,6 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use tower_layer::Layer;
 use tower_service::Service;
 
 /// A Tower service that enforces authentication and authorization requirepub(crate) ments.
