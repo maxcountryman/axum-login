@@ -87,7 +87,10 @@ where
     /// Sets the fallback response for unauthenticated requests.
     /// When a request requires authentication but the user is not authenticated,
     /// the fallback response is used.
-    pub fn fallback<Fb2: Send>(self, new_fallback: Fb2) -> RequireBuilder<B, ST, T, Fb2> {
+    pub fn fallback<Fb2: AsyncFallback<T> + Send>(
+        self,
+        new_fallback: Fb2,
+    ) -> RequireBuilder<B, ST, T, Fb2> {
         RequireBuilder {
             predicate: self.predicate,
             restrict: self.restrict,
