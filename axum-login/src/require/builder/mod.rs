@@ -1,10 +1,8 @@
 // --- The Builder
 
-//TODO: create Require without state (nullable state)
-
 use crate::require::builder::params::{Predicate, Rstr};
 use crate::require::fallback::{AsyncFallback, DefaultFallback};
-use crate::require::{FallbackFn, PredicateStateFn, Require, RestrictFn};
+use crate::require::{PredicateStateFn, Require, RestrictFn};
 use crate::{AuthnBackend, AuthzBackend};
 use axum::body::Body;
 use axum::http::StatusCode;
@@ -40,21 +38,32 @@ where
     /// Handler for user authentication
     fallback: Fb,
     /// State to get values dynamically
-    state: Option<ST>,
+    state: ST,
 }
 
-impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T, DefaultFallback> {
+impl<B: AuthnBackend, T: 'static + Send> RequireBuilder<B, (), T, DefaultFallback> {
     /// Creates a new `RequireBuilder` with default settings.
     pub fn new() -> Self {
         Self {
             predicate: None,
             restrict: None,
             fallback: DefaultFallback,
-            state: None,
+            state: (),
         }
     }
 }
 
+impl<B: AuthnBackend, ST, T: 'static + Send> RequireBuilder<B, ST, T, DefaultFallback> {
+    /// Creates a new `RequireBuilder` with set state.
+    pub fn new_with_state(state: ST) -> Self {
+        Self {
+            predicate: None,
+            restrict: None,
+            fallback: DefaultFallback,
+            state,
+        }
+    }
+}
 impl<B: AuthnBackend, Fb, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T, Fb>
 where
     Fb: AsyncFallback<T> + Clone + std::marker::Send + std::marker::Sync,
@@ -78,10 +87,7 @@ where
     /// Sets the fallback response for unauthenticated requests.
     /// When a request requires authentication but the user is not authenticated,
     /// the fallback response is used.
-    pub fn fallback<Fb2: std::marker::Send>(
-        self,
-        new_fallback: Fb2,
-    ) -> RequireBuilder<B, ST, T, Fb2> {
+    pub fn fallback<Fb2: Send>(self, new_fallback: Fb2) -> RequireBuilder<B, ST, T, Fb2> {
         RequireBuilder {
             predicate: self.predicate,
             restrict: self.restrict,
@@ -99,22 +105,6 @@ where
     {
         self.restrict = Some(func.into());
         self
-    }
-
-    /// Sets the state value passed to the predicate function.
-    pub fn state(mut self, state: ST) -> Self {
-        self.state = Some(state);
-        self
-    }
-    fn default_fallback() -> FallbackFn<T> {
-        Arc::new(|_req| {
-            Box::pin(async {
-                Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .body("Unauthorized".into())
-                    .unwrap()
-            }) as Pin<Box<dyn Future<Output = Response> + Send>>
-        })
     }
 
     fn default_restrict() -> RestrictFn<T> {
@@ -145,9 +135,7 @@ where
             predicate,
             restrict: perm_fallback,
             fallback: self.fallback,
-            state: self
-                .state
-                .expect("State is required. Use .state() or contribute to library"),
+            state: self.state,
             // _marker: PhantomData,
         }
     }

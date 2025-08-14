@@ -14,7 +14,7 @@ mod tests {
 
     use crate::require::builder::params::{Predicate, Rstr};
     use crate::require::builder::RequireBuilder;
-    use crate::require::fallback::{AsyncFallback, DefaultFallback, RedirectFallback};
+    use crate::require::fallback::{  RedirectFallback};
     use crate::require::Require;
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 
@@ -134,8 +134,7 @@ mod tests {
     // Classic Tests (no state)
     #[tokio::test]
     async fn test_login_required() {
-        let require_login = RequireBuilder::<Backend, (), Body, DefaultFallback>::new()
-            .state(())
+        let require_login: Require<Backend> = RequireBuilder::new()
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -176,8 +175,8 @@ mod tests {
                 redirect_field: None,
                 login_url: Some("/login".to_string()),
             })
-            .state(())
             .build();
+
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(require)
@@ -228,7 +227,6 @@ mod tests {
             // .predicate(Predicate::Params {
             //     permissions: permissions.iter().map(|&p| p.into()).collect(),
             // })
-            .state(())
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -280,7 +278,6 @@ mod tests {
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
-            .state(())
             .build();
 
         let app = Router::new()
@@ -328,7 +325,6 @@ mod tests {
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
-            .state(())
             .build();
 
         let app = Router::new()
@@ -376,7 +372,6 @@ mod tests {
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
-            .state(())
             .build();
 
         let app = Router::new()
@@ -428,7 +423,6 @@ mod tests {
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
-            .state(())
             .build();
 
         let app = Router::new()
@@ -480,7 +474,6 @@ mod tests {
             .predicate(Predicate::Params {
                 permissions: permissions.iter().map(|&p| p.into()).collect(),
             })
-            .state(())
             .build();
 
         let app = Router::new()
@@ -523,7 +516,6 @@ mod tests {
                 redirect_field: None,
                 login_url: Some("/login".to_string()),
             })
-            .state(())
             .build();
 
         let app = Router::new()
@@ -552,7 +544,6 @@ mod tests {
                 redirect_field: None,
                 login_url: Some("/login?foo=bar&foo=baz".to_string()),
             })
-            .state(())
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -590,7 +581,6 @@ mod tests {
                 redirect_field: Some("next_url".to_string()),
                 login_url: Some("/login?next_url=%2Fdashboard".to_string()),
             })
-            .state(())
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -612,7 +602,6 @@ mod tests {
                 redirect_field: None,
                 login_url: Some("/login?next=%2Fdashboard".to_string()),
             })
-            .state(())
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -637,7 +626,6 @@ mod tests {
                 redirect_field: None,
                 login_url: Some("/login".to_string()),
             })
-            .state(())
             .build();
         let nested = Router::new()
             .route("/foo", axum::routing::get(|| async {}))
@@ -742,13 +730,12 @@ mod tests {
         };
 
         let f = |backend, user, state| verify_permissions(backend, user, state);
-        let require_login = RequireBuilder::<Backend, TestState>::new()
+        let require_login = RequireBuilder::new_with_state(state.clone())
             .fallback(RedirectFallback {
                 redirect_field: None,
                 login_url: Some("/login".to_string()),
             })
             .predicate(Predicate::from_closure(f))
-            .state(state.clone())
             .on_restrict(Rstr::from_closure(|_| async {
                 StatusCode::UNAUTHORIZED.into_response()
             }))
@@ -793,7 +780,7 @@ mod tests {
             req_perm: vec!["test.read".into(), "test.write".into()],
         };
 
-        let require_login = RequireBuilder::<Backend, TestState>::new()
+        let require_login = RequireBuilder::new_with_state(state.clone())
             .fallback(RedirectFallback {
                 redirect_field: Some("next_url".to_string()),
                 login_url: Some("/login?next_url=%2Fdashboard".to_string()),
@@ -804,7 +791,6 @@ mod tests {
             .predicate(Predicate::from_closure(|backend, user, state| {
                 verify_permissions(backend, user, state)
             }))
-            .state(state.clone())
             .build();
 
         let app = Router::new()
