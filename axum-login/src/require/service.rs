@@ -157,7 +157,6 @@ where
         #[pin]
         internal_fallback_future: <InternalErrorFallback as AsyncFallback<Body>>::Future,
     },
-    Error,
 }
 
 impl<S, T, Fb> Future for RequireFuture<S, T, Fb>
@@ -223,9 +222,6 @@ where
                         Poll::Ready(response) => Poll::Ready(Ok(response)),
                         Poll::Pending => Poll::Pending,
                     }
-                }
-                RequireFutureStateProj::Error => {
-                    panic!("Future polled after completion")
                 }
             }
         }
