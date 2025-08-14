@@ -6,10 +6,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::require::{
-    FallbackFn, PredicateStateFn, RestrictFn, DEFAULT_LOGIN_URL, DEFAULT_REDIRECT_FIELD,
+    PredicateStateFn, RestrictFn,
 };
-use crate::{url_with_redirect_query, AuthnBackend, AuthzBackend};
-use axum::extract::{OriginalUri, Request};
+use crate::{AuthnBackend, AuthzBackend};
+use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::response::Response;
 
@@ -183,104 +183,5 @@ where
         Fut: Future<Output = Response> + Send + 'static,
     {
         Self::Function(Arc::new(move |req| Box::pin(f(req))))
-    }
-}
-
-/// Represents different ways to specify a fallback handler.
-///
-/// When a request requires authentication but the user is not authenticated,
-/// a fallback response is used.
-#[derive(Clone)]
-pub enum Fallback<T = Body> {
-    /// A custom function that generates the fallback response.
-    Function(FallbackFn<T>),
-
-    /// Parameter-based fallback configuration for redirect-style authentication.
-    Params {
-        /// The field name used for the redirect URL in the query string
-        redirect_field: Option<String>,
-        /// The URL to redirect to for authentication
-        login_url: Option<String>,
-    },
-}
-
-impl<T> fmt::Debug for Fallback<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Fallback::Function(_) => f.debug_tuple("HandlerFunc").field(&"<closure>").finish(),
-            Fallback::Params {
-                redirect_field,
-                login_url,
-            } => f
-                .debug_struct("Params")
-                .field("redirect_field", redirect_field)
-                .field("login_url", login_url)
-                .finish(),
-        }
-    }
-}
-
-impl<T> Fallback<T>
-where
-    T: Send + 'static,
-{
-    /// Creates a fallback handler from a closure.
-    pub fn from_handler<F, Fut>(f: F) -> Self
-    where
-        F: Fn(Request<T>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Response> + Send + 'static,
-    {
-        Fallback::Function(Arc::new(move |req| Box::pin(f(req))))
-    }
-}
-
-impl<T> From<Fallback<T>> for FallbackFn<T>
-where
-    T: Send + 'static,
-{
-    fn from(params: Fallback<T>) -> Self {
-        match params {
-            Fallback::Function(f) => Arc::new(move |req| {
-                Box::pin(f(req)) as Pin<Box<dyn Future<Output = Response> + Send>>
-            }),
-
-            Fallback::Params {
-                redirect_field,
-                login_url,
-                ..
-            } => {
-                //TODO: redundant
-                let login_url = login_url.unwrap_or(DEFAULT_LOGIN_URL.to_string());
-                let redirect_field = redirect_field.unwrap_or(DEFAULT_REDIRECT_FIELD.to_string());
-
-                Arc::new(move |req| {
-                    let login_url = login_url.clone();
-                    let redirect_field = redirect_field.clone();
-
-                    Box::pin(async move {
-                        let original_uri = req.extensions().get::<OriginalUri>().cloned();
-                        match original_uri {
-                            None => Response::builder()
-                                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body("Internal Server Error".into())
-                                .unwrap(),
-                            Some(OriginalUri(original_uri)) => {
-                                let url = url_with_redirect_query(
-                                    &login_url,
-                                    &redirect_field,
-                                    original_uri,
-                                )
-                                .unwrap();
-                                Response::builder()
-                                    .status(StatusCode::TEMPORARY_REDIRECT)
-                                    .header("Location", url.to_string())
-                                    .body("Redirecting...".into())
-                                    .unwrap()
-                            }
-                        }
-                    }) as Pin<Box<dyn Future<Output = Response> + Send>>
-                })
-            }
-        }
     }
 }

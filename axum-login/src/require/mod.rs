@@ -1,8 +1,8 @@
 mod builder;
+mod fallback;
 mod service;
-// mod predicate;
-// mod fallback;
 
+use crate::require::fallback::{AsyncFallback, DefaultFallback};
 use crate::require::service::RequireService;
 use crate::AuthnBackend;
 use axum::body::Body;
@@ -25,22 +25,28 @@ pub type PredicateStateFn<B, ST> =
     Arc<dyn Fn(B, <B as AuthnBackend>::User, ST) -> BoxFuture<'static, bool> + Send + Sync>;
 pub type RestrictFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Send + Sync>;
 pub type FallbackFn<T> = Arc<dyn Fn(Request<T>) -> BoxFuture<'static, Response> + Send + Sync>;
-pub struct Require<B: AuthnBackend, ST = (), T = Body> {
+
+pub struct Require<B, ST = (), T = Body, Fb = DefaultFallback>
+where
+    B: AuthnBackend,
+    Fb: Send + 'static,
+{
     pub predicate: PredicateStateFn<B, ST>,
     pub restrict: RestrictFn<T>,
-    pub fallback: FallbackFn<T>,
+    pub fallback: Fb,
     pub state: ST,
 }
 
-impl<B, ST, T> Require<B, ST, T>
+impl<B, Fb, ST, T> Require<B, ST, T, Fb>
 where
     B: AuthnBackend,
+    Fb: Clone + Send + Sync + 'static,
     ST: Clone,
 {
     pub fn new(
         predicate: PredicateStateFn<B, ST>,
         restrict: RestrictFn<T>,
-        fallback: FallbackFn<T>,
+        fallback: Fb,
         state: ST,
     ) -> Self {
         Self {
@@ -53,8 +59,9 @@ where
 }
 
 //umm, manual clone, because of Body
-impl<B, ST, T> Clone for Require<B, ST, T>
+impl<B, Fb, ST, T> Clone for Require<B, ST, T, Fb>
 where
+    Fb: Clone + Send + Sync + 'static,
     ST: Clone,
     B: Clone + AuthnBackend,
 {
@@ -69,12 +76,13 @@ where
     }
 }
 
-impl<S, B, ST, T> Layer<S> for Require<B, ST, T>
+impl<S, B, ST, T, Fb> Layer<S> for Require<B, ST, T, Fb>
 where
-    B: Clone + AuthnBackend,
-    ST: Clone,
+    B: Clone + AuthnBackend + Send + Sync + 'static,
+    Fb: Clone + Send + Sync + 'static,
+    ST: Clone + Send + Sync + 'static,
 {
-    type Service = RequireService<S, B, ST, T>;
+    type Service = RequireService<S, B, ST, T, Fb>;
 
     fn layer(&self, inner: S) -> Self::Service {
         RequireService {

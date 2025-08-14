@@ -2,7 +2,8 @@
 
 //TODO: create Require without state (nullable state)
 
-use crate::require::builder::params::{Fallback, Predicate, Rstr};
+use crate::require::builder::params::{Predicate, Rstr};
+use crate::require::fallback::{AsyncFallback, DefaultFallback};
 use crate::require::{FallbackFn, PredicateStateFn, Require, RestrictFn};
 use crate::{AuthnBackend, AuthzBackend};
 use axum::body::Body;
@@ -27,40 +28,43 @@ mod tests;
 /// * `ST` - The state type passed to the predicate function (defaults to `()`)
 /// * `T` - The request body type (defaults to [`Body`])
 /// ```
-pub struct RequireBuilder<B: AuthnBackend, ST = (), T = Body> {
+pub struct RequireBuilder<B, ST = (), T = Body, Fb = DefaultFallback>
+where
+    B: AuthnBackend,
+    Fb: Send + 'static,
+{
     /// Function for checking user permissions
     predicate: Option<PredicateStateFn<B, ST>>,
     /// Handler for user lacking permissions
     restrict: Option<RestrictFn<T>>,
     /// Handler for user authentication
-    fallback: Option<FallbackFn<T>>,
+    fallback: Fb,
     /// State to get values dynamically
     state: Option<ST>,
 }
 
-impl<B: AuthnBackend, ST: Clone, T: 'static + Send> Default for RequireBuilder<B, ST, T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
+impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T, DefaultFallback> {
     /// Creates a new `RequireBuilder` with default settings.
     pub fn new() -> Self {
         Self {
             predicate: None,
             restrict: None,
-            fallback: None,
+            fallback: DefaultFallback,
             state: None,
         }
     }
+}
 
+impl<B: AuthnBackend, Fb, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T, Fb>
+where
+    Fb: AsyncFallback<T> + Clone + std::marker::Send + std::marker::Sync,
+{
     /// Sets the custom predicate function for authorization checks.
     /// The predicate determines whether a request should be allowed to proceed.
     ///
     /// # Examples
     /// ```rust
-    pub fn predicate(mut self, pred: Predicate<B, ST>) -> RequireBuilder<B, ST, T>
+    pub fn predicate(mut self, pred: Predicate<B, ST>) -> RequireBuilder<B, ST, T, Fb>
     where
         B: AuthnBackend + AuthzBackend + 'static,
         B::User: 'static,
@@ -74,9 +78,16 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     /// Sets the fallback response for unauthenticated requests.
     /// When a request requires authentication but the user is not authenticated,
     /// the fallback response is used.
-    pub fn fallback(mut self, func: Fallback<T>) -> Self {
-        self.fallback = Some(func.into());
-        self
+    pub fn fallback<Fb2: std::marker::Send>(
+        self,
+        new_fallback: Fb2,
+    ) -> RequireBuilder<B, ST, T, Fb2> {
+        RequireBuilder {
+            predicate: self.predicate,
+            restrict: self.restrict,
+            fallback: new_fallback,
+            state: self.state,
+        }
     }
 
     /// Sets the restriction response for unauthorized requests.
@@ -125,16 +136,15 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     }
 
     /// Build the resulting middleware
-    pub fn build(self) -> Require<B, ST, T> {
+    pub fn build(self) -> Require<B, ST, T, Fb> {
         let predicate = self.predicate.unwrap_or_else(Self::default_predicat);
 
-        let fallback = self.fallback.unwrap_or_else(Self::default_fallback);
         let perm_fallback = self.restrict.unwrap_or_else(Self::default_restrict);
 
         Require {
             predicate,
             restrict: perm_fallback,
-            fallback,
+            fallback: self.fallback,
             state: self
                 .state
                 .expect("State is required. Use .state() or contribute to library"),
