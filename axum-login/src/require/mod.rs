@@ -2,7 +2,7 @@ mod builder;
 mod fallback;
 mod service;
 
-use crate::require::fallback::{DefaultFallback};
+use crate::require::fallback::DefaultFallback;
 use crate::require::service::RequireService;
 use crate::AuthnBackend;
 use axum::body::Body;
