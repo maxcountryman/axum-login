@@ -267,6 +267,49 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK);
     }
 
+
+    #[tokio::test]
+    async fn test_login_required_with_custom_fallback() {
+        let require = RequireBuilder::<Backend>::new()
+            .fallback(|_| async { StatusCode::GONE.into_response() })
+            // .predicate(Predicate::Params {
+            //     permissions: permissions.iter().map(|&p| p.into()).collect(),
+            // })
+            .build();
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(require)
+            .route(
+                "/signin",
+                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::GONE);
+
+        let req = Request::builder()
+            .uri("/signin")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
     #[tokio::test]
     async fn test_permission_required() {
         let permissions: Vec<&str> = vec!["test.read"];
