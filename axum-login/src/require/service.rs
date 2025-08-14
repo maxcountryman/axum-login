@@ -1,71 +1,44 @@
-use std::fmt;
+use crate::backend;
+use crate::require::{BoxFuture, Require, RestrictFn};
+use crate::{AuthSession, AuthnBackend};
+use axum::body::Body;
+use axum::http;
+use axum::response::IntoResponse;
+use http::{Request, Response, StatusCode};
+use pin_project::pin_project;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use tower_layer::Layer;
 use tower_service::Service;
-use crate::{AuthSession, AuthnBackend};
-use crate::require::{BoxFuture, FallbackFn, PredicateStateFn, RestrictFn};
-use axum::body::Body;
-use axum::response::Response;
-use axum::extract::{OriginalUri, Request};
-use axum::http::StatusCode;
 
-/// A Tower service that enforces authentication and authorization requirements.
+/// A Tower service that enforces authentication and authorization requirepub(crate) ments.
 ///
 /// This service checks for authentication, if it fails, it responds with fallback applies a
-/// predicate function to determine if
+/// pub(crate) pub(crate) predicate function to determine if
 /// the request should
 /// be
-/// allowed to proceed. If the predicate fails, it applies either a restriction response or a fallback response.
-pub struct RequireService<S, B: AuthnBackend, ST: Clone, T> {
+/// allowed to proceed. If the predicate fails, it applies either a restpub(crate)riction response or a fallback response.
+#[must_use]
+pub struct RequireService<S, B: AuthnBackend + Clone, ST: Clone, T = ()> {
     pub(crate) inner: S,
-    /// Function used to check user permissions or other requirements
-    pub(crate) predicate: PredicateStateFn<B, ST>,
-    /// Handler used in case the user fails authentication
-    pub(crate) fallback: FallbackFn<T>,
-    /// State of the application
-    pub(crate) state: ST,
-    /// Handler used in case the user fails predicate check
-    pub(crate) restrict: RestrictFn<T>,
+    pub(crate) layer: Require<B, ST, T>,
 }
-
-impl<S, B, ST, T> fmt::Debug for RequireService<S, B, ST, T>
-where
-    S: fmt::Debug,
-    B: AuthnBackend,
-    ST: Clone + fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RequireService")
-            .field("inner", &self.inner)
-            .field("predicate", &"<function>")
-            .field("fallback", &"<function>")
-            .field("state", &self.state)
-            .field("restrict", &"<function>")
-            .finish()
-    }
-}
-
-//umm, manual clone, yes
-impl<S, B, ST, T> Clone for RequireService<S, B, ST, T>
-where
-    S: Clone,
-    ST: Clone,
-    B: AuthnBackend,
+impl<S: Clone, B: backend::AuthnBackend, ST: std::clone::Clone, T> Clone
+for RequireService<S, B, ST, T>
 {
     fn clone(&self) -> Self {
-        Self {
+        RequireService {
             inner: self.inner.clone(),
-            predicate: self.predicate.clone(),
-            fallback: self.fallback.clone(),
-            state: self.state.clone(),
-            restrict: self.restrict.clone(),
+            layer: self.layer.clone(),
         }
     }
 }
 
 impl<S, B, ST, T> Service<Request<T>> for RequireService<S, B, ST, T>
 where
-    S: Service<Request<T>, Response = Response> + Send + Clone + 'static,
+    S: Service<Request<T>, Response=Response<Body>> + Send + Clone + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
     B: AuthnBackend + Clone + Send + 'static,
@@ -74,7 +47,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+    type Future = RequireFuture<S, T>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -82,46 +55,145 @@ where
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
+        //PERF: I am not exactly sure, but there is a potential optimization to include `restrict()`
+        //as a part of `predicate()`
+        let restrict = Arc::clone(&self.layer.restrict);
+        let state = self.layer.state.clone();
 
-        let predicate = Arc::clone(&self.predicate);
-        let fallback = Arc::clone(&self.fallback);
-        let restrict = Arc::clone(&self.restrict);
-        let state = self.state.clone();
+        // Clone inner service for the future
+        let mut inner = self.inner.clone();
+        // mem::swap due to https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
+        std::mem::swap(&mut self.inner, &mut inner);
 
-        // This should help
-        let clone = self.inner.clone();
-        let mut inner = std::mem::replace(&mut self.inner, clone);
-
-        Box::pin(async move {
-            match auth_session {
-                Some(AuthSession {
-                         user: Some(user),
-                         backend,
-                         ..
-                     }) => {
-                    // Only enter here if user is Some(...)
-                    if predicate(backend, user.clone(), state).await {
-                        // Authorized
-                        let response = inner.call(req).await?;
-                        Ok(response)
-                    } else {
-                        // Restricted
-                        let response = restrict(req).await;
-                        Ok(response)
-                    }
-                }
-                Some(_auth_session) => {
-                    // No user in session, use fallback
-                    let response = fallback(req).await;
-                    Ok(response)
-                }
-                _ => {
-                    // Missing required extensions
-                    Ok(axum::response::IntoResponse::into_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    ))
+        match auth_session {
+            Some(AuthSession {
+                     user: Some(user),
+                     backend,
+                     ..
+                 }) => {
+                // User is authenticated, check predicate
+                let predicate_future = (self.layer.predicate)(backend, user.clone(), state);
+                RequireFuture {
+                    state: RequireFutureState::CheckingPredicate {
+                        predicate_future,
+                        inner,
+                        request: Some(req),
+                        restrict,
+                    },
                 }
             }
-        })
+            Some(_auth_session) => {
+                // No user in session, use fallback
+                let fallback_future = (self.layer.fallback)(req);
+                RequireFuture {
+                    state: RequireFutureState::CallingFallback { fallback_future },
+                }
+            }
+            None => {
+                // Missing required extensions - return internal server error
+                let error_response = StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                let fallback_future = Box::pin(async move { error_response });
+                RequireFuture {
+                    state: RequireFutureState::CallingFallback { fallback_future },
+                }
+            }
+        }
+    }
+}
+
+#[pin_project]
+pub struct RequireFuture<S, T>
+where
+    S: Service<Request<T>, Response=Response<Body>>,
+{
+    #[pin]
+    state: RequireFutureState<S, T>,
+}
+
+#[pin_project(project = RequireFutureStateProj)]
+pub enum RequireFutureState<S, T>
+where
+    S: Service<Request<T>, Response=Response<Body>>,
+{
+    CheckingPredicate {
+        #[pin]
+        predicate_future: BoxFuture<'static, bool>,
+        inner: S,
+        request: Option<Request<T>>,
+        restrict: RestrictFn<T>,
+    },
+    CallingInner {
+        #[pin]
+        inner_future: S::Future,
+    },
+    CallingRestrict {
+        #[pin]
+        restrict_future: BoxFuture<'static, Response<Body>>,
+    },
+    CallingFallback {
+        #[pin]
+        fallback_future: BoxFuture<'static, Response<Body>>,
+    },
+    Error,
+}
+
+impl<S, T> Future for RequireFuture<S, T>
+where
+    S: Service<Request<T>, Response=Response<Body>> + Send + 'static,
+{
+    type Output = Result<Response<Body>, S::Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut this = self.project();
+
+        loop {
+            match this.state.as_mut().project() {
+                RequireFutureStateProj::CheckingPredicate {
+                    predicate_future,
+                    inner,
+                    request,
+                    restrict,
+                } => {
+                    match predicate_future.poll(cx) {
+                        Poll::Ready(true) => {
+                            // Predicate passed, call inner service
+                            let req = request.take().expect("Request should be available");
+                            let inner_future = inner.call(req);
+                            this.state
+                                .set(RequireFutureState::CallingInner { inner_future });
+                        }
+                        Poll::Ready(false) => {
+                            // Predicate failed, call restrict handler
+                            let req = request.take().expect("Request should be available");
+                            let restrict_future = restrict(req);
+                            this.state
+                                .set(RequireFutureState::CallingRestrict { restrict_future });
+                        }
+                        Poll::Pending => return Poll::Pending,
+                    }
+                }
+                RequireFutureStateProj::CallingInner { inner_future } => {
+                    return match inner_future.poll(cx) {
+                        Poll::Ready(result) => Poll::Ready(result),
+                        Poll::Pending => Poll::Pending,
+                    }
+                }
+                RequireFutureStateProj::CallingRestrict { restrict_future } => {
+                    return match restrict_future.poll(cx) {
+                        Poll::Ready(response) => Poll::Ready(Ok(response)),
+                        Poll::Pending => Poll::Pending,
+                    }
+                }
+                RequireFutureStateProj::CallingFallback { fallback_future } => {
+                    return match fallback_future.poll(cx) {
+                        Poll::Ready(response) => Poll::Ready(Ok(response)),
+                        Poll::Pending => Poll::Pending,
+                    }
+                }
+                RequireFutureStateProj::Error => {
+                    panic!("Future polled after completion")
+                }
+            }
+        }
     }
 }

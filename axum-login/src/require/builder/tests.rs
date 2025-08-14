@@ -1,22 +1,21 @@
-
 #[cfg(test)]
 mod tests {
+    use axum::body::Body;
     use axum::response::IntoResponse;
     use axum::{
         http::{header, Request, Response, StatusCode},
         Router,
     };
     use std::collections::HashSet;
-    use axum::body::Body;
     use tower::ServiceExt;
     use tower_cookies::cookie;
     use tower_sessions::SessionManagerLayer;
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
-    use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
     use crate::require::builder::params::{Fallback, Predicate, Rstr};
     use crate::require::builder::RequireBuilder;
     use crate::require::Require;
+    use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 
     macro_rules! auth_layer {
         () => {{

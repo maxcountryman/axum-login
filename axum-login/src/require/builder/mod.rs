@@ -2,18 +2,16 @@
 
 //TODO: create Require without state (nullable state)
 
-use std::fmt::Debug;
+use crate::require::builder::params::{Fallback, Predicate, Rstr};
+use crate::require::{FallbackFn, PredicateStateFn, Require, RestrictFn};
+use crate::{AuthnBackend, AuthzBackend};
 use axum::body::Body;
-use axum::extract::{OriginalUri, Request};
-use std::future::{ready, Future};
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::Arc;
 use axum::http::StatusCode;
 use axum::response::Response;
-use crate::{AuthnBackend, AuthzBackend};
-use crate::require::{FallbackFn, PredicateStateFn, Require, RestrictFn};
-use crate::require::builder::params::{Fallback, Predicate, Rstr};
+use std::fmt::Debug;
+use std::future::{ready, Future};
+use std::pin::Pin;
+use std::sync::Arc;
 
 mod params;
 mod tests;
@@ -28,21 +26,6 @@ mod tests;
 /// * `B` - The authentication backend type that implements [`AuthnBackend`]
 /// * `ST` - The state type passed to the predicate function (defaults to `()`)
 /// * `T` - The request body type (defaults to [`Body`])
-///
-/// # Examples
-///
-/// ```rust
-///
-/// let require_layer = RequireBuilder::new()
-///     .predicate(Predicate::from_closure(|backend, user, state| async move {
-///         // Custom authorization logic here
-///         true
-///     }))
-///     .fallback(Fallback::Params {
-///         login_url: Some("/login".to_string()),
-///         redirect_field: Some("next".to_string()),
-///     })
-///     .build();
 /// ```
 pub struct RequireBuilder<B: AuthnBackend, ST = (), T = Body> {
     /// Function for checking user permissions
@@ -54,8 +37,6 @@ pub struct RequireBuilder<B: AuthnBackend, ST = (), T = Body> {
     /// State to get values dynamically
     state: Option<ST>,
 }
-
-
 
 impl<B: AuthnBackend, ST: Clone, T: 'static + Send> Default for RequireBuilder<B, ST, T> {
     fn default() -> Self {
@@ -79,13 +60,6 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     ///
     /// # Examples
     /// ```rust
-    /// use axum_login::{RequireBuilder, Predicate};
-    ///
-    /// let builder = RequireBuilder::new()
-    ///     .predicate(Predicate::from_closure(|backend, user, state| async move {
-    ///         true
-    ///     }));
-    /// ```
     pub fn predicate(mut self, pred: Predicate<B, ST>) -> RequireBuilder<B, ST, T>
     where
         B: AuthnBackend + AuthzBackend + 'static,
@@ -94,25 +68,12 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
         ST: Clone + Send + Sync + 'static,
     {
         self.predicate = Some(pred.into());
-
         self
     }
 
     /// Sets the fallback response for unauthenticated requests.
     /// When a request requires authentication but the user is not authenticated,
     /// the fallback response is used.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use axum_login::{RequireBuilder, Fallback};
-    ///
-    /// let builder = RequireBuilder::new()
-    ///     .fallback(Fallback::Params {
-    ///         login_url: Some("/signin".to_string()),
-    ///         redirect_field: Some("next".to_string()),
-    ///     });
-    /// ```
     pub fn fallback(mut self, func: Fallback<T>) -> Self {
         self.fallback = Some(func.into());
         self
@@ -121,18 +82,6 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     /// Sets the restriction response for unauthorized requests.
     /// When a request fails authorization but the user is authenticated,
     /// the restriction response is used instead of redirecting.
-    /// # Examples
-    ///
-    /// ```rust
-    /// use axum_login::{RequireBuilder, Rstr};
-    /// use axum::http::StatusCode;
-    /// use axum::response::IntoResponse;
-    ///
-    /// let builder = RequireBuilder::new()
-    ///     .on_restrict(Rstr::from_closure(|_req| async {
-    ///         StatusCode::FORBIDDEN.into_response()
-    ///     }));
-    /// ```
     pub fn on_restrict(mut self, func: Rstr<T>) -> Self
     where
         T: Send + 'static,
@@ -142,22 +91,6 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
     }
 
     /// Sets the state value passed to the predicate function.
-    /// # Examples
-    ///
-    /// ```rust
-    /// use axum_login::RequireBuilder;
-    ///
-    /// #[derive(Clone)]
-    /// struct MyState {
-    ///     required_role: String,
-    /// }
-    ///
-    /// let state = MyState {
-    ///     required_role: "admin".to_string(),
-    /// };
-    ///
-    /// let builder = RequireBuilder::new().state(state);
-    /// ```
     pub fn state(mut self, state: ST) -> Self {
         self.state = Some(state);
         self
@@ -197,7 +130,6 @@ impl<B: AuthnBackend, ST: Clone, T: 'static + Send> RequireBuilder<B, ST, T> {
 
         let fallback = self.fallback.unwrap_or_else(Self::default_fallback);
         let perm_fallback = self.restrict.unwrap_or_else(Self::default_restrict);
-
 
         Require {
             predicate,
