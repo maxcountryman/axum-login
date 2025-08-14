@@ -1,20 +1,17 @@
 mod builder;
-mod layer;
 mod service;
 // mod predicate;
 // mod fallback;
 
-use crate::{url_with_redirect_query, AuthSession, AuthnBackend, AuthzBackend};
+use crate::require::service::RequireService;
+use crate::AuthnBackend;
 use axum::body::Body;
-use axum::extract::{OriginalUri, Request};
+use axum::extract::Request;
 use axum::response::Response;
-use std::fmt::Debug;
-use std::future::{ready, Future};
-use std::marker::PhantomData;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tower_layer::Layer;
-use tower_service::Service;
 
 const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
@@ -33,7 +30,26 @@ pub struct Require<B: AuthnBackend, ST = (), T = Body> {
     pub restrict: RestrictFn<T>,
     pub fallback: FallbackFn<T>,
     pub state: ST,
-    // _marker: std::marker::PhantomData<B>,
+}
+
+impl<B, ST, T> Require<B, ST, T>
+where
+    B: AuthnBackend,
+    ST: Clone,
+{
+    pub fn new(
+        predicate: PredicateStateFn<B, ST>,
+        restrict: RestrictFn<T>,
+        fallback: FallbackFn<T>,
+        state: ST,
+    ) -> Self {
+        Self {
+            predicate,
+            restrict,
+            fallback,
+            state,
+        }
+    }
 }
 
 //umm, manual clone, because of Body
@@ -49,6 +65,21 @@ where
             fallback: self.fallback.clone(),
             state: self.state.clone(),
             // _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, B, ST, T> Layer<S> for Require<B, ST, T>
+where
+    B: Clone + AuthnBackend,
+    ST: Clone,
+{
+    type Service = RequireService<S, B, ST, T>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RequireService {
+            inner,
+            layer: self.clone(),
         }
     }
 }

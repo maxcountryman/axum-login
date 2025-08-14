@@ -1,15 +1,17 @@
+use axum::body::Body;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use axum::body::Body;
 
-use axum::response::Response;
+use crate::require::{
+    FallbackFn, PredicateStateFn, RestrictFn, DEFAULT_LOGIN_URL, DEFAULT_REDIRECT_FIELD,
+};
+use crate::{url_with_redirect_query, AuthnBackend, AuthzBackend};
 use axum::extract::{OriginalUri, Request};
 use axum::http::StatusCode;
-use crate::{url_with_redirect_query, AuthnBackend, AuthzBackend};
-use crate::require::{FallbackFn, PredicateStateFn, RestrictFn, DEFAULT_LOGIN_URL, DEFAULT_REDIRECT_FIELD};
+use axum::response::Response;
 
 /// Represents different types of predicates for authorization checks.
 /// A predicate determines whether a user should be allowed access to a protected resource.
@@ -268,7 +270,7 @@ where
                                     &redirect_field,
                                     original_uri,
                                 )
-                                    .unwrap();
+                                .unwrap();
                                 Response::builder()
                                     .status(StatusCode::TEMPORARY_REDIRECT)
                                     .header("Location", url.to_string())
