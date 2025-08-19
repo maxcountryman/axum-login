@@ -1,5 +1,7 @@
 # Unreleased
 
+- Remove `mut` in AuthSession::{logout, login}. #297
+
 # 0.18.0
 
 - Disable default features for `tower-sessions`. #287
