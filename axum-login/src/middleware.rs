@@ -314,7 +314,7 @@ mod tests {
             .route_layer(login_required!(Backend))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -348,7 +348,7 @@ mod tests {
             .route_layer(login_required!(Backend, login_url = "/login"))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -393,7 +393,7 @@ mod tests {
             ))
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -434,7 +434,7 @@ mod tests {
             .route_layer(permission_required!(Backend, "test.read"))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -468,7 +468,7 @@ mod tests {
             .route_layer(permission_required!(Backend, "test.read", "test.write"))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -506,7 +506,7 @@ mod tests {
             ))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -551,7 +551,7 @@ mod tests {
             ))
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -596,7 +596,7 @@ mod tests {
             ))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )

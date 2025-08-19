@@ -36,7 +36,7 @@ mod post {
     use super::*;
 
     pub async fn login(
-        mut auth_session: AuthSession,
+        auth_session: AuthSession,
         messages: Messages,
         Form(creds): Form<Credentials>,
     ) -> impl IntoResponse {
@@ -87,7 +87,7 @@ mod get {
         )
     }
 
-    pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
+    pub async fn logout(auth_session: AuthSession) -> impl IntoResponse {
         match auth_session.logout().await {
             Ok(_) => Redirect::to("/login").into_response(),
             Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
