@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           rustup toolchain install nightly --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@v2
@@ -28,7 +28,7 @@ jobs:
   check-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           rustup toolchain install stable --profile minimal
       - uses: Swatinem/rust-cache@v2
@@ -42,7 +42,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           rustup toolchain install nightly --profile minimal
       - uses: Swatinem/rust-cache@v2
@@ -54,7 +54,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           rustup toolchain install nightly --profile minimal
           cargo install cargo-tarpaulin
@@ -73,7 +73,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           rustup toolchain install stable --profile minimal
       - uses: Swatinem/rust-cache@v2
