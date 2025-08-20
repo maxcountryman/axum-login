@@ -19,7 +19,7 @@ mod get {
     use super::*;
 
     pub async fn restricted(auth_session: AuthSession) -> impl IntoResponse {
-        match auth_session.user().await {
+        match auth_session.user {
             Some(user) => Html(
                 RestrictedTemplate {
                     username: &user.username,
