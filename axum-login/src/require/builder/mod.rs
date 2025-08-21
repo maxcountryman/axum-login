@@ -40,6 +40,16 @@ where
     _phantom: PhantomData<T>,
 }
 
+impl<B, T> Default for RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict>
+where
+    B: AuthnBackend,
+    T: 'static + Send,
+ {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<B, T> RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict>
 where
     B: AuthnBackend,

@@ -54,8 +54,14 @@ where
     S::Error: Send + 'static,
     B: AuthnBackend + Clone + Send + 'static,
     ST: Clone + Send + 'static,
-    Fb: AsyncFallbackHandler<T, Response = S::Response> + Clone + std::marker::Sync + std::marker::Send,
-    Rs: AsyncFallbackHandler<T, Response = S::Response> + Clone + std::marker::Sync + std::marker::Send,
+    Fb: AsyncFallbackHandler<T, Response = S::Response>
+        + Clone
+        + std::marker::Sync
+        + std::marker::Send,
+    Rs: AsyncFallbackHandler<T, Response = S::Response>
+        + Clone
+        + std::marker::Sync
+        + std::marker::Send,
     T: Send + 'static,
 {
     type Response = S::Response;
@@ -194,8 +200,10 @@ where
                             // Predicate failed, call restrict handler
                             let req = request.take().expect("Request should be available");
                             let restrict_future = restrict.handle(req);
-                            this.state
-                                .set(RequireFutureState::CallingRestrict { restrict_future, phantom_data: PhantomData });
+                            this.state.set(RequireFutureState::CallingRestrict {
+                                restrict_future,
+                                phantom_data: PhantomData,
+                            });
                         }
                         Poll::Pending => return Poll::Pending,
                     }
@@ -206,7 +214,9 @@ where
                         Poll::Pending => Poll::Pending,
                     }
                 }
-                RequireFutureStateProj::CallingRestrict { restrict_future ,..} => {
+                RequireFutureStateProj::CallingRestrict {
+                    restrict_future, ..
+                } => {
                     return match restrict_future.poll(cx) {
                         Poll::Ready(response) => Poll::Ready(Ok(response)),
                         Poll::Pending => Poll::Pending,

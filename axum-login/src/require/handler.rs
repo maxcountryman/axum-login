@@ -138,7 +138,7 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
             }
         };
 
-        return ready(resp);
+        ready(resp)
     }
 }
 
