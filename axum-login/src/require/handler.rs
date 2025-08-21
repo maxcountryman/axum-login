@@ -2,20 +2,21 @@ use crate::require::{DEFAULT_LOGIN_URL, DEFAULT_REDIRECT_FIELD};
 use crate::url_with_redirect_query;
 use axum::body::Body;
 use axum::extract::{OriginalUri, Request};
-use axum::http::{Response, StatusCode};
+use axum::http::{HeaderName, HeaderValue, Response, StatusCode};
+use std::collections::HashMap;
 use std::future::{ready, Future, Ready};
 
-pub trait AsyncFallback<Req> {
-    /// Future returned by the fallback handler
+pub trait AsyncFallbackHandler<Req> {
+    /// Future returned by the handler
     type Future: Future<Output = Self::Response>;
 
     /// Type of the successful response
     type Response;
 
-    fn fallback(&mut self, request: Request<Req>) -> Self::Future;
+    fn handle(&mut self, request: Request<Req>) -> Self::Future;
 }
 
-impl<F, ReqInBody, Fut, Res> AsyncFallback<ReqInBody> for F
+impl<F, ReqInBody, Fut, Res> AsyncFallbackHandler<ReqInBody> for F
 where
     F: FnMut(Request<ReqInBody>) -> Fut,
     Fut: Future<Output = Res>,
@@ -23,7 +24,7 @@ where
     type Future = Fut;
     type Response = Res;
 
-    fn fallback(&mut self, request: Request<ReqInBody>) -> Self::Future {
+    fn handle(&mut self, request: Request<ReqInBody>) -> Self::Future {
         (self)(request)
     }
 }
@@ -31,14 +32,14 @@ where
 #[derive(Clone)]
 pub struct DefaultFallback;
 
-impl<ReqInBody> AsyncFallback<ReqInBody> for DefaultFallback
+impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for DefaultFallback
 where
     ReqInBody: Send + 'static,
 {
     type Future = Ready<Response<Body>>;
     type Response = Response<Body>;
 
-    fn fallback(&mut self, _request: Request<ReqInBody>) -> Self::Future {
+    fn handle(&mut self, _request: Request<ReqInBody>) -> Self::Future {
         ready(
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
@@ -49,13 +50,33 @@ where
 }
 
 #[derive(Clone)]
-pub(crate) struct InternalErrorFallback;
+pub struct DefaultRestrict;
 
-impl<ReqInBody> AsyncFallback<ReqInBody> for InternalErrorFallback {
+impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for DefaultRestrict
+where
+    ReqInBody: Send + 'static,
+{
     type Future = Ready<Response<Body>>;
     type Response = Response<Body>;
 
-    fn fallback(&mut self, _request: Request<ReqInBody>) -> Self::Future {
+    fn handle(&mut self, _request: Request<ReqInBody>) -> Self::Future {
+        ready(
+            Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .body(Body::from("Forbidden"))
+                .unwrap(),
+        )
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct InternalErrorFallback;
+
+impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for InternalErrorFallback {
+    type Future = Ready<Response<Body>>;
+    type Response = Response<Body>;
+
+    fn handle(&mut self, _request: Request<ReqInBody>) -> Self::Future {
         ready(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -87,11 +108,11 @@ impl RedirectFallback {
     }
 }
 
-impl<ReqInBody> AsyncFallback<ReqInBody> for RedirectFallback {
-    type Future = Ready<axum::response::Response<Body>>; //TODO: currently have only async variant
+impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
+    type Future = Ready<axum::response::Response<Body>>; //PERF: currently have only async variant
     type Response = axum::response::Response<Body>;
 
-    fn fallback(&mut self, req: Request<ReqInBody>) -> Self::Future {
+    fn handle(&mut self, req: Request<ReqInBody>) -> Self::Future {
         let login_url = self
             .login_url
             .clone()

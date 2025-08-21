@@ -12,9 +12,9 @@ mod tests {
     use tower_sessions::SessionManagerLayer;
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
-    use crate::require::builder::params::{Predicate, Rstr};
+    use crate::require::builder::params::Predicate;
     use crate::require::builder::RequireBuilder;
-    use crate::require::fallback::RedirectFallback;
+    use crate::require::handler::RedirectFallback;
     use crate::require::Require;
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 
@@ -134,7 +134,7 @@ mod tests {
     // Classic Tests (no state)
     #[tokio::test]
     async fn test_login_required() {
-        let require_login: Require<Backend> = RequireBuilder::new().build();
+        let require_login = RequireBuilder::<Backend>::new().build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(require_login)
@@ -649,7 +649,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nested() {
-        let require = RequireBuilder::<Backend>::new()
+        let require = Require::<Backend>::builder()
             .fallback(RedirectFallback::new().login_url("/login"))
             .build();
         let nested = Router::new()
@@ -755,12 +755,10 @@ mod tests {
         };
 
         let f = |backend, user, state| verify_permissions(backend, user, state);
-        let require_login = RequireBuilder::new_with_state(state.clone())
+        let require_login = Require::builder_with_state(state.clone())
             .fallback(RedirectFallback::new().login_url("/login"))
             .predicate(Predicate::from_closure(f))
-            .on_restrict(Rstr::from_closure(|_| async {
-                StatusCode::UNAUTHORIZED.into_response()
-            }))
+            .restrict(|_| async { StatusCode::UNAUTHORIZED.into_response() })
             .build();
 
         let app = Router::new()

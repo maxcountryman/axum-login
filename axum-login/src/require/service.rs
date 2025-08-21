@@ -1,5 +1,5 @@
-use crate::require::fallback::{AsyncFallback, InternalErrorFallback};
-use crate::require::{BoxFuture, Require, RestrictFn};
+use crate::require::handler::{AsyncFallbackHandler, InternalErrorFallback};
+use crate::require::{BoxFuture, Require};
 use crate::{AuthSession, AuthnBackend};
 use axum::body::Body;
 use axum::http;
@@ -8,7 +8,6 @@ use pin_project::pin_project;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower_service::Service;
 
@@ -24,19 +23,21 @@ pub struct RequireService<
     S,
     B: AuthnBackend + Clone,
     ST: Clone,
-    T,
+    T: std::marker::Send + 'static,
     Fb: Clone + std::marker::Send + std::marker::Sync + 'static,
+    Rs: Clone + std::marker::Send + std::marker::Sync + 'static,
 > {
     pub(crate) inner: S,
-    pub(crate) layer: Require<B, ST, T, Fb>,
+    pub(crate) layer: Require<B, ST, T, Fb, Rs>,
 }
 impl<
         S: Clone,
         B: AuthnBackend,
         Fb: Clone + std::marker::Sync + std::marker::Send,
+        Rs: Clone + std::marker::Send + std::marker::Sync + 'static,
         ST: Clone,
-        T,
-    > Clone for RequireService<S, B, ST, T, Fb>
+        T: Send,
+    > Clone for RequireService<S, B, ST, T, Fb, Rs>
 {
     fn clone(&self) -> Self {
         RequireService {
@@ -46,19 +47,20 @@ impl<
     }
 }
 
-impl<S, B, Fb, ST, T> Service<Request<T>> for RequireService<S, B, ST, T, Fb>
+impl<S, B, Fb, Rs, ST, T> Service<Request<T>> for RequireService<S, B, ST, T, Fb, Rs>
 where
     S: Service<Request<T>, Response = Response<Body>> + Send + Clone + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
     B: AuthnBackend + Clone + Send + 'static,
     ST: Clone + Send + 'static,
-    Fb: AsyncFallback<T, Response = S::Response> + Clone + std::marker::Sync + std::marker::Send,
+    Fb: AsyncFallbackHandler<T, Response = S::Response> + Clone + std::marker::Sync + std::marker::Send,
+    Rs: AsyncFallbackHandler<T, Response = S::Response> + Clone + std::marker::Sync + std::marker::Send,
     T: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = RequireFuture<S, T, Fb>;
+    type Future = RequireFuture<S, T, Fb, Rs>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -66,9 +68,8 @@ where
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
-        //PERF: I am not exactly sure, but there is a potential optimization to include `restrict()`
+        //PERF: Not exactly sure, but there is a potential optimization to include `restrict()`
         //as a part of `predicate()`
-        let restrict = Arc::clone(&self.layer.restrict);
         let state = self.layer.state.clone();
 
         // Clone inner service for the future
@@ -89,13 +90,13 @@ where
                         predicate_future,
                         inner,
                         request: Some(req),
-                        restrict,
+                        restrict: self.layer.restrict.clone(), //PERF: avoid cloning
                     },
                 }
             }
             Some(_auth_session) => {
                 // No user in session, use fallback
-                let fallback_future = self.layer.fallback.fallback(req);
+                let fallback_future = self.layer.fallback.handle(req);
                 RequireFuture {
                     state: RequireFutureState::CallingFallback {
                         fallback_future,
@@ -105,7 +106,7 @@ where
             }
             None => {
                 // Missing required extensions - return internal server error
-                let internal_fallback_future = InternalErrorFallback.fallback(req);
+                let internal_fallback_future = InternalErrorFallback.handle(req);
 
                 RequireFuture {
                     state: RequireFutureState::CallingInternalFallback {
@@ -118,27 +119,29 @@ where
 }
 
 #[pin_project]
-pub struct RequireFuture<S, T, Fb>
+pub struct RequireFuture<S, T, Fb, Rs>
 where
     S: Service<Request<T>, Response = Response<Body>>,
-    Fb: AsyncFallback<T> + Clone,
+    Fb: AsyncFallbackHandler<T> + Clone,
+    Rs: AsyncFallbackHandler<T> + Clone,
 {
     #[pin]
-    state: RequireFutureState<S, T, Fb>,
+    state: RequireFutureState<S, T, Fb, Rs>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
-pub enum RequireFutureState<S, T, Fb>
+pub enum RequireFutureState<S, T, Fb, Rs>
 where
     S: Service<Request<T>, Response = Response<Body>>,
-    Fb: AsyncFallback<T> + Clone,
+    Fb: AsyncFallbackHandler<T> + Clone,
+    Rs: AsyncFallbackHandler<T> + Clone,
 {
     CheckingPredicate {
         #[pin]
         predicate_future: BoxFuture<'static, bool>,
         inner: S,
         request: Option<Request<T>>,
-        restrict: RestrictFn<T>,
+        restrict: Rs,
     },
     CallingInner {
         #[pin]
@@ -146,7 +149,8 @@ where
     },
     CallingRestrict {
         #[pin]
-        restrict_future: BoxFuture<'static, Response<Body>>,
+        restrict_future: Rs::Future,
+        phantom_data: PhantomData<Rs>,
     },
     CallingFallback {
         #[pin]
@@ -155,14 +159,15 @@ where
     },
     CallingInternalFallback {
         #[pin]
-        internal_fallback_future: <InternalErrorFallback as AsyncFallback<Body>>::Future,
+        internal_fallback_future: <InternalErrorFallback as AsyncFallbackHandler<Body>>::Future,
     },
 }
 
-impl<S, T, Fb> Future for RequireFuture<S, T, Fb>
+impl<S, T, Fb, Rs> Future for RequireFuture<S, T, Fb, Rs>
 where
     S: Service<Request<T>, Response = Response<Body>> + Send + 'static,
-    Fb: AsyncFallback<T, Response = Response<Body>> + Clone,
+    Fb: AsyncFallbackHandler<T, Response = Response<Body>> + Clone,
+    Rs: AsyncFallbackHandler<T, Response = Response<Body>> + Clone,
 {
     type Output = Result<Response<Body>, S::Error>;
 
@@ -188,9 +193,9 @@ where
                         Poll::Ready(false) => {
                             // Predicate failed, call restrict handler
                             let req = request.take().expect("Request should be available");
-                            let restrict_future = restrict(req);
+                            let restrict_future = restrict.handle(req);
                             this.state
-                                .set(RequireFutureState::CallingRestrict { restrict_future });
+                                .set(RequireFutureState::CallingRestrict { restrict_future, phantom_data: PhantomData });
                         }
                         Poll::Pending => return Poll::Pending,
                     }
@@ -201,7 +206,7 @@ where
                         Poll::Pending => Poll::Pending,
                     }
                 }
-                RequireFutureStateProj::CallingRestrict { restrict_future } => {
+                RequireFutureStateProj::CallingRestrict { restrict_future ,..} => {
                     return match restrict_future.poll(cx) {
                         Poll::Ready(response) => Poll::Ready(Ok(response)),
                         Poll::Pending => Poll::Pending,
