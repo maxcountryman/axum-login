@@ -119,7 +119,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
 
     /// Updates the session such that the user is logged in.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id = user.id().to_string()), ret, err)]
-    pub async fn login(&mut self, user: &Backend::User) -> Result<(), Error<Backend>> {
+    pub async fn login(&self, user: &Backend::User) -> Result<(), Error<Backend>> {
         {
             let mut inner = self.inner.lock().await;
             inner.user = Some(user.clone());
@@ -139,7 +139,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
 
     /// Updates the session such that the user is logged out.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
-    pub async fn logout(&mut self) -> Result<Option<Backend::User>, Error<Backend>> {
+    pub async fn logout(&self) -> Result<Option<Backend::User>, Error<Backend>> {
         let mut inner = self.inner.lock().await;
         let user = inner.user.take();
 
@@ -152,7 +152,7 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         Ok(user)
     }
 
-    async fn update_session(&mut self) -> Result<(), session::Error> {
+    async fn update_session(&self) -> Result<(), session::Error> {
         let inner = self.inner.lock().await;
         inner
             .session
@@ -337,7 +337,7 @@ mod tests {
             data: Data::default(),
             data_key: "auth_data",
         };
-        let mut auth_session = AuthSession {
+        let auth_session = AuthSession {
             backend: mock_backend,
             inner: Arc::new(Mutex::new(inner)),
         };
@@ -372,7 +372,7 @@ mod tests {
             data: Data::default(),
             data_key: "auth_data",
         };
-        let mut auth_session = AuthSession {
+        let auth_session = AuthSession {
             backend: mock_backend,
             inner: Arc::new(Mutex::new(inner)),
         };

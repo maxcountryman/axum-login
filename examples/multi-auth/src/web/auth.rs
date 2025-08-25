@@ -43,7 +43,7 @@ mod post {
         use crate::users::{Credentials, PasswordCreds};
 
         pub async fn password(
-            mut auth_session: AuthSession,
+            auth_session: AuthSession,
             Form(creds): Form<PasswordCreds>,
         ) -> impl IntoResponse {
             let user = match auth_session
@@ -112,7 +112,7 @@ mod get {
         )
     }
 
-    pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
+    pub async fn logout(auth_session: AuthSession) -> impl IntoResponse {
         match auth_session.logout().await {
             Ok(_) => Redirect::to("/login").into_response(),
             Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
