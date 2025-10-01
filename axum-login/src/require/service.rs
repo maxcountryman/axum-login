@@ -1,5 +1,6 @@
 use crate::require::handler::{AsyncFallbackHandler, InternalErrorFallback};
-use crate::require::{BoxFuture, Require};
+use crate::require::predicate::PredicateAsync;
+use crate::require::Require;
 use crate::{AuthSession, AuthnBackend};
 use axum::body::Body;
 use axum::http;
@@ -21,23 +22,25 @@ use tower_service::Service;
 #[must_use]
 pub struct RequireService<
     S,
-    B: AuthnBackend + Clone,
-    ST: Clone,
+    B: AuthnBackend + Clone + 'static,
+    ST: Clone + std::marker::Send + 'static,
     T: std::marker::Send + 'static,
     Fb: Clone + std::marker::Send + std::marker::Sync + 'static,
     Rs: Clone + std::marker::Send + std::marker::Sync + 'static,
+    Pr: Clone + std::marker::Send + std::marker::Sync + 'static,
 > {
     pub(crate) inner: S,
-    pub(crate) layer: Require<B, ST, T, Fb, Rs>,
+    pub(crate) layer: Require<B, ST, T, Fb, Rs, Pr>,
 }
 impl<
         S: Clone,
         B: AuthnBackend,
         Fb: Clone + std::marker::Sync + std::marker::Send,
         Rs: Clone + std::marker::Send + std::marker::Sync + 'static,
-        ST: Clone,
+        Pr: Clone + std::marker::Send + std::marker::Sync + 'static,
+        ST: Clone + std::marker::Send,
         T: Send,
-    > Clone for RequireService<S, B, ST, T, Fb, Rs>
+    > Clone for RequireService<S, B, ST, T, Fb, Rs, Pr>
 {
     fn clone(&self) -> Self {
         RequireService {
@@ -47,7 +50,7 @@ impl<
     }
 }
 
-impl<S, B, Fb, Rs, ST, T> Service<Request<T>> for RequireService<S, B, ST, T, Fb, Rs>
+impl<S, B, Fb, Rs, ST, T, Pr> Service<Request<T>> for RequireService<S, B, ST, T, Fb, Rs, Pr>
 where
     S: Service<Request<T>, Response = Response<Body>> + Send + Clone + 'static,
     S::Future: Send + 'static,
@@ -62,20 +65,20 @@ where
         + Clone
         + std::marker::Sync
         + std::marker::Send,
+    Pr: PredicateAsync<B, ST> + std::clone::Clone + Send + Sync,
     T: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = RequireFuture<S, T, Fb, Rs>;
+    type Future = RequireFuture<S, T, Fb, Rs, Pr, B, ST>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
+        //PERF: clone needed?
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
-        //PERF: Not exactly sure, but there is a potential optimization to include `restrict()`
-        //as a part of `predicate()`
         let state = self.layer.state.clone();
 
         // Clone inner service for the future
@@ -90,9 +93,13 @@ where
                 ..
             }) => {
                 // User is authenticated, check predicate
-                let predicate_future = (self.layer.predicate)(backend, user.clone(), state);
+                // PERF: clone...
+                let predicate_future =
+                    (self.layer)
+                        .predicate
+                        .predicate(backend, user.clone(), state);
                 RequireFuture {
-                    state: RequireFutureState::CheckingPredicate {
+                    state: RequireFutureState::CallingPredicate {
                         predicate_future,
                         inner,
                         request: Some(req),
@@ -125,26 +132,30 @@ where
 }
 
 #[pin_project]
-pub struct RequireFuture<S, T, Fb, Rs>
+pub struct RequireFuture<S, T, Fb, Rs, Pr, B, ST>
 where
     S: Service<Request<T>, Response = Response<Body>>,
     Fb: AsyncFallbackHandler<T> + Clone,
     Rs: AsyncFallbackHandler<T> + Clone,
+    Pr: PredicateAsync<B, ST>,
+    B: AuthnBackend,
 {
     #[pin]
-    state: RequireFutureState<S, T, Fb, Rs>,
+    state: RequireFutureState<S, T, Fb, Rs, Pr, B, ST>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
-pub enum RequireFutureState<S, T, Fb, Rs>
+pub enum RequireFutureState<S, T, Fb, Rs, Pr, B, ST>
 where
+    Pr: PredicateAsync<B, ST>,
     S: Service<Request<T>, Response = Response<Body>>,
     Fb: AsyncFallbackHandler<T> + Clone,
     Rs: AsyncFallbackHandler<T> + Clone,
+    B: AuthnBackend,
 {
-    CheckingPredicate {
+    CallingPredicate {
         #[pin]
-        predicate_future: BoxFuture<'static, bool>,
+        predicate_future: Pr::Future,
         inner: S,
         request: Option<Request<T>>,
         restrict: Rs,
@@ -169,11 +180,13 @@ where
     },
 }
 
-impl<S, T, Fb, Rs> Future for RequireFuture<S, T, Fb, Rs>
+impl<S, T, Fb, Rs, Pr, B, ST> Future for RequireFuture<S, T, Fb, Rs, Pr, B, ST>
 where
     S: Service<Request<T>, Response = Response<Body>> + Send + 'static,
     Fb: AsyncFallbackHandler<T, Response = Response<Body>> + Clone,
     Rs: AsyncFallbackHandler<T, Response = Response<Body>> + Clone,
+    Pr: PredicateAsync<B, ST> + Send + 'static,
+    B: AuthnBackend,
 {
     type Output = Result<Response<Body>, S::Error>;
 
@@ -182,7 +195,7 @@ where
 
         loop {
             match this.state.as_mut().project() {
-                RequireFutureStateProj::CheckingPredicate {
+                RequireFutureStateProj::CallingPredicate {
                     predicate_future,
                     inner,
                     request,

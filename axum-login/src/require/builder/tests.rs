@@ -7,14 +7,15 @@ mod tests {
         Router,
     };
     use std::collections::HashSet;
+    
     use tower::ServiceExt;
     use tower_cookies::cookie;
     use tower_sessions::SessionManagerLayer;
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
-    use crate::require::builder::params::Predicate;
     use crate::require::builder::RequireBuilder;
-    use crate::require::handler::RedirectFallback;
+    use crate::require::handler::{RedirectFallback, SimpleResponseFallback};
+    use crate::require::predicate::SimplePredicate;
     use crate::require::Require;
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
 
@@ -26,17 +27,17 @@ mod tests {
 
             let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
 
-            AuthManagerLayerBuilder::new(Backend, session_layer).build()
+            AuthManagerLayerBuilder::new(TestBackend, session_layer).build()
         }};
     }
 
     #[derive(Clone)]
     struct TestState {
-        req_perm: Vec<Permission>,
+        req_perm: Vec<TestPermission>,
     }
 
     //TODO: technically needs only refs
-    async fn verify_permissions(backend: Backend, user: User, state: TestState) -> bool {
+    async fn verify_permissions(backend: TestBackend, user: User, state: TestState) -> bool {
         let req_perms = &state.req_perm;
         let Ok(u_perms) = backend.get_user_permissions(&user).await else {
             return false;
@@ -74,9 +75,9 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct Backend;
+    struct TestBackend;
 
-    impl AuthnBackend for Backend {
+    impl AuthnBackend for TestBackend {
         type User = User;
         type Credentials = Credentials;
         type Error = Error;
@@ -90,27 +91,27 @@ mod tests {
 
         async fn get_user(
             &self,
-            _: &<<Backend as AuthnBackend>::User as AuthUser>::Id,
+            _: &<<TestBackend as AuthnBackend>::User as AuthUser>::Id,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(User))
         }
     }
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-    pub struct Permission {
+    pub struct TestPermission {
         pub name: String,
     }
 
-    impl From<&str> for Permission {
+    impl From<&str> for TestPermission {
         fn from(name: &str) -> Self {
-            Permission {
+            TestPermission {
                 name: name.to_string(),
             }
         }
     }
 
-    impl AuthzBackend for Backend {
-        type Permission = Permission;
+    impl AuthzBackend for TestBackend {
+        type Permission = TestPermission;
 
         async fn get_user_permissions(
             &self,
@@ -134,13 +135,13 @@ mod tests {
     // Classic Tests (no state)
     #[tokio::test]
     async fn test_login_required() {
-        let require_login = RequireBuilder::<Backend>::new().build();
+        let require_login = RequireBuilder::<TestBackend>::new().build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(require_login)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -169,7 +170,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_required_with_login_url() {
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(RedirectFallback::new().login_url("/login"))
             .build();
 
@@ -178,7 +179,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -218,7 +219,7 @@ mod tests {
             .redirect_field("next_uri")
             .login_url("/signin");
 
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(fallback)
             // .predicate(Predicate::Params {
             //     permissions: permissions.iter().map(|&p| p.into()).collect(),
@@ -229,7 +230,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -264,8 +265,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_login_required_with_response_fallback() {
+        let require = RequireBuilder::<TestBackend>::new()
+            .fallback(|_| async { StatusCode::GONE.into_response() })
+            .fallback(SimpleResponseFallback::text(StatusCode::GONE, "test"))
+            .build();
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(require)
+            .route(
+                "/signin",
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::GONE);
+
+        let req = Request::builder()
+            .uri("/signin")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+    #[tokio::test]
     async fn test_login_required_with_custom_fallback() {
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(|_| async { StatusCode::GONE.into_response() })
             // .predicate(Predicate::Params {
             //     permissions: permissions.iter().map(|&p| p.into()).collect(),
@@ -277,7 +317,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -308,14 +348,15 @@ mod tests {
     #[tokio::test]
     async fn test_permission_required() {
         let permissions: Vec<&str> = vec!["test.read"];
-        let require: Require<Backend> = RequireBuilder::new()
+        let require = RequireBuilder::<TestBackend>::new()
             // .fallback(Fallback::Params {
             //     redirect_field: Some("next_uri".to_string()),
             //     login_url: Some("/signin".to_string()),
             // })
-            .predicate(Predicate::Params {
-                permissions: permissions.iter().map(|&p| p.into()).collect(),
-            })
+            // .predicate(Predicate::Params {
+            //     permissions: permissions.iter().map(|&p| p.into()).collect(),
+            // })
+            .predicate(SimplePredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -323,7 +364,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -355,14 +396,12 @@ mod tests {
     #[tokio::test]
     async fn test_permission_required_multiple_permissions() {
         let permissions: Vec<&str> = vec!["test.read", "test.write"];
-        let require: Require<Backend> = RequireBuilder::new()
+        let require = RequireBuilder::<TestBackend>::new()
             // .fallback(Fallback::Params {
             //     redirect_field: Some("next_uri".to_string()),
             //     login_url: Some("/signin".to_string()),
             // })
-            .predicate(Predicate::Params {
-                permissions: permissions.iter().map(|&p| p.into()).collect(),
-            })
+            .predicate(SimplePredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -370,7 +409,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -402,11 +441,9 @@ mod tests {
     #[tokio::test]
     async fn test_permission_required_with_login_url() {
         let permissions: Vec<&str> = vec!["test.read"];
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(RedirectFallback::new().login_url("/login"))
-            .predicate(Predicate::Params {
-                permissions: permissions.iter().map(|&p| p.into()).collect(),
-            })
+            .predicate(SimplePredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -414,7 +451,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -450,15 +487,13 @@ mod tests {
     #[tokio::test]
     async fn test_permission_required_with_login_url_and_redirect_field() {
         let permissions: Vec<&str> = vec!["test.read"];
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(
                 RedirectFallback::new()
                     .redirect_field("next_uri")
                     .login_url("/signin"),
             )
-            .predicate(Predicate::Params {
-                permissions: permissions.iter().map(|&p| p.into()).collect(),
-            })
+            .predicate(SimplePredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -466,7 +501,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -502,14 +537,12 @@ mod tests {
     #[tokio::test]
     async fn test_permission_required_missing_permissions() {
         let permissions: Vec<&str> = vec!["test.read", "test.write", "admin.read"];
-        let require: Require<Backend> = RequireBuilder::new()
+        let require = RequireBuilder::<TestBackend>::new()
             // .fallback(Fallback::Params {
             //     redirect_field: None,
             //     login_url: Some("/login".to_string()),
             // })
-            .predicate(Predicate::Params {
-                permissions: permissions.iter().map(|&p| p.into()).collect(),
-            })
+            .predicate(SimplePredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -517,7 +550,7 @@ mod tests {
             .route_layer(require)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -547,7 +580,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_redirect_uri_query() {
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(RedirectFallback::new().login_url("/login"))
             .build();
 
@@ -572,7 +605,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_url_query() {
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(RedirectFallback::new().login_url("/login?foo=bar&foo=baz"))
             .build();
         let app = Router::new()
@@ -606,7 +639,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_url_explicit_redirect() {
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(
                 RedirectFallback::new()
                     .redirect_field("next_url")
@@ -628,7 +661,7 @@ mod tests {
             Some("/login?next_url=%2Fdashboard")
         );
 
-        let require = RequireBuilder::<Backend>::new()
+        let require = RequireBuilder::<TestBackend>::new()
             .fallback(RedirectFallback::new().login_url("/login?next=%2Fdashboard"))
             .build();
         let app = Router::new()
@@ -649,7 +682,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nested() {
-        let require = Require::<Backend>::builder()
+        let require = Require::<TestBackend>::builder()
             .fallback(RedirectFallback::new().login_url("/login"))
             .build();
         let nested = Router::new()
@@ -754,11 +787,13 @@ mod tests {
             req_perm: vec!["test.read".into()],
         };
 
-        let f = |backend, user, state| verify_permissions(backend, user, state);
-        let require_login = Require::builder_with_state(state.clone())
+        let f = |backend: TestBackend, user: User, state: TestState| {
+            verify_permissions(backend, user, state)
+        };
+        let require_login = Require::<TestBackend, TestState>::builder_with_state(state.clone())
             .fallback(RedirectFallback::new().login_url("/login"))
-            .predicate(Predicate::from_closure(f))
             .restrict(|_| async { StatusCode::UNAUTHORIZED.into_response() })
+            .predicate(f)
             .build();
 
         let app = Router::new()
@@ -766,7 +801,7 @@ mod tests {
             .route_layer(require_login)
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -799,27 +834,23 @@ mod tests {
         let state = TestState {
             req_perm: vec!["test.read".into(), "test.write".into()],
         };
-
-        let require_login = RequireBuilder::new_with_state(state.clone())
-            .fallback(
-                RedirectFallback::new()
-                    .redirect_field("next_url")
-                    .login_url("/login?next_url=%2Fdashboard"),
-            )
-            // .fallback(MissingAuthHandlerParams::from_handler(|_, _| async {
-            //     StatusCode::UNAUTHORIZED.into_response()
-            // }))
-            .predicate(Predicate::from_closure(|backend, user, state| {
-                verify_permissions(backend, user, state)
-            }))
-            .build();
+        let f = |backend: TestBackend, user: User, state: TestState| {
+            verify_permissions(backend, user, state)
+        };
+        let re = RequireBuilder::<TestBackend, TestState>::new_with_state(state.clone()).fallback(
+            RedirectFallback::new()
+                .redirect_field("next_url")
+                .login_url("/login?next_url=%2Fdashboard"),
+        );
+        let pre = re.predicate(f);
+        let require_login = pre.build();
 
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
             .route_layer(require_login)
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
