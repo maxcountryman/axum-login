@@ -14,7 +14,7 @@ pub trait AsyncFallbackHandler<Req> {
     type Response;
 
     fn handle(&mut self, request: Request<Req>) -> Self::Future;
-}
+}  
 
 impl<F, ReqInBody, Fut, Res> AsyncFallbackHandler<ReqInBody> for F
 where

@@ -1,0 +1,167 @@
+use crate::{AuthnBackend, AuthzBackend};
+use pin_project::pin_project;
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::future::{ready, Ready};
+use std::marker::PhantomData;
+use std::task::{Context, Poll};
+use std::{future::Future, pin::Pin};
+
+//PERF: this should be take references to backend, user and maybe state, otherwise we have to
+// clone them every time. The problem is that references and async DO NOT combine well.
+pub trait PredicateAsync<B: AuthnBackend, ST = ()> {
+    type Future: Future<Output = bool>;
+    fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, state: ST) -> Self::Future;
+}
+
+#[derive(Clone)]
+pub struct DefaultPredicate<B: AuthnBackend, ST> {
+    pub(crate) _marker: PhantomData<(B, ST)>,
+}
+
+impl<B, ST> PredicateAsync<B, ST> for DefaultPredicate<B, ST>
+where
+    B: AuthnBackend,
+    ST: std::marker::Send + std::marker::Sync,
+{
+    type Future = Ready<bool>;
+
+    fn predicate(&self, _backend: B, _user: <B as AuthnBackend>::User, _state: ST) -> Self::Future {
+        ready(true)
+    }
+}
+impl<F, Fut, B, ST> PredicateAsync<B, ST> for F
+where
+    F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
+    Fut: Future<Output = bool>,
+    B: AuthnBackend + AuthzBackend + 'static,
+    B::User: 'static,
+    B::Permission: Clone + Debug,
+    ST: Clone + Send + Sync + 'static,
+{
+    type Future = Fut;
+
+    fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, state: ST) -> Self::Future {
+        (self)(backend, user, state)
+    }
+}
+
+/// Defines how permissions should be checked
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckMode {
+    /// User must have ANY of the specified permissions
+    Any,
+    /// User must have All the specified permissions
+    All,
+    /// User must have EXACTLY the specified permissions (no more, no less)
+    Exact,
+}
+
+#[derive(Debug, Clone)]
+pub struct SimplePredicate<B: AuthzBackend + AuthnBackend> {
+    pub(crate) _marker: PhantomData<B>,
+    // PERF: maybe could add a single permission variant
+    permissions: HashSet<B::Permission>,
+    check_mode: CheckMode,
+}
+
+impl<B: AuthnBackend + AuthzBackend> SimplePredicate<B> {
+    /// Create a new SimplePredicate with a single permission and ALL check mode
+    pub fn new() -> Self {
+        let permissions: HashSet<B::Permission> = HashSet::new();
+        Self {
+            _marker: PhantomData,
+            permissions,
+            check_mode: CheckMode::All,
+        }
+    }
+    /// Set the check mode for this predicate
+    pub fn with_mode(mut self, mode: CheckMode) -> Self {
+        self.check_mode = mode;
+        self
+    }
+
+    /// Add permissions to the predicate
+    pub fn with_permissions<I, P>(mut self, permissions: I) -> Self
+    where
+        I: IntoIterator<Item = P>,
+        P: Into<B::Permission>,
+    {
+        self.permissions = permissions.into_iter().map(Into::into).collect();
+        self
+    }
+}
+
+impl<B> PredicateAsync<B, ()> for SimplePredicate<B>
+where
+    B: AuthnBackend + AuthzBackend + 'static,
+    B::Permission: Clone,
+{
+    type Future = SimplePredicateFuture<B>;
+
+    fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, _state: ()) -> Self::Future {
+        let backend = backend.clone();
+        let user = user.clone();
+        let required_permissions = self.permissions.clone();
+        let check_mode = self.check_mode;
+
+        SimplePredicateFuture::GetPermissions {
+            future: Box::pin(async move { backend.get_all_permissions(&user).await }),
+            required_permissions,
+            check_mode,
+        }
+    }
+}
+
+#[pin_project(project = SimplePredicateFutureProj)]
+pub enum SimplePredicateFuture<B: AuthnBackend + AuthzBackend> {
+    GetPermissions {
+        #[pin]
+        future: Pin<Box<dyn Future<Output = Result<HashSet<B::Permission>, B::Error>> + Send>>,
+        required_permissions: HashSet<B::Permission>,
+        check_mode: CheckMode,
+    },
+    Ready {
+        result: bool,
+    },
+}
+
+impl<B> Future for SimplePredicateFuture<B>
+where
+    B: AuthnBackend + AuthzBackend,
+    B::Permission: Clone + Eq + std::hash::Hash,
+{
+    type Output = bool;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        loop {
+            match self.as_mut().project() {
+                SimplePredicateFutureProj::GetPermissions {
+                    future,
+                    required_permissions,
+                    check_mode,
+                } => match future.poll(cx) {
+                    Poll::Ready(Ok(user_permissions)) => {
+                        let result = match check_mode {
+                            CheckMode::Any => required_permissions
+                                .iter()
+                                .any(|perm| user_permissions.contains(perm)),
+                            CheckMode::All => required_permissions
+                                .iter()
+                                .all(|perm| user_permissions.contains(perm)),
+                            CheckMode::Exact => user_permissions == *required_permissions,
+                        };
+                        self.set(SimplePredicateFuture::Ready { result });
+                    }
+                    Poll::Ready(Err(_)) => {
+                        self.set(SimplePredicateFuture::Ready { result: false });
+                    }
+                    Poll::Pending => return Poll::Pending,
+                },
+                SimplePredicateFutureProj::Ready { result } => {
+                    return Poll::Ready(*result);
+                }
+            }
+        }
+    }
+}
