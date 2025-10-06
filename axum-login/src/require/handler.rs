@@ -12,7 +12,7 @@ use axum::{
 const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
 
-pub trait AsyncFallbackHandler<Req> {
+pub trait AsyncFallbackHandler<Req> : Clone{
     /// Future returned by the handler
     type Future: Future<Output = Self::Response>;
 
@@ -22,9 +22,10 @@ pub trait AsyncFallbackHandler<Req> {
     fn handle(&mut self, request: Request<Req>) -> Self::Future;
 }
 
+
 impl<F, ReqInBody, Fut, Res> AsyncFallbackHandler<ReqInBody> for F
 where
-    F: FnMut(Request<ReqInBody>) -> Fut,
+    F: FnMut(Request<ReqInBody>) -> Fut + Clone,
     Fut: Future<Output = Res>,
 {
     type Future = Fut;
