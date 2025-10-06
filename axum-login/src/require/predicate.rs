@@ -1,25 +1,41 @@
-use crate::{AuthnBackend, AuthzBackend};
-use pin_project::pin_project;
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::future::{ready, Ready};
-use std::marker::PhantomData;
-use std::task::{Context, Poll};
-use std::{future::Future, pin::Pin};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    future::{ready, Future, Ready},
+    marker::PhantomData,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
-//PERF: this should be take references to backend, user and maybe state, otherwise we have to
-// clone them every time. The problem is that references and async DO NOT combine well.
-pub trait PredicateAsync<B: AuthnBackend, ST = ()> {
+use pin_project::pin_project;
+
+use crate::{AuthnBackend, AuthzBackend};
+use crate::require::BoxFuture;
+//PERF: this should be take references to backend, user and maybe state,
+// otherwise we have to clone them every time. The problem is that references
+// and async DO NOT combine well.
+
+/// Trait for predicating requests
+pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
+    /// Async predicate Future should return bool
     type Future: Future<Output = bool>;
+    /// Allow request, based on a given predicate
+    ///
+    /// The predicate takes the backend, the user and the state.
+    ///
+    /// See [`RequireBuilder::predicate`] for more details.
+    ///
+    /// [`RequireBuilder::predicate`]: super::builder::RequireBuilder
     fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, state: ST) -> Self::Future;
 }
 
-#[derive(Clone)]
+/// The default [`AsyncPredicate`] implementation used by [`Require`].
+#[derive(Clone, Debug)]
 pub struct DefaultPredicate<B: AuthnBackend, ST> {
     pub(crate) _marker: PhantomData<(B, ST)>,
 }
 
-impl<B, ST> PredicateAsync<B, ST> for DefaultPredicate<B, ST>
+impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
 where
     B: AuthnBackend,
     ST: std::marker::Send + std::marker::Sync,
@@ -30,7 +46,7 @@ where
         ready(true)
     }
 }
-impl<F, Fut, B, ST> PredicateAsync<B, ST> for F
+impl<F, Fut, B, ST> AsyncPredicate<B, ST> for F
 where
     F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
     Fut: Future<Output = bool>,
@@ -58,11 +74,19 @@ pub enum CheckMode {
 }
 
 #[derive(Debug, Clone)]
+/// A simple stateless predicate that checks if the user has a set of
+/// permissions.
 pub struct SimplePredicate<B: AuthzBackend + AuthnBackend> {
     pub(crate) _marker: PhantomData<B>,
     // PERF: maybe could add a single permission variant
     permissions: HashSet<B::Permission>,
     check_mode: CheckMode,
+}
+
+impl<B: AuthnBackend + AuthzBackend> Default for SimplePredicate<B> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<B: AuthnBackend + AuthzBackend> SimplePredicate<B> {
@@ -92,7 +116,7 @@ impl<B: AuthnBackend + AuthzBackend> SimplePredicate<B> {
     }
 }
 
-impl<B> PredicateAsync<B, ()> for SimplePredicate<B>
+impl<B> AsyncPredicate<B, ()> for SimplePredicate<B>
 where
     B: AuthnBackend + AuthzBackend + 'static,
     B::Permission: Clone,
@@ -114,10 +138,11 @@ where
 }
 
 #[pin_project(project = SimplePredicateFutureProj)]
+#[allow(missing_debug_implementations)]
 pub enum SimplePredicateFuture<B: AuthnBackend + AuthzBackend> {
     GetPermissions {
         #[pin]
-        future: Pin<Box<dyn Future<Output = Result<HashSet<B::Permission>, B::Error>> + Send>>,
+        future: BoxFuture<'static, Result<HashSet<B::Permission>, B::Error>>,
         required_permissions: HashSet<B::Permission>,
         check_mode: CheckMode,
     },
