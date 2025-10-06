@@ -17,7 +17,7 @@ use crate::require::BoxFuture;
 // and async DO NOT combine well.
 
 /// Trait for predicating requests
-pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
+pub trait AsyncPredicate<B: AuthnBackend, ST = ()>: Clone{
     /// Async predicate Future should return bool
     type Future: Future<Output = bool>;
     /// Allow request, based on a given predicate
@@ -39,7 +39,7 @@ pub struct DefaultPredicate<B: AuthnBackend, ST> {
 impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
 where
     B: AuthnBackend,
-    ST: std::marker::Send + std::marker::Sync,
+    ST: Send + Sync + Clone,
 {
     type Future = Ready<bool>;
 
@@ -49,7 +49,7 @@ where
 }
 impl<F, Fut, B, ST> AsyncPredicate<B, ST> for F
 where
-    F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
+    F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut + Clone,
     Fut: Future<Output = bool>,
     B: AuthnBackend + AuthzBackend + 'static,
     B::User: 'static,
