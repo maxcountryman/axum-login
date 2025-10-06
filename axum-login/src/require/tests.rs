@@ -1,23 +1,27 @@
 #[cfg(test)]
 mod tests {
-    use axum::body::Body;
-    use axum::response::IntoResponse;
+    use std::collections::HashSet;
+
     use axum::{
+        body::Body,
         http::{header, Request, Response, StatusCode},
+        response::IntoResponse,
         Router,
     };
-    use std::collections::HashSet;
-    
     use tower::ServiceExt;
     use tower_cookies::cookie;
     use tower_sessions::SessionManagerLayer;
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
-    use crate::require::builder::RequireBuilder;
-    use crate::require::handler::{RedirectFallback, SimpleResponseFallback};
-    use crate::require::predicate::SimplePredicate;
-    use crate::require::Require;
-    use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
+    use crate::{
+        require::{
+            builder::RequireBuilder,
+            handler::{RedirectFallback, SimpleResponseFallback},
+            predicate::SimplePredicate,
+            Require,
+        },
+        AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend,
+    };
 
     macro_rules! auth_layer {
         () => {{
@@ -719,10 +723,10 @@ mod tests {
     //     };
     //
     //     // Predicate factory functions
-    //     let predicate_factories: Vec<Box<dyn Fn() -> Predicate<Backend, TestState>>> = vec![
-    //         Box::new(|| {
-    //             Predicate::from_closure(|_b: Backend, _u: User, _s: TestState| async { true })
-    //         }),
+    //     let predicate_factories: Vec<Box<dyn Fn() -> Predicate<Backend,
+    // TestState>>> = vec![         Box::new(|| {
+    //             Predicate::from_closure(|_b: Backend, _u: User, _s: TestState|
+    // async { true })         }),
     //         Box::new(|| Predicate::Params {
     //             permissions: vec!["test.read".into()],
     //         }),
@@ -757,8 +761,8 @@ mod tests {
     //             let restrict = restrict_factory();
     //
     //             // Build
-    //             let require: Require<Backend, TestState, Body> = RequireBuilder::new()
-    //                 .predicate(pred)
+    //             let require: Require<Backend, TestState, Body> =
+    // RequireBuilder::new()                 .predicate(pred)
     //                 // .fallback(fallback)
     //                 .on_restrict(restrict)
     //                 .state(state.clone())
