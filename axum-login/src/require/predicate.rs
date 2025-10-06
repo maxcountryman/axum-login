@@ -11,13 +11,12 @@ use pin_project::pin_project;
 
 use crate::{AuthnBackend, AuthzBackend};
 use crate::require::BoxFuture;
-
 //PERF: this should be take references to backend, user and maybe state,
 // otherwise we have to clone them every time. The problem is that references
 // and async DO NOT combine well.
 
 /// Trait for predicating requests
-pub trait AsyncPredicate<B: AuthnBackend, ST = ()>: Clone{
+pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
     /// Async predicate Future should return bool
     type Future: Future<Output = bool>;
     /// Allow request, based on a given predicate
@@ -39,7 +38,7 @@ pub struct DefaultPredicate<B: AuthnBackend, ST> {
 impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
 where
     B: AuthnBackend,
-    ST: Clone
+    ST: std::marker::Send + std::marker::Sync,
 {
     type Future = Ready<bool>;
 
@@ -49,10 +48,12 @@ where
 }
 impl<F, Fut, B, ST> AsyncPredicate<B, ST> for F
 where
-    F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut + Clone,
+    F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
     Fut: Future<Output = bool>,
     B: AuthnBackend + AuthzBackend + 'static,
-    ST: Clone,
+    B::User: 'static,
+    B::Permission: Clone + Debug,
+    ST: Clone + Send + Sync + 'static,
 {
     type Future = Fut;
 
