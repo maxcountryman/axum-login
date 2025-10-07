@@ -183,7 +183,7 @@ where
     }
 }
 
-//umm, manual clone, because of Body
+// Manual clone, because of Body
 impl<B, Fb, Rs, ST, T, Pr> Clone for Require<B, ST, T, Fb, Rs, Pr>
 where
     Fb: Clone,
@@ -206,7 +206,6 @@ where
 impl<B, T> Require<B, (), T>
 where
     B: AuthnBackend,
-    T: 'static + Send,
 {
     /// Returns a builder for constructing a [`Require`] layer with an empty
     /// state.
@@ -220,8 +219,6 @@ where
 impl<B, ST, T> Require<B, ST, T>
 where
     B: AuthnBackend,
-    T: 'static + Send,
-    ST: std::marker::Send + std::clone::Clone + std::marker::Sync,
     DefaultPredicate<B, ST>: AsyncPredicate<B, ST>,
 {
     /// Returns a builder for constructing a [`Require`] layer with custom
