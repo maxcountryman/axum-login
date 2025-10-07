@@ -38,7 +38,6 @@ struct TestState {
     req_perm: Vec<TestPermission>,
 }
 
-//TODO: technically needs only refs
 async fn verify_permissions(backend: TestBackend, user: User, state: TestState) -> bool {
     let req_perms = &state.req_perm;
     let Ok(u_perms) = backend.get_user_permissions(&user).await else {
@@ -702,83 +701,6 @@ async fn test_nested() {
         Some("/login?next=%2Fnested%2Ffoo")
     );
 }
-
-//New test (with state)
-
-// #[tokio::test]
-// async fn test_require_builder_all_combinations() {
-//     //TODO: add tests with state
-//     #[derive(Clone)]
-//     struct TestState {
-//         req_perm: Vec<String>,
-//     }
-//
-//     let state = TestState {
-//         req_perm: vec!["test.read".into()],
-//     };
-//
-//     // Predicate factory functions
-//     let predicate_factories: Vec<Box<dyn Fn() -> Predicate<Backend,
-// TestState>>> = vec![         Box::new(|| {
-//             Predicate::from_closure(|_b: Backend, _u: User, _s: TestState|
-// async { true })         }),
-//         Box::new(|| Predicate::Params {
-//             permissions: vec!["test.read".into()],
-//         }),
-//     ];
-//
-//     // Restrict factory functions
-//     let restrict_factories: Vec<Box<dyn Fn() -> Rstr<Body>>> = vec![
-//         Box::new(|| {
-//             Rstr::from_closure(|_req| async {
-//                 Response::builder()
-//                     .status(StatusCode::FORBIDDEN)
-//                     .body("Forbidden".into())
-//                     .unwrap()
-//             })
-//         }),
-//         Box::new(|| Rstr::Params {
-//             i_dunno: Some("param".to_string()),
-//         }),
-//     ];
-//
-//     for pred_factory in predicate_factories {
-//         for restrict_factory in &restrict_factories {
-//             // Create fresh instances
-//             let pred = pred_factory();
-//             let fallback =
-//                 |_req| async {
-//                     Response::builder()
-//                         .status(StatusCode::UNAUTHORIZED)
-//                         .body("Unauthorized".into())
-//                         .unwrap()
-//                 };
-//             let restrict = restrict_factory();
-//
-//             // Build
-//             let require: Require<Backend, TestState, Body> =
-// RequireBuilder::new()                 .predicate(pred)
-//                 // .fallback(fallback)
-//                 .on_restrict(restrict)
-//                 .state(state.clone())
-//                 .build();
-//
-//             // Test fallback handler response
-//             let req = axum::http::Request::builder()
-//                 .uri("/")
-//                 .body(Body::empty())
-//                 .unwrap();
-//
-//             let fallback_resp = (require.fallback)(req).await;
-//             assert!(matches!(
-//                     fallback_resp.status(),
-//                     StatusCode::UNAUTHORIZED
-//                         | StatusCode::TEMPORARY_REDIRECT
-//                         | StatusCode::INTERNAL_SERVER_ERROR
-//                 ));
-//         }
-//     }
-// }
 
 #[tokio::test]
 async fn test_login_required_perm_with_state() {
