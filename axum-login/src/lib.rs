@@ -394,4 +394,5 @@ mod middleware;
 mod service;
 mod session;
 
+#[cfg(feature = "require-builder")]
 pub mod require;
