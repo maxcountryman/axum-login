@@ -71,13 +71,13 @@ pub struct RequireBuilder<
     fallback: Fb,
     /// Shared state available to predicates and handlers.
     state: ST,
-    _phantom: PhantomData<(T, B)>,
+    /// Internal marker to maintain type safety.
+    _phantom: PhantomData<(B, fn() -> T)>, //Sync trick
 }
 
 impl<B, T> Default for RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict>
 where
     B: AuthnBackend,
-    T: 'static + Send,
 {
     fn default() -> Self {
         Self::new()
@@ -87,7 +87,6 @@ where
 impl<B, T> RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict, DefaultPredicate<B, ()>>
 where
     B: AuthnBackend,
-    T: 'static + Send,
 {
     /// Creates a new `RequireBuilder` with the default configuration.
     ///
@@ -112,8 +111,6 @@ impl<B, ST, T> RequireBuilder<B, ST, T, DefaultFallback, DefaultRestrict, Defaul
 where
     DefaultPredicate<B, ST>: AsyncPredicate<B, ST>,
     B: AuthnBackend,
-    ST: Send + Sync + Clone,
-    T: 'static + Send,
 {
     /// Creates a new `RequireBuilder` with the given application state.
     pub fn new_with_state(state: ST) -> Self {
@@ -132,11 +129,10 @@ where
 impl<B, ST, T, Fb, Rs, Pr> RequireBuilder<B, ST, T, Fb, Rs, Pr>
 where
     B: AuthnBackend,
-    T: 'static + Send,
-    ST: Clone + Send,
-    Fb: AsyncFallbackHandler<T> + Send + Sync,
-    Rs: AsyncFallbackHandler<T> + Send + Sync,
-    Pr: AsyncPredicate<B, ST> + Send + Sync,
+    ST: Clone,
+    Fb: AsyncFallbackHandler<T>,
+    Rs: AsyncFallbackHandler<T> ,
+    Pr: AsyncPredicate<B, ST> ,
 {
     /// Sets a custom authorization predicate.
     ///
@@ -145,7 +141,7 @@ where
     /// request data.
     pub fn predicate<Pr2>(self, new_predicate: Pr2) -> RequireBuilder<B, ST, T, Fb, Rs, Pr2>
     where
-        Pr2: AsyncPredicate<B, ST> + Send + Sync,
+        Pr2: AsyncPredicate<B, ST>,
     {
         RequireBuilder {
             predicate: new_predicate,
@@ -162,7 +158,7 @@ where
     /// is logged in.
     pub fn fallback<Fb2>(self, new_fallback: Fb2) -> RequireBuilder<B, ST, T, Fb2, Rs, Pr>
     where
-        Fb2: AsyncFallbackHandler<T> + Send + Sync,
+        Fb2: AsyncFallbackHandler<T>,
     {
         RequireBuilder {
             predicate: self.predicate,
@@ -179,7 +175,7 @@ where
     /// to access the requested resource.
     pub fn restrict<Rs2>(self, new_restrict: Rs2) -> RequireBuilder<B, ST, T, Fb, Rs2, Pr>
     where
-        Rs2: AsyncFallbackHandler<T> + Clone + Send + Sync,
+        Rs2: AsyncFallbackHandler<T>,
     {
         RequireBuilder {
             predicate: self.predicate,

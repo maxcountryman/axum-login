@@ -35,14 +35,15 @@ pub struct RequireService<S, B: AuthnBackend, ST, T, Fb, Rs, Pr> {
     pub(crate) layer: Require<B, ST, T, Fb, Rs, Pr>,
 }
 
+// Manual clone, because of Body
 impl<S, B, Fb, Rs, Pr, ST, T> Clone for RequireService<S, B, ST, T, Fb, Rs, Pr>
 where
     S: Clone,
+    B: AuthnBackend,
     Fb: Clone,
     Rs: Clone,
     Pr: Clone,
     ST: Clone,
-    B: AuthnBackend,
 {
     fn clone(&self) -> Self {
         RequireService {
@@ -55,14 +56,11 @@ where
 impl<S, B, Fb, Rs, ST, T, Pr> Service<Request<T>> for RequireService<S, B, ST, T, Fb, Rs, Pr>
 where
     S: Service<Request<T>, Response = Response<Body>> + Clone,
-    S::Future: Send,
-    S::Error: Send,
-    B: AuthnBackend + Clone + Send + 'static,
-    ST: Clone + Send,
-    Fb: AsyncFallbackHandler<T, Response = S::Response> + Sync + Send,
-    Rs: AsyncFallbackHandler<T, Response = S::Response> + Sync + Send,
-    Pr: AsyncPredicate<B, ST> + Send + Sync,
-    T: Send,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Clone,
+    Fb: AsyncFallbackHandler<T, Response = S::Response>,
+    Rs: AsyncFallbackHandler<T, Response = S::Response>,
+    Pr: AsyncPredicate<B, ST>,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -73,9 +71,8 @@ where
     }
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
-        //PERF: clone needed?
+        //PERF: clone needed for predicate, for more info see [`super::predicate::AsyncPredicate`]
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
-        let state = self.layer.state.clone();
 
         // Clone inner service for the future
         let mut inner = self.inner.clone();
@@ -93,7 +90,7 @@ where
                 let predicate_future =
                     (self.layer)
                         .predicate
-                        .predicate(backend, user.clone(), state);
+                        .predicate(backend, user, self.layer.state.clone());
                 RequireFuture {
                     state: RequireFutureState::Predicate {
                         predicate_future,

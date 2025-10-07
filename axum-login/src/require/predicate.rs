@@ -39,7 +39,7 @@ pub struct DefaultPredicate<B: AuthnBackend, ST> {
 impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
 where
     B: AuthnBackend,
-    ST: Send + Sync + Clone,
+    ST: Clone
 {
     type Future = Ready<bool>;
 
@@ -52,9 +52,7 @@ where
     F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut + Clone,
     Fut: Future<Output = bool>,
     B: AuthnBackend + AuthzBackend + 'static,
-    B::User: 'static,
-    B::Permission: Clone + Debug,
-    ST: Clone + Send + Sync + 'static,
+    ST: Clone,
 {
     type Future = Fut;
 
