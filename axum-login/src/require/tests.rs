@@ -219,9 +219,6 @@ async fn test_login_required_with_login_url_and_redirect_field() {
 
     let require = RequireBuilder::<TestBackend>::new()
         .fallback(fallback)
-        // .predicate(Predicate::Params {
-        //     permissions: permissions.iter().map(|&p| p.into()).collect(),
-        // })
         .build();
     let app = Router::new()
         .route("/", axum::routing::get(|| async {}))
@@ -347,13 +344,6 @@ async fn test_login_required_with_custom_fallback() {
 async fn test_permission_required() {
     let permissions: Vec<&str> = vec!["test.read"];
     let require = RequireBuilder::<TestBackend>::new()
-        // .fallback(Fallback::Params {
-        //     redirect_field: Some("next_uri".to_string()),
-        //     login_url: Some("/signin".to_string()),
-        // })
-        // .predicate(Predicate::Params {
-        //     permissions: permissions.iter().map(|&p| p.into()).collect(),
-        // })
         .predicate(SimplePredicate::new().with_permissions(permissions))
         .build();
 
@@ -372,6 +362,8 @@ async fn test_permission_required() {
     let res = app.clone().oneshot(req).await.unwrap();
 
     //WARN: This differs from macros implementation. Macros returned FORBIDDEN
+    // to achieve the same behaviour add
+    // `.fallback(|_| async { StatusCode::FORBIDDEN.into_response() })`
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
     let req = Request::builder()
@@ -395,10 +387,6 @@ async fn test_permission_required() {
 async fn test_permission_required_multiple_permissions() {
     let permissions: Vec<&str> = vec!["test.read", "test.write"];
     let require = RequireBuilder::<TestBackend>::new()
-        // .fallback(Fallback::Params {
-        //     redirect_field: Some("next_uri".to_string()),
-        //     login_url: Some("/signin".to_string()),
-        // })
         .predicate(SimplePredicate::new().with_permissions(permissions))
         .build();
 
@@ -536,10 +524,6 @@ async fn test_permission_required_with_login_url_and_redirect_field() {
 async fn test_permission_required_missing_permissions() {
     let permissions: Vec<&str> = vec!["test.read", "test.write", "admin.read"];
     let require = RequireBuilder::<TestBackend>::new()
-        // .fallback(Fallback::Params {
-        //     redirect_field: None,
-        //     login_url: Some("/login".to_string()),
-        // })
         .predicate(SimplePredicate::new().with_permissions(permissions))
         .build();
 
@@ -556,6 +540,7 @@ async fn test_permission_required_missing_permissions() {
 
     let req = Request::builder().uri("/").body(Body::empty()).unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
+
     //WARN: This differs from macros implementation. Macros returned FORBIDDEN
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
