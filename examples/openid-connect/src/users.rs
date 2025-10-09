@@ -1,54 +1,48 @@
-use axum::http::header::{AUTHORIZATION, USER_AGENT};
 use axum_login::{AuthUser, AuthnBackend, UserId};
-use oauth2::{
-    basic::{BasicClient, BasicRequestTokenError},
+use openidconnect::{
+    core::{CoreAuthenticationFlow, CoreClient, CoreErrorResponseType, CoreProviderMetadata},
+    reqwest::{self, Client},
     url::Url,
-    AuthorizationCode, CsrfToken, EndpointNotSet, EndpointSet, TokenResponse,
+    AccessTokenHash, AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret,
+    ConfigurationError, CsrfToken, HttpClientError, IssuerUrl, Nonce, OAuth2TokenResponse,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RequestTokenError,
+    SignatureVerificationError, SigningError, StandardErrorResponse, TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
-    id: i64,
-    pub username: String,
-    pub access_token: String,
+    pub id: String,
 }
 
 // Here we've implemented `Debug` manually to avoid accidentally logging the
 // access token.
 impl std::fmt::Debug for User {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("User")
-            .field("id", &self.id)
-            .field("username", &self.username)
-            .field("access_token", &"[redacted]")
-            .finish()
+        f.debug_struct("User").field("id", &self.id).finish()
     }
 }
 
 impl AuthUser for User {
-    type Id = i64;
+    type Id = String;
 
     fn id(&self) -> Self::Id {
-        self.id
+        self.id.clone()
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        self.access_token.as_bytes()
+        self.id.as_bytes()
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Credentials {
     pub code: String,
     pub old_state: CsrfToken,
     pub new_state: CsrfToken,
-}
-
-#[derive(Debug, Deserialize)]
-struct UserInfo {
-    login: String,
+    pub pkce_verifier: PkceCodeVerifier,
+    pub nonce: Nonce,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -57,38 +51,85 @@ pub enum BackendError {
     Sqlx(sqlx::Error),
 
     #[error(transparent)]
-    Reqwest(reqwest::Error),
+    OpenIDConnectConfiguration(ConfigurationError),
 
     #[error(transparent)]
-    OAuth2(BasicRequestTokenError<<reqwest::Client as oauth2::AsyncHttpClient<'static>>::Error>),
-}
+    OpenIDRequestToken(
+        RequestTokenError<
+            HttpClientError<reqwest::Error>,
+            StandardErrorResponse<CoreErrorResponseType>,
+        >,
+    ),
 
-pub type BasicClientSet =
-    BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
+    #[error(transparent)]
+    OpenIDInvalidToken(ClaimsVerificationError),
+
+    #[error(transparent)]
+    OpenIDSignatureVerification(SignatureVerificationError),
+
+    #[error(transparent)]
+    OpenIDSigning(SigningError),
+}
 
 #[derive(Debug, Clone)]
 pub struct Backend {
     db: SqlitePool,
-    client: BasicClientSet,
-    http_client: reqwest::Client,
+    client_id: ClientId,
+    client_secret: Option<ClientSecret>,
+    issuer_url: IssuerUrl,
+    redirect_url: RedirectUrl,
+    http_client: Client,
 }
 
 impl Backend {
-    pub fn new(db: SqlitePool, client: BasicClientSet) -> Self {
-        let http_client: reqwest::Client = reqwest::ClientBuilder::new()
+    pub fn new(
+        db: SqlitePool,
+        client_id: ClientId,
+        client_secret: Option<ClientSecret>,
+        issuer_url: IssuerUrl,
+        redirect_url: RedirectUrl,
+    ) -> Self {
+        let http_client = reqwest::ClientBuilder::new()
             // Following redirects opens the client up to SSRF vulnerabilities.
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("Client should build");
+
         Self {
             db,
-            client,
+            client_id,
+            client_secret,
+            issuer_url,
+            redirect_url,
             http_client,
         }
     }
 
-    pub fn authorize_url(&self) -> (Url, CsrfToken) {
-        self.client.authorize_url(CsrfToken::new_random).url()
+    pub async fn authorize_url(&self) -> (Url, CsrfToken, Nonce, PkceCodeVerifier) {
+        let provider_metadata =
+            CoreProviderMetadata::discover_async(self.issuer_url.clone(), &self.http_client)
+                .await
+                .expect("Unable to get the core provider metadata");
+
+        let client = CoreClient::from_provider_metadata(
+            provider_metadata,
+            self.client_id.clone(),
+            self.client_secret.clone(),
+        )
+        .set_redirect_uri(self.redirect_url.clone());
+
+        let (pkce_challenge, pkce_verifer) = PkceCodeChallenge::new_random_sha256();
+
+        let (auth_url, csrf_token, nonce) = client
+            .authorize_url(
+                CoreAuthenticationFlow::AuthorizationCode,
+                CsrfToken::new_random,
+                Nonce::new_random,
+            )
+            .set_pkce_challenge(pkce_challenge)
+            .url();
+
+        (auth_url, csrf_token, nonce, pkce_verifer)
     }
 }
 
@@ -106,41 +147,73 @@ impl AuthnBackend for Backend {
             return Ok(None);
         };
 
+        // Retrieve the provider's metadata
+        let provider_metadata =
+            CoreProviderMetadata::discover_async(self.issuer_url.clone(), &self.http_client)
+                .await
+                .expect("Unable to get the core provider metadata");
+
+        // Create the OpenID client from the provider's metadata, client_id,
+        // client_secret and redirect_url
+        let client = CoreClient::from_provider_metadata(
+            provider_metadata,
+            self.client_id.clone(),
+            self.client_secret.clone(),
+        )
+        .set_redirect_uri(self.redirect_url.clone());
+
         // Process authorization code, expecting a token response back.
-        let token_res = self
-            .client
+        let token_response = client
             .exchange_code(AuthorizationCode::new(creds.code))
+            .map_err(BackendError::OpenIDConnectConfiguration)?
+            // Set the PKCE code verifier.
+            .set_pkce_verifier(creds.pkce_verifier)
             .request_async(&self.http_client)
             .await
-            .map_err(Self::Error::OAuth2)?;
+            .map_err(BackendError::OpenIDRequestToken)?;
 
-        // Use access token to request user info.
-        let user_info = reqwest::Client::new()
-            .get("https://api.github.com/user")
-            .header(USER_AGENT.as_str(), "axum-login") // See: https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#user-agent-required
-            .header(
-                AUTHORIZATION.as_str(),
-                format!("Bearer {}", token_res.access_token().secret()),
+        // Retrieve the ID token
+        let id_token = token_response
+            .id_token()
+            .expect("The provider MUST return an ID token for a valid token response");
+
+        // Verify and decode the ID token
+        let id_token_verifier = client.id_token_verifier();
+        let claims = id_token
+            .claims(&id_token_verifier, &creds.nonce)
+            .map_err(BackendError::OpenIDInvalidToken)?;
+
+        // Check the access token hasn't been tampered with
+        if let Some(expected_access_token_hash) = claims.access_token_hash() {
+            let actual_access_token_hash = AccessTokenHash::from_token(
+                token_response.access_token(),
+                id_token
+                    .signing_alg()
+                    .map_err(BackendError::OpenIDSignatureVerification)?,
+                id_token
+                    .signing_key(&id_token_verifier)
+                    .map_err(BackendError::OpenIDSignatureVerification)?,
             )
-            .send()
-            .await
-            .map_err(Self::Error::Reqwest)?
-            .json::<UserInfo>()
-            .await
-            .map_err(Self::Error::Reqwest)?;
+            .map_err(BackendError::OpenIDSigning)?;
+            if actual_access_token_hash != *expected_access_token_hash {
+                return Ok(None);
+            }
+        }
+
+        // Retrieve the locally-unique identifier from the decoded ID token
+        let unique_identifier = claims.subject().as_str();
 
         // Persist user in our database so we can use `get_user`.
         let user = sqlx::query_as(
             r#"
-            insert into users (username, access_token)
-            values (?, ?)
-            on conflict(username) do update
-            set access_token = excluded.access_token
+            insert into users (id)
+            values (?)
+            on conflict(id) do update
+            set id = excluded.id
             returning *
             "#,
         )
-        .bind(user_info.login)
-        .bind(token_res.access_token().secret())
+        .bind(unique_identifier)
         .fetch_one(&self.db)
         .await
         .map_err(Self::Error::Sqlx)?;

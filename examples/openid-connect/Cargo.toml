@@ -1,5 +1,5 @@
 [package]
-name = "example-oauth2"
+name = "example-openid-connect"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -11,8 +11,7 @@ axum-login = { path = "../../axum-login" }
 dotenvy = "0.15.7"
 http = "1.0.0"
 hyper = "1.0.1"
-oauth2 = "5.0.0"
-reqwest = { version = "0.12.12", features = ["json"] }
+openidconnect = "4.0.1"
 serde = "1"
 sqlx = { version = "0.8.1", features = ["sqlite", "time", "runtime-tokio"] }
 thiserror = "2.0.0"

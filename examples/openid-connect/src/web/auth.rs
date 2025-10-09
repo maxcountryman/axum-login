@@ -36,13 +36,15 @@ pub fn router() -> Router<()> {
 
 mod post {
     use super::*;
+    use crate::web::oauth::{CODE_VERIFIER_KEY, NONCE_KEY};
 
     pub async fn login(
         auth_session: AuthSession,
         session: Session,
         Form(NextUrl { next }): Form<NextUrl>,
     ) -> impl IntoResponse {
-        let (auth_url, csrf_state) = auth_session.backend().authorize_url();
+        let (auth_url, csrf_state, nonce, pkce_verifier) =
+            auth_session.backend().authorize_url().await;
 
         session
             .insert(CSRF_STATE_KEY, csrf_state.secret())
@@ -51,6 +53,16 @@ mod post {
 
         session
             .insert(NEXT_URL_KEY, next)
+            .await
+            .expect("Serialization should not fail.");
+
+        session
+            .insert(CODE_VERIFIER_KEY, pkce_verifier)
+            .await
+            .expect("Serialization should not fail.");
+
+        session
+            .insert(NONCE_KEY, nonce)
             .await
             .expect("Serialization should not fail.");
 
