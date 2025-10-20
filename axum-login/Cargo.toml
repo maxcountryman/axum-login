@@ -18,6 +18,8 @@ readme = "../README.md"
 
 [features]
 require-builder = ["dep:pin-project"]
+macros-middleware = []
+default = ["macros-middleware"]
 
 [dependencies]
 axum = { version = "0.8.1", default-features = false, features = [
