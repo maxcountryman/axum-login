@@ -110,7 +110,10 @@ use tower_layer::Layer;
 
 pub use self::{
     builder::RequireBuilder,
-    handler::{DefaultFallback, DefaultRestrict, RedirectFallback, SimpleResponseFallback},
+    handler::{
+        AsyncFallbackHandler, DefaultFallback, DefaultRestrict, RedirectFallback,
+        SimpleResponseFallback,
+    },
     predicate::{AsyncPredicate, DefaultPredicate, SimplePredicate},
     service::RequireService,
 };

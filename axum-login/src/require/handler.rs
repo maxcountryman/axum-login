@@ -12,19 +12,22 @@ use axum::{
 const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
 
-pub trait AsyncFallbackHandler<Req> {
+/// Trait for [`super::Require`] Middleware Asynchronous Fallback/Restrict
+/// handlers
+pub trait AsyncFallbackHandler<Req>: Clone {
     /// Future returned by the handler
     type Future: Future<Output = Self::Response>;
 
     /// Type of the successful response
     type Response;
 
+    /// Handle Fallback type request
     fn handle(&mut self, request: Request<Req>) -> Self::Future;
 }
 
 impl<F, ReqInBody, Fut, Res> AsyncFallbackHandler<ReqInBody> for F
 where
-    F: FnMut(Request<ReqInBody>) -> Fut,
+    F: FnMut(Request<ReqInBody>) -> Fut + Clone,
     Fut: Future<Output = Res>,
 {
     type Future = Fut;
@@ -35,8 +38,8 @@ where
     }
 }
 
-/// The default [`AsyncFallbackHandler`] implementation used by [`Require`] for
-/// requests missing authentication.
+/// The default [`AsyncFallbackHandler`] implementation used by
+/// [`super::Require`] for requests missing authentication.
 #[derive(Clone, Debug)]
 pub struct DefaultFallback;
 
@@ -57,8 +60,8 @@ where
     }
 }
 
-/// The default [`AsyncFallbackHandler`] implementation used by [`Require`] for
-/// requests restricted by the predicate.
+/// The default [`AsyncFallbackHandler`] implementation used by
+/// [`super::Require`] for requests restricted by the predicate.
 #[derive(Clone, Debug)]
 pub struct DefaultRestrict;
 

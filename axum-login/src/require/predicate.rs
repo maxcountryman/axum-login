@@ -29,7 +29,7 @@ pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
     fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, state: ST) -> Self::Future;
 }
 
-/// The default [`AsyncPredicate`] implementation used by [`Require`].
+/// The default [`AsyncPredicate`] implementation used by [`super::Require`].
 #[derive(Clone, Debug)]
 pub struct DefaultPredicate<B: AuthnBackend, ST> {
     pub(crate) _marker: PhantomData<(B, ST)>,
