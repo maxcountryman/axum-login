@@ -42,7 +42,7 @@ mod post {
         session: Session,
         Form(NextUrl { next }): Form<NextUrl>,
     ) -> impl IntoResponse {
-        let (auth_url, csrf_state) = auth_session.backend.authorize_url();
+        let (auth_url, csrf_state) = auth_session.backend().authorize_url();
 
         session
             .insert(CSRF_STATE_KEY, csrf_state.secret())
@@ -72,7 +72,7 @@ mod get {
         )
     }
 
-    pub async fn logout(mut auth_session: AuthSession) -> impl IntoResponse {
+    pub async fn logout(auth_session: AuthSession) -> impl IntoResponse {
         match auth_session.logout().await {
             Ok(_) => Redirect::to("/login").into_response(),
             Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

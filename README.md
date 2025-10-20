@@ -51,7 +51,7 @@ To use the crate in your project, add the following to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-axum-login = "0.17.0"
+axum-login = "0.18.0"
 ```
 
 ## 🤸 Usage

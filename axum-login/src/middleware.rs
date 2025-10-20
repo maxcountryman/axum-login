@@ -28,7 +28,7 @@ pub fn url_with_redirect_query(
 
     let redirect_uri_string = redirect_uri.to_string();
     let redirect_uri_encoded = urlencoding::encode(&redirect_uri_string);
-    let redirect_query = format!("{}={}", redirect_field, redirect_uri_encoded);
+    let redirect_query = format!("{redirect_field}={redirect_uri_encoded}");
 
     update_query(&uri, redirect_query)
 }
@@ -40,7 +40,7 @@ pub fn url_with_redirect_query(
 macro_rules! login_required {
     ($backend_type:ty) => {{
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            auth_session.user.is_some()
+            auth_session.user().await.is_some()
         }
 
         $crate::predicate_required!(
@@ -51,7 +51,7 @@ macro_rules! login_required {
 
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
         async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            auth_session.user.is_some()
+            auth_session.user().await.is_some()
         }
 
         $crate::predicate_required!(
@@ -80,11 +80,11 @@ macro_rules! permission_required {
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user {
+            if let Some(ref user) = auth_session.user().await {
                 let mut has_all_permissions = true;
                 $(
                     has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                        auth_session.backend().has_perm(user, $perm.into()).await.unwrap_or(false);
                 )+
                 has_all_permissions
             } else {
@@ -112,11 +112,11 @@ macro_rules! permission_required {
         use $crate::AuthzBackend;
 
         async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user {
+            if let Some(ref user) = auth_session.user().await {
                 let mut has_all_permissions = true;
                 $(
                     has_all_permissions = has_all_permissions &&
-                        auth_session.backend.has_perm(user, $perm.into()).await.unwrap_or(false);
+                        auth_session.backend().has_perm(user, $perm.into()).await.unwrap_or(false);
                 )+
                 has_all_permissions
             } else {
@@ -314,7 +314,7 @@ mod tests {
             .route_layer(login_required!(Backend))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -348,7 +348,7 @@ mod tests {
             .route_layer(login_required!(Backend, login_url = "/login"))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -393,7 +393,7 @@ mod tests {
             ))
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -434,7 +434,7 @@ mod tests {
             .route_layer(permission_required!(Backend, "test.read"))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -468,7 +468,7 @@ mod tests {
             .route_layer(permission_required!(Backend, "test.read", "test.write"))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -506,7 +506,7 @@ mod tests {
             ))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -551,7 +551,7 @@ mod tests {
             ))
             .route(
                 "/signin",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )
@@ -596,7 +596,7 @@ mod tests {
             ))
             .route(
                 "/login",
-                axum::routing::get(|mut auth_session: AuthSession<Backend>| async move {
+                axum::routing::get(|auth_session: AuthSession<Backend>| async move {
                     auth_session.login(&User).await.unwrap();
                 }),
             )

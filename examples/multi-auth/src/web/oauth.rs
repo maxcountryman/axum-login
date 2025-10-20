@@ -32,7 +32,7 @@ mod get {
     use crate::users::OAuthCreds;
 
     pub async fn callback(
-        mut auth_session: AuthSession,
+        auth_session: AuthSession,
         session: Session,
         Query(AuthzResp {
             code,
