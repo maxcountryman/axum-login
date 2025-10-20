@@ -20,14 +20,14 @@ use crate::{
 };
 
 /// A Tower service that enforces authentication and authorization
-/// requirepub(crate) ments.
+/// requirements.
 ///
 /// This service checks for authentication, if it fails, it responds with
 /// fallback applies a pub(crate) pub(crate) predicate function to determine if
 /// the request should
 /// be
 /// allowed to proceed. If the predicate fails, it applies either a
-/// restpub(crate)riction response or a fallback response.
+/// restriction response or a fallback response.
 #[must_use]
 #[derive(Debug)]
 pub struct RequireService<S, B: AuthnBackend, ST, T, Fb, Rs, Pr> {
