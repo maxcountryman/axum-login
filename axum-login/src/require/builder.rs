@@ -35,6 +35,7 @@
 //!   unauthenticated
 
 use std::marker::PhantomData;
+
 use axum::body::Body;
 
 use crate::{
@@ -131,8 +132,8 @@ where
     B: AuthnBackend,
     ST: Clone,
     Fb: AsyncFallbackHandler<T>,
-    Rs: AsyncFallbackHandler<T> ,
-    Pr: AsyncPredicate<B, ST> ,
+    Rs: AsyncFallbackHandler<T>,
+    Pr: AsyncPredicate<B, ST>,
 {
     /// Sets a custom authorization predicate.
     ///

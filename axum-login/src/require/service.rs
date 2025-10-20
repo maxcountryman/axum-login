@@ -71,7 +71,8 @@ where
     }
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
-        //PERF: clone needed for predicate, for more info see [`super::predicate::AsyncPredicate`]
+        //PERF: clone needed for predicate, for more info see
+        // [`super::predicate::AsyncPredicate`]
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
 
         // Clone inner service for the future

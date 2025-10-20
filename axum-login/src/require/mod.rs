@@ -97,7 +97,6 @@
 //!     Ok(())
 //! }
 //! ```
-//!
 mod builder;
 mod handler;
 mod predicate;
@@ -106,10 +105,9 @@ mod service;
 #[cfg(test)]
 mod tests;
 
+use std::{future::Future, marker::PhantomData, pin::Pin};
+
 use axum::body::Body;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::pin::Pin;
 use tower_layer::Layer;
 
 pub use self::{
@@ -190,7 +188,7 @@ where
     Rs: Clone,
     Pr: Clone,
     ST: Clone,
-    B: AuthnBackend
+    B: AuthnBackend,
 {
     fn clone(&self) -> Self {
         Self {
