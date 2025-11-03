@@ -121,8 +121,6 @@ pub use self::{
 };
 use crate::AuthnBackend;
 
-//TODO: relax bounds
-
 /// A Future in a Box
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
