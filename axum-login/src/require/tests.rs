@@ -487,7 +487,7 @@ async fn test_permission_required_with_login_url_and_redirect_field() {
         .route_layer(require)
         .route(
             "/signin",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -743,6 +743,7 @@ async fn test_login_url_explicit_redirect_with_permissions() {
     let f = |backend: TestBackend, user: User, state: TestState| {
         verify_permissions(backend, user, state)
     };
+
     let re = RequireBuilder::<TestBackend, TestState>::new_with_state(state.clone()).fallback(
         RedirectFallback::new()
             .redirect_field("next_url")

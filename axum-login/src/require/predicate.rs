@@ -9,16 +9,15 @@ use std::{
 
 use pin_project::pin_project;
 
-use crate::{AuthnBackend, AuthzBackend};
-use crate::require::BoxFuture;
-//PERF: this should be take references to backend, user and maybe state,
-// otherwise we have to clone them every time. The problem is that references
-// and async DO NOT combine well.
+use crate::{require::BoxFuture, AuthnBackend, AuthzBackend};
+
+//PERF: this takes owned values of backend and user because references and async DO NOT combine well
 
 /// Trait for predicating requests
 pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
-    /// Async predicate Future should return bool
-    type Future: Future<Output = bool>;
+    /// The future type returned by predicate
+    type Future: Future<Output = bool> + Send + 'static;
+
     /// Allow request, based on a given predicate
     ///
     /// The predicate takes the backend, the user and the state.
@@ -38,7 +37,7 @@ pub struct DefaultPredicate<B: AuthnBackend, ST> {
 impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
 where
     B: AuthnBackend,
-    ST: std::marker::Send + std::marker::Sync,
+    ST: Clone,
 {
     type Future = Ready<bool>;
 
@@ -46,14 +45,12 @@ where
         ready(true)
     }
 }
-impl<F, Fut, B, ST> AsyncPredicate<B, ST> for F
+impl<F, B, ST, Fut> AsyncPredicate<B, ST> for F
 where
     F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
-    Fut: Future<Output = bool>,
+    Fut: Future<Output = bool> + Send + 'static,
     B: AuthnBackend + AuthzBackend + 'static,
-    B::User: 'static,
-    B::Permission: Clone + Debug,
-    ST: Clone + Send + Sync + 'static,
+    ST: Clone,
 {
     type Future = Fut;
 
@@ -78,7 +75,7 @@ pub enum CheckMode {
 /// permissions.
 pub struct SimplePredicate<B: AuthzBackend + AuthnBackend> {
     pub(crate) _marker: PhantomData<B>,
-    // PERF: maybe could add a single permission variant
+    // PERF: could add a single permission variant
     permissions: HashSet<B::Permission>,
     check_mode: CheckMode,
 }
@@ -121,19 +118,26 @@ where
     B: AuthnBackend + AuthzBackend + 'static,
     B::Permission: Clone,
 {
-    type Future = SimplePredicateFuture<B>;
+    type Future = BoxFuture<'static, bool>;
 
     fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, _state: ()) -> Self::Future {
-        let backend = backend.clone();
-        let user = user.clone();
         let required_permissions = self.permissions.clone();
         let check_mode = self.check_mode;
 
-        SimplePredicateFuture::GetPermissions {
-            future: Box::pin(async move { backend.get_all_permissions(&user).await }),
-            required_permissions,
-            check_mode,
-        }
+        Box::pin(async move {
+            match backend.get_all_permissions(&user).await {
+                Ok(user_permissions) => match check_mode {
+                    CheckMode::Any => required_permissions
+                        .iter()
+                        .any(|perm| user_permissions.contains(perm)),
+                    CheckMode::All => required_permissions
+                        .iter()
+                        .all(|perm| user_permissions.contains(perm)),
+                    CheckMode::Exact => user_permissions == required_permissions,
+                },
+                Err(_) => false,
+            }
+        })
     }
 }
 

@@ -102,9 +102,11 @@ mod handler;
 mod predicate;
 mod service;
 
-use std::future::Future;
-use std::marker::PhantomData;
-use std::pin::Pin;
+#[cfg(test)]
+mod tests;
+
+use std::{future::Future, marker::PhantomData, pin::Pin};
+
 use axum::body::Body;
 use tower_layer::Layer;
 
@@ -119,7 +121,7 @@ pub use self::{
 };
 use crate::AuthnBackend;
 
-//TODO: relax bounds
+/// A Future in a Box
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// A configurable authentication and access control layer.
@@ -149,11 +151,7 @@ pub struct Require<
     Rs = DefaultRestrict,
     Pr = DefaultPredicate<B, ST>,
 > where
-    Fb: Send + 'static,
-    Rs: Send + 'static,
-    Pr: Send + 'static,
     B: AuthnBackend,
-    T: Send + 'static,
 {
     /// The predicate that determines if access should be granted.
     pub predicate: Pr,
@@ -170,11 +168,6 @@ pub struct Require<
 impl<B, Fb, Rs, Pr, ST, T> Require<B, ST, T, Fb, Rs, Pr>
 where
     B: AuthnBackend,
-    Fb: Clone + Send + Sync + 'static,
-    Rs: Clone + Send + Sync + 'static,
-    Pr: Clone + Send + Sync + 'static,
-    ST: Clone + std::marker::Send,
-    T: std::marker::Send,
 {
     /// Creates a new [`Require`] instance with the specified predicate,
     /// restriction, fallback, and state.
@@ -189,15 +182,14 @@ where
     }
 }
 
-//umm, manual clone, because of Body
+// Manual clone, because of Body
 impl<B, Fb, Rs, ST, T, Pr> Clone for Require<B, ST, T, Fb, Rs, Pr>
 where
-    Fb: Clone + 'static + std::marker::Send,
-    Rs: Clone + 'static + std::marker::Send,
-    Pr: Clone + Send + Sync + 'static,
-    ST: Clone + std::marker::Send,
-    B: Clone + AuthnBackend,
-    T: std::marker::Send,
+    Fb: Clone,
+    Rs: Clone,
+    Pr: Clone,
+    ST: Clone,
+    B: AuthnBackend,
 {
     fn clone(&self) -> Self {
         Self {
@@ -209,10 +201,10 @@ where
         }
     }
 }
+
 impl<B, T> Require<B, (), T>
 where
     B: AuthnBackend,
-    T: 'static + Send,
 {
     /// Returns a builder for constructing a [`Require`] layer with an empty
     /// state.
@@ -226,8 +218,6 @@ where
 impl<B, ST, T> Require<B, ST, T>
 where
     B: AuthnBackend,
-    T: 'static + Send,
-    ST: std::marker::Send + std::clone::Clone + std::marker::Sync,
     DefaultPredicate<B, ST>: AsyncPredicate<B, ST>,
 {
     /// Returns a builder for constructing a [`Require`] layer with custom
@@ -242,6 +232,7 @@ where
 
 impl<S, B, ST, T, Fb, Rs, Pr> Layer<S> for Require<B, ST, T, Fb, Rs, Pr>
 where
+    S: Clone,
     B: Clone + AuthnBackend + Send + Sync + 'static,
     Fb: Clone + Send + Sync + 'static,
     Rs: Clone + Send + Sync + 'static,
