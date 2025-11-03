@@ -40,6 +40,7 @@ pin-project = { version = "1.1.10", optional = true }
 
 [dev-dependencies]
 axum = "0.8.1"
+criterion = { version = "0.5", features = ["async_tokio"] }
 mockall = "0.13"
 reqwest = { version = "0.12", features = ["cookies"] }
 serial_test = "3.0.0"
@@ -49,3 +50,7 @@ tokio-test = "0.4.3"
 tower = "0.5.2"
 tower-sessions = { version = "0.14.0", features = ["memory-store"] }
 tower-sessions-sqlx-store = { version = "0.15.0", features = ["sqlite"] }
+
+[[bench]]
+name = "middleware_comparison"
+harness = false
