@@ -7,7 +7,7 @@
 //! authentication.
 //! ## Overview
 //!
-//! ```rust
+//! ```rust,no_run
 //! # use std::collections::HashMap;
 //! #
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
@@ -80,7 +80,7 @@
 //!     let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 //!
 //!     // Permission control layer
-//!     let require = Require::<TestBackend>::builder()
+//!     let require = Require::<Backend>::builder()
 //!         .fallback(RedirectFallback::new().login_url("/login"))
 //!         .build();
 //!

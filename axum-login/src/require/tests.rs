@@ -139,7 +139,7 @@ async fn test_login_required() {
         .route_layer(require_login)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -177,7 +177,7 @@ async fn test_login_required_with_login_url() {
         .route_layer(require)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -225,7 +225,7 @@ async fn test_login_required_with_login_url_and_redirect_field() {
         .route_layer(require)
         .route(
             "/signin",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -271,7 +271,7 @@ async fn test_login_required_with_response_fallback() {
         .route_layer(require)
         .route(
             "/signin",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -312,7 +312,7 @@ async fn test_login_required_with_custom_fallback() {
         .route_layer(require)
         .route(
             "/signin",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -352,7 +352,7 @@ async fn test_permission_required() {
         .route_layer(require)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -395,7 +395,7 @@ async fn test_permission_required_multiple_permissions() {
         .route_layer(require)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -437,7 +437,7 @@ async fn test_permission_required_with_login_url() {
         .route_layer(require)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -532,7 +532,7 @@ async fn test_permission_required_missing_permissions() {
         .route_layer(require)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -707,7 +707,7 @@ async fn test_login_required_perm_with_state() {
         .route_layer(require_login)
         .route(
             "/login",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
@@ -757,7 +757,7 @@ async fn test_login_url_explicit_redirect_with_permissions() {
         .route_layer(require_login)
         .route(
             "/signin",
-            axum::routing::get(|mut auth_session: AuthSession<TestBackend>| async move {
+            axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
                 auth_session.login(&User).await.unwrap();
             }),
         )
