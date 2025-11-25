@@ -118,26 +118,17 @@ where
     B: AuthnBackend + AuthzBackend + 'static,
     B::Permission: Clone,
 {
-    type Future = BoxFuture<'static, bool>;
+    type Future = SimplePredicateFuture<B>;
 
     fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, _state: ()) -> Self::Future {
         let required_permissions = self.permissions.clone();
         let check_mode = self.check_mode;
 
-        Box::pin(async move {
-            match backend.get_all_permissions(&user).await {
-                Ok(user_permissions) => match check_mode {
-                    CheckMode::Any => required_permissions
-                        .iter()
-                        .any(|perm| user_permissions.contains(perm)),
-                    CheckMode::All => required_permissions
-                        .iter()
-                        .all(|perm| user_permissions.contains(perm)),
-                    CheckMode::Exact => user_permissions == required_permissions,
-                },
-                Err(_) => false,
-            }
-        })
+        SimplePredicateFuture::GetPermissions {
+            future: Box::pin(async move { backend.get_all_permissions(&user).await }),
+            required_permissions,
+            check_mode,
+        }
     }
 }
 
