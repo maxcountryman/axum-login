@@ -11,7 +11,8 @@ use pin_project::pin_project;
 
 use crate::{require::BoxFuture, AuthnBackend, AuthzBackend};
 
-//PERF: this takes owned values of backend and user because references and async DO NOT combine well
+//PERF: currently this takes owned values of backend and user because
+// references and async DO NOT combine well
 
 /// Trait for predicating requests
 pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
