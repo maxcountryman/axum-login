@@ -2,17 +2,17 @@ use sqlx::SqlitePool;
 
 use crate::store::{Nonce, Store};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppState {
-    pub db: SqlitePool,
+    pub(crate) db: SqlitePool,
 }
 
 impl AppState {
-    pub fn new(db: SqlitePool) -> Self {
+    pub(crate) fn new(db: SqlitePool) -> Self {
         Self { db }
     }
 
-    pub async fn initialize(&self) -> Result<(), sqlx::Error> {
+    pub(crate) async fn initialize(&self) -> Result<(), sqlx::Error> {
         self.create_nonce_table().await?;
         Ok(())
     }

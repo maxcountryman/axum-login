@@ -136,6 +136,24 @@ async fn permissions_example() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn web3_example() {
+    let _child_guard = start_example_binary("example-web3").await;
+
+    let cookie_jar = Arc::new(Jar::default());
+    let client = Client::builder()
+        .cookie_provider(cookie_jar.clone())
+        .build()
+        .unwrap();
+
+    // A logged out user is redirected to the login URL with a next query string.
+    let res = client.get(url("/me")).send().await.unwrap();
+
+    assert_eq!(*res.url(), url("/login?next=%2Fme"));
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
 struct ChildGuard {
     child: Child,
 }

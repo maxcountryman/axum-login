@@ -3,8 +3,8 @@ use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use http::StatusCode;
 
+use crate::backend::AppState;
 use crate::store::Store;
-use crate::web::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/nonce", get(get_nonce))

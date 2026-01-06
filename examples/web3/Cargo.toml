@@ -1,11 +1,12 @@
 [package]
-name = "example-siwe"
+name = "example-web3"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dependencies]
 axum = "0.8.1"
+askama = { version = "0.14.0" }
 axum-login = { path = "../../axum-login" }
 color-eyre = "0.6"
 hex = "0.4"
@@ -24,3 +25,7 @@ tower-sessions = { version = "0.14.0", features = ["signed"] }
 tower-sessions-sqlx-store = { version = "0.15.0", features = ["sqlite"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["cookies"] }
+serial_test = "3.0.0"

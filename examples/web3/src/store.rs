@@ -1,5 +1,6 @@
 use sqlx::Error;
 
+#[allow(unused)]
 pub struct Nonce {
     pub nonce: String,
     pub created_at: time::OffsetDateTime,

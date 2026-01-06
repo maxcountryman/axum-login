@@ -1,9 +1,4 @@
-use axum::{
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
-};
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
@@ -17,13 +12,13 @@ use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
 use crate::{
-    backend::{AuthSession, Backend, Credentials},
+    backend::{AuthSession, Backend},
     store::Store,
-    web::{nonce, state::AppState},
+    web::{auth, nonce},
 };
 
 pub struct App {
-    state: AppState,
+    backend: Backend,
 }
 
 impl App {
@@ -31,18 +26,20 @@ impl App {
         let db = SqlitePool::connect(":memory:").await?;
         // Create users table
         Ok(Self {
-            state: AppState::new(db),
+            backend: Backend::new(db),
         })
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error>> {
-        let session_store = SqliteStore::new(self.state.db.clone());
+        let session_store = SqliteStore::new(self.backend.state().db.clone());
         session_store.migrate().await?;
-        self.state.initialize().await?;
+
+        self.backend.initialize().await?;
+        let state = self.backend.state().clone();
 
         let deletion_task = {
             let seassion_store = session_store.clone();
-            let state = self.state.clone();
+            let state = state.clone();
             tokio::task::spawn(async move {
                 let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
                 interval.tick().await; // The first tick completes immediately; skip.
@@ -61,19 +58,16 @@ impl App {
             .with_expiry(Expiry::OnInactivity(Duration::days(1)))
             .with_signed(key);
 
-        let backend = Backend::new(self.state.db.clone());
-
-        let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
+        let auth_layer = AuthManagerLayerBuilder::new(self.backend, session_layer).build();
 
         let app = Router::new()
-            .route("/", get(self::handler::home))
-            .route_layer(login_required!(Backend, login_url = "/login"))
-            .route("/login", post(self::handler::login))
-            .route("/logout", get(self::handler::logout))
             .route("/me", get(self::handler::me)) // Add verification endpoint
+            .route_layer(login_required!(Backend, login_url = "/login"))
+            .route("/", get(self::handler::home))
             .merge(nonce::router())
+            .merge(auth::router())
             .layer(auth_layer)
-            .with_state(self.state);
+            .with_state(state);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
@@ -94,30 +88,6 @@ mod handler {
         match auth_session.user().await {
             Some(user) => format!("Hello, {}! Address: {}", user.username, user.address),
             None => "You are not logged in.".to_string(),
-        }
-    }
-
-    pub async fn login(
-        auth_session: AuthSession,
-        Json(creds): Json<Credentials>,
-    ) -> impl IntoResponse {
-        let user = match auth_session.authenticate(creds).await {
-            Ok(Some(user)) => user,
-            Ok(None) => return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response(),
-            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-        };
-
-        if auth_session.login(&user).await.is_err() {
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-
-        (StatusCode::OK, "Successfully logged in").into_response()
-    }
-
-    pub async fn logout(auth_session: AuthSession) -> impl IntoResponse {
-        match auth_session.logout().await {
-            Ok(_) => (StatusCode::OK, "Logged out").into_response(),
-            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
     }
 
