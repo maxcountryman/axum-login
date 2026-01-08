@@ -34,8 +34,11 @@ form_urlencoded = "1.2.1"
 
 [dev-dependencies]
 axum = "0.8.1"
+ethers-core = "2.0.14"
+ethers-rs = "0.2.3"
+ethers-signers = "2.0.14"
 mockall = "0.13"
-reqwest = { version = "0.12", features = ["cookies"] }
+reqwest = { version = "0.12", features = ["cookies", "json"] }
 serial_test = "3.0.0"
 time = "0.3.36"
 tokio = { version = "1.32.0", features = ["full"] }

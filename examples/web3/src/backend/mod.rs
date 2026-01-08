@@ -50,10 +50,12 @@ impl Backend {
             return Ok(user);
         }
 
-        let user = sqlx::query_as("insert into users (address) values (?)")
-            .bind(addr_prefixed_lowercase.as_str())
-            .fetch_one(&self.state().db)
-            .await?;
+        let user =
+            sqlx::query_as("insert into users (username, address) values (?, ?) returning *")
+                .bind(addr_prefixed_lowercase.as_str())
+                .bind(addr_prefixed_lowercase.as_str())
+                .fetch_one(&self.state().db)
+                .await?;
 
         Ok(user)
     }
@@ -65,10 +67,12 @@ pub enum BackendError {
     Sqlx(#[from] sqlx::Error),
     #[error("SIWE verification failed: {0}")]
     Siwe(#[from] siwe::VerificationError),
-    #[error("Invalid message")]
+    #[error("Invalid message: {0}")]
     InvalidMessage(siwe::ParseError),
     #[error("Invalid nonce")]
     InvalidNonce,
+    #[error("Invalid signature")]
+    InvalidSignature,
 }
 
 impl AuthnBackend for Backend {
@@ -103,8 +107,9 @@ impl AuthnBackend for Backend {
             timestamp: Some(now),
             ..Default::default()
         };
+        let sig = hex::decode(creds.signature).map_err(|_| BackendError::InvalidSignature)?;
         message
-            .verify(&creds.signature.as_bytes(), &opts)
+            .verify(&sig, &opts)
             .await
             .map_err(|e| BackendError::Siwe(e))?;
 

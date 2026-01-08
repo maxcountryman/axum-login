@@ -9,6 +9,7 @@ use reqwest::{
     cookie::{CookieStore, Jar},
     Client, StatusCode, Url,
 };
+use serde::Deserialize;
 use serial_test::serial;
 
 const WEBSERVER_URL: &str = "http://localhost:3000";
@@ -140,6 +141,9 @@ async fn permissions_example() {
 #[serial]
 async fn web3_example() {
     let _child_guard = start_example_binary("example-web3").await;
+    use ethers_core::rand::thread_rng;
+    use ethers_core::utils::to_checksum;
+    use ethers_signers::{LocalWallet, Signer};
 
     let cookie_jar = Arc::new(Jar::default());
     let client = Client::builder()
@@ -152,6 +156,59 @@ async fn web3_example() {
 
     assert_eq!(*res.url(), url("/login?next=%2Fme"));
     assert_eq!(res.status(), StatusCode::OK);
+
+    // get nonce
+    let res = client.get(url("/nonce")).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let nonce = res.text().await.unwrap();
+    assert!(!nonce.is_empty());
+
+    let now = time::OffsetDateTime::now_utc();
+    let wallet = LocalWallet::new(&mut thread_rng());
+
+    let domain = WEBSERVER_URL.strip_prefix("http://").unwrap();
+
+    // Create siwe message
+    let message = format!(
+        "{domain} wants you to sign in with your Ethereum account:
+{}
+
+SIWE Notepad Example
+
+URI: {WEBSERVER_URL}
+Version: 1
+Chain ID: 1
+Nonce: {nonce}
+Issued At: {}",
+        to_checksum(&wallet.address(), None),
+        now.format(&time::format_description::well_known::Rfc3339)
+            .unwrap()
+    );
+    // sign message
+    let signature = wallet.sign_message(message.as_bytes()).await.unwrap();
+
+    // login
+    let mut form = HashMap::new();
+    form.insert("message", message);
+    form.insert("signature", signature.to_string());
+    let res = client.post(url("/login")).json(&form).send().await.unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.text().await.unwrap(), "Successfully logged in");
+
+    // Cookie should be set
+    let res = client.get(url("/me")).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    #[derive(Deserialize)]
+    struct User {
+        username: String,
+        address: String,
+    }
+    let addr_prefixed = format!("0x{:x}", wallet.address());
+    let body = res.json::<User>().await.unwrap();
+    assert_eq!(body.username, addr_prefixed);
+    assert_eq!(body.address, addr_prefixed);
 }
 
 struct ChildGuard {

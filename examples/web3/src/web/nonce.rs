@@ -69,13 +69,6 @@ mod tests {
             .map(|bytes| -> String { String::from_utf8(bytes.to_vec()).unwrap() })
             .unwrap();
 
-        let entity: NonceEntity = sqlx::query_as("SELECT * FROM nonces WHERE nonce = ?")
-            .bind(&nonce)
-            .fetch_one(&db)
-            .await
-            .unwrap();
-        println!("Entity: {:#?}", entity);
-
         let (stored_nonce, created_at, expires_at): (
             String,
             time::OffsetDateTime,

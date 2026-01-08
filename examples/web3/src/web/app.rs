@@ -24,6 +24,7 @@ pub struct App {
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let db = SqlitePool::connect(":memory:").await?;
+        sqlx::migrate!().run(&db).await?;
         // Create users table
         Ok(Self {
             backend: Backend::new(db),
