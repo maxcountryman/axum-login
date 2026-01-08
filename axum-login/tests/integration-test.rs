@@ -9,7 +9,6 @@ use reqwest::{
     cookie::{CookieStore, Jar},
     Client, StatusCode, Url,
 };
-use serde::Deserialize;
 use serial_test::serial;
 
 const WEBSERVER_URL: &str = "http://localhost:3000";
@@ -140,10 +139,12 @@ async fn permissions_example() {
 #[tokio::test]
 #[serial]
 async fn web3_example() {
-    let _child_guard = start_example_binary("example-web3").await;
     use ethers_core::rand::thread_rng;
     use ethers_core::utils::to_checksum;
     use ethers_signers::{LocalWallet, Signer};
+    use serde::Deserialize;
+
+    let _child_guard = start_example_binary("example-web3").await;
 
     let cookie_jar = Arc::new(Jar::default());
     let client = Client::builder()
