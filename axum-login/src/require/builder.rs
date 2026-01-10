@@ -104,7 +104,8 @@ use crate::{
 ///
 /// The `RequireBuilder` provides a fluent API for composing authentication
 /// logic in your Axum application. Each call to a method like
-/// [`decision`](#method.decision), [`unauthenticated`](#method.unauthenticated),
+/// [`decision`](#method.decision),
+/// [`unauthenticated`](#method.unauthenticated),
 /// or [`RequireBuilder::unauthorized`] returns a new builder with the specified
 /// configuration.
 ///
