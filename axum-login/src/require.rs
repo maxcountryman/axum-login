@@ -164,7 +164,7 @@ mod predicate;
 mod service;
 
 #[cfg(test)]
-mod tests;
+mod require_tests;
 
 use std::{future::Future, marker::PhantomData, pin::Pin};
 
