@@ -19,6 +19,13 @@ use crate::{
     AuthSession, AuthnBackend,
 };
 
+fn internal_error_response() -> Response<Body> {
+    http::Response::builder()
+        .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+        .body(Body::from("Internal server error"))
+        .unwrap_or_else(|_| http::Response::new(Body::empty()))
+}
+
 /// A Tower service that enforces authentication and authorization
 /// requirements.
 ///
@@ -84,10 +91,10 @@ where
                 let user_future = Box::pin(async move { auth_session.user().await });
                 RequireFuture {
                     state: RequireFutureState::CheckingUser {
+                        request: Some(req),
                         backend,
                         user_future,
                     },
-                    request: Some(req),
                     fallback: self.layer.fallback.clone(),
                     restrict: self.layer.restrict.clone(),
                     predicate: self.layer.predicate.clone(),
@@ -103,7 +110,6 @@ where
                     state: RequireFutureState::InternalFallback {
                         internal_fallback_future,
                     },
-                    request: None, // Request was already moved to the handler
                     fallback: self.layer.fallback.clone(),
                     restrict: self.layer.restrict.clone(),
                     predicate: self.layer.predicate.clone(),
@@ -133,7 +139,6 @@ where
     restrict: Rs,
     predicate: Pr,
     app_state: ST,
-    request: Option<Request<T>>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
@@ -147,11 +152,13 @@ where
     B: AuthnBackend,
 {
     CheckingUser {
+        request: Option<Request<T>>,
         #[pin]
         user_future: BoxFuture<'static, Option<B::User>>,
         backend: B,
     },
     Predicate {
+        request: Option<Request<T>>,
         #[pin]
         predicate_future: BoxFuture<'static, bool>,
     },
@@ -192,6 +199,7 @@ where
         loop {
             match this.state.as_mut().project() {
                 RequireFutureStateProj::CheckingUser {
+                    request,
                     user_future,
                     backend,
                 } => {
@@ -205,12 +213,17 @@ where
                                 this.app_state.clone(),
                             ));
 
-                            this.state
-                                .set(RequireFutureState::Predicate { predicate_future });
+                            let request = request.take();
+                            this.state.set(RequireFutureState::Predicate {
+                                request,
+                                predicate_future,
+                            });
                         }
                         Poll::Ready(None) => {
                             // No user in session, use fallback
-                            let request = this.request.take().expect("Request should be available");
+                            let Some(request) = request.take() else {
+                                return Poll::Ready(Ok(internal_error_response()));
+                            };
                             let fallback_future = this.fallback.handle(request);
                             this.state.set(RequireFutureState::Fallback {
                                 fallback_future,
@@ -220,17 +233,24 @@ where
                         Poll::Pending => return Poll::Pending,
                     }
                 }
-                RequireFutureStateProj::Predicate { predicate_future } => {
+                RequireFutureStateProj::Predicate {
+                    request,
+                    predicate_future,
+                } => {
                     match predicate_future.poll(cx) {
                         Poll::Ready(true) => {
                             // Predicate passed, call inner service
-                            let request = this.request.take().expect("Request should be available");
+                            let Some(request) = request.take() else {
+                                return Poll::Ready(Ok(internal_error_response()));
+                            };
                             let inner_future = this.service.call(request);
                             this.state.set(RequireFutureState::Inner { inner_future });
                         }
                         Poll::Ready(false) => {
                             // Predicate failed, call restrict handler
-                            let request = this.request.take().expect("Request should be available");
+                            let Some(request) = request.take() else {
+                                return Poll::Ready(Ok(internal_error_response()));
+                            };
                             let restrict_future = this.restrict.handle(request);
                             this.state.set(RequireFutureState::Restrict {
                                 restrict_future,

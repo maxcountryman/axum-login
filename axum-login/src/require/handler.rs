@@ -8,20 +8,20 @@ use axum::{
     extract::{OriginalUri, Request},
     http::{HeaderName, HeaderValue, Response, StatusCode},
 };
+use tracing::error;
 
 const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
 
-/// Trait for [`super::Require`] Middleware Asynchronous Fallback/Restrict
-/// handlers
+/// Trait for [`super::Require`] middleware fallback/restrict handlers.
 pub trait AsyncFallbackHandler<Req>: Clone {
-    /// Future returned by the handler
+    /// Future returned by the handler.
     type Future: Future<Output = Self::Response>;
 
-    /// Type of the successful response
+    /// Type of the successful response.
     type Response;
 
-    /// Handle Fallback type request
+    /// Handle a request.
     fn handle(&mut self, request: Request<Req>) -> Self::Future;
 }
 
@@ -135,7 +135,7 @@ impl RedirectFallback {
 }
 
 impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
-    type Future = Ready<axum::response::Response<Body>>; //PERF: currently have only async variant
+    type Future = Ready<axum::response::Response<Body>>;
     type Response = axum::response::Response<Body>;
 
     fn handle(&mut self, req: Request<ReqInBody>) -> Self::Future {
@@ -148,18 +148,23 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
             .clone()
             .unwrap_or(DEFAULT_REDIRECT_FIELD.to_string());
 
-        let resp = match req.extensions().get::<OriginalUri>().cloned() {
-            None => axum::response::Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body("Internal Server Error".into())
+        let original_uri = req
+            .extensions()
+            .get::<OriginalUri>()
+            .map(|uri| uri.0.clone())
+            .unwrap_or_else(|| req.uri().clone());
+
+        let resp = match crate::url_with_redirect_query(&login_url, &redirect_field, original_uri) {
+            Ok(url) => axum::response::Response::builder()
+                .status(StatusCode::TEMPORARY_REDIRECT)
+                .header("Location", url.to_string())
+                .body("Redirecting...".into())
                 .unwrap(),
-            Some(OriginalUri(original_uri)) => {
-                let url = crate::url_with_redirect_query(&login_url, &redirect_field, original_uri)
-                    .unwrap();
+            Err(err) => {
+                error!(err = %err);
                 axum::response::Response::builder()
-                    .status(StatusCode::TEMPORARY_REDIRECT)
-                    .header("Location", url.to_string())
-                    .body("Redirecting...".into())
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body("Internal Server Error".into())
                     .unwrap()
             }
         };
@@ -177,9 +182,9 @@ pub struct SimpleResponseFallback {
     pub status_code: StatusCode,
     /// Response body content
     pub body: String,
-    /// Content-Type header value
+    /// Content-Type header value.
     pub content_type: String,
-    /// Additional custom headers to include
+    /// Additional custom headers to include.
     pub headers: HashMap<String, String>,
 }
 
@@ -195,42 +200,42 @@ impl Default for SimpleResponseFallback {
 }
 
 impl SimpleResponseFallback {
-    /// Create a new CustomResponseFallback with default values
+    /// Create a new `SimpleResponseFallback` with default values.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the HTTP status code
+    /// Set the HTTP status code.
     pub fn status_code(mut self, status: StatusCode) -> Self {
         self.status_code = status;
         self
     }
 
-    /// Set the response body
+    /// Set the response body.
     pub fn body(mut self, body: impl Into<String>) -> Self {
         self.body = body.into();
         self
     }
 
-    /// Set the content type
+    /// Set the content type.
     pub fn content_type(mut self, content_type: impl Into<String>) -> Self {
         self.content_type = content_type.into();
         self
     }
 
-    /// Add a custom header
+    /// Add a custom header.
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
     }
 
-    /// Add multiple custom headers
+    /// Add multiple custom headers.
     pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
         self.headers.extend(headers);
         self
     }
 
-    /// Create an HTML response
+    /// Create an HTML response.
     pub fn html(status: StatusCode, body: impl Into<String>) -> Self {
         Self::new()
             .status_code(status)
@@ -238,7 +243,7 @@ impl SimpleResponseFallback {
             .body(body)
     }
 
-    /// Create a plain text response
+    /// Create a plain text response.
     pub fn text(status: StatusCode, body: impl Into<String>) -> Self {
         Self::new()
             .status_code(status)
@@ -246,7 +251,7 @@ impl SimpleResponseFallback {
             .body(body)
     }
 
-    /// Create an XML response
+    /// Create an XML response.
     pub fn xml(status: StatusCode, body: impl Into<String>) -> Self {
         Self::new()
             .status_code(status)
@@ -254,7 +259,7 @@ impl SimpleResponseFallback {
             .body(body)
     }
 
-    /// Create a simple error page
+    /// Create a simple error page.
     pub fn error_page(
         status: StatusCode,
         title: impl Into<String>,
@@ -287,11 +292,10 @@ impl SimpleResponseFallback {
 }
 
 impl<ReqBody> AsyncFallbackHandler<ReqBody> for SimpleResponseFallback {
-    type Future = Ready<Response<Body>>; //PERF: currently have only async variant
+    type Future = Ready<Response<Body>>;
     type Response = Response<Body>;
 
     fn handle(&mut self, _req: Request<ReqBody>) -> Self::Future {
-        //PERF: currently have only async variant
         let mut response_builder = Response::builder().status(self.status_code);
 
         // Set content type

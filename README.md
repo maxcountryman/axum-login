@@ -39,9 +39,10 @@ It offers:
   `AuthzBackend` trait, which allows applications to define custom
   permissions. Both user and group permissions are supported.
 - **Convenient Route Protection**: Middleware for protecting access to
-  routes are provided via the `login_required` and `permission_required`
-  macros. Or bring your own by using `AuthSession` directly with
-  `from_fn`.
+  routes is available via the `login_required` and `permission_required`
+  macros, and via the `require` builder (`require-builder` feature). The
+  builder is the long-term primary surface; macros are convenience wrappers
+  over the same behavior.
 - **Rock-solid Session Management**: Uses [`tower-sessions`](https://github.com/maxcountryman/tower-sessions)
   for high-performing and ergonomic session management. _Look ma, no deadlocks!_
 
@@ -60,6 +61,27 @@ We recommend reviewing our [`sqlite` example][sqlite-example]. There is also a [
 
 > [!NOTE]
 > See the [crate documentation][docs] for usage information.
+
+## ✅ Behavior Contract
+
+The middleware surfaces follow the same contract:
+
+- If the request is unauthenticated, the fallback handler is used.
+- If the request is authenticated but not authorized, the restrict handler is used.
+- Redirect fallbacks preserve explicit redirect query parameters if already present and otherwise append the configured redirect field.
+- Redirect construction errors return `500 Internal Server Error`.
+
+## 🧩 Feature Flags
+
+- `require-builder`: Enables the builder-based `require` module, which is the primary middleware surface.
+- `macros-middleware`: Enables the `login_required!` and `permission_required!` macros. These are convenience wrappers over the builder and are enabled by default.
+
+Example (builder only, no macros):
+
+```toml
+[dependencies]
+axum-login = { version = "0.18.0", default-features = false, features = ["require-builder"] }
+```
 
 ## 🦺 Safety
 

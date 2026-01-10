@@ -166,6 +166,214 @@ async fn test_login_required() {
     assert_eq!(res.status(), StatusCode::OK);
 }
 
+#[cfg(feature = "macros-middleware")]
+mod parity {
+    use axum::routing::get;
+
+    use super::*;
+    use crate::{login_required, permission_required};
+
+    async fn request(app: &Router, uri: &str, cookie: Option<&str>) -> Response<Body> {
+        let mut req = Request::builder().uri(uri);
+        if let Some(cookie) = cookie {
+            req = req.header(header::COOKIE, cookie);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        app.clone().oneshot(req).await.unwrap()
+    }
+
+    async fn login_cookie(app: &Router) -> String {
+        let res = request(app, "/login", None).await;
+        get_session_cookie(&res).expect("Response should have a valid session cookie")
+    }
+
+    fn location(res: &Response<Body>) -> Option<String> {
+        res.headers()
+            .get(header::LOCATION)
+            .and_then(|h| h.to_str().ok())
+            .map(|value| value.to_string())
+    }
+
+    #[tokio::test]
+    async fn test_login_required_parity_unauthenticated() {
+        let builder_layer = RequireBuilder::<TestBackend>::new().build();
+        let macro_layer = login_required!(TestBackend);
+
+        let app_builder = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(builder_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let app_macro = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(macro_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let res_builder = request(&app_builder, "/", None).await;
+        let res_macro = request(&app_macro, "/", None).await;
+
+        assert_eq!(res_builder.status(), res_macro.status());
+    }
+
+    #[tokio::test]
+    async fn test_login_required_parity_redirect() {
+        let builder_layer = RequireBuilder::<TestBackend>::new()
+            .fallback(RedirectFallback::new().login_url("/login"))
+            .build();
+        let macro_layer = login_required!(TestBackend, login_url = "/login");
+
+        let app_builder = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(builder_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let app_macro = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(macro_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let res_builder = request(&app_builder, "/?foo=bar", None).await;
+        let res_macro = request(&app_macro, "/?foo=bar", None).await;
+
+        assert_eq!(res_builder.status(), res_macro.status());
+        assert_eq!(location(&res_builder), location(&res_macro));
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_parity_unauthenticated() {
+        let builder_layer = RequireBuilder::<TestBackend>::new()
+            .predicate(SimplePredicate::new().with_permissions(vec!["test.read"]))
+            .build();
+        let macro_layer = permission_required!(TestBackend, "test.read");
+
+        let app_builder = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(builder_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let app_macro = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(macro_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let res_builder = request(&app_builder, "/", None).await;
+        let res_macro = request(&app_macro, "/", None).await;
+
+        assert_eq!(res_builder.status(), res_macro.status());
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_parity_authenticated() {
+        let builder_layer = RequireBuilder::<TestBackend>::new()
+            .predicate(SimplePredicate::new().with_permissions(vec!["test.read"]))
+            .build();
+        let macro_layer = permission_required!(TestBackend, "test.read");
+
+        let app_builder = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(builder_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let app_macro = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(macro_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let cookie_builder = login_cookie(&app_builder).await;
+        let cookie_macro = login_cookie(&app_macro).await;
+
+        let res_builder = request(&app_builder, "/", Some(&cookie_builder)).await;
+        let res_macro = request(&app_macro, "/", Some(&cookie_macro)).await;
+
+        assert_eq!(res_builder.status(), res_macro.status());
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_parity_redirect() {
+        let builder_layer = RequireBuilder::<TestBackend>::new()
+            .predicate(SimplePredicate::new().with_permissions(vec!["test.read"]))
+            .fallback(RedirectFallback::new().login_url("/login"))
+            .build();
+        let macro_layer = permission_required!(TestBackend, login_url = "/login", "test.read");
+
+        let app_builder = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(builder_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let app_macro = Router::new()
+            .route("/", get(|| async {}))
+            .route_layer(macro_layer)
+            .route(
+                "/login",
+                get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let res_builder = request(&app_builder, "/", None).await;
+        let res_macro = request(&app_macro, "/", None).await;
+
+        assert_eq!(res_builder.status(), res_macro.status());
+        assert_eq!(location(&res_builder), location(&res_macro));
+    }
+}
+
 #[tokio::test]
 async fn test_login_required_with_login_url() {
     let require = RequireBuilder::<TestBackend>::new()
@@ -361,9 +569,6 @@ async fn test_permission_required() {
     let req = Request::builder().uri("/").body(Body::empty()).unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
 
-    //WARN: This differs from macros implementation. Macros returned FORBIDDEN
-    // to achieve the same behaviour add
-    // `.fallback(|_| async { StatusCode::FORBIDDEN.into_response() })`
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
     let req = Request::builder()
@@ -404,7 +609,6 @@ async fn test_permission_required_multiple_permissions() {
     let req = Request::builder().uri("/").body(Body::empty()).unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
 
-    //WARN: This differs from macros implementation. Macros returned FORBIDDEN
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
     let req = Request::builder()
@@ -541,7 +745,6 @@ async fn test_permission_required_missing_permissions() {
     let req = Request::builder().uri("/").body(Body::empty()).unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
 
-    //WARN: This differs from macros implementation. Macros returned FORBIDDEN
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
     let req = Request::builder()

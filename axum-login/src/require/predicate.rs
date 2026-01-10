@@ -11,8 +11,8 @@ use pin_project::pin_project;
 
 use crate::{require::BoxFuture, AuthnBackend, AuthzBackend};
 
-//PERF: currently this takes owned values of backend and user because
-// references and async DO NOT combine well
+// Note: this takes owned values of backend and user to keep the async boundary
+// simple for callers.
 
 /// Trait for predicating requests
 pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
@@ -32,7 +32,15 @@ pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
 /// The default [`AsyncPredicate`] implementation used by [`super::Require`].
 #[derive(Clone, Debug)]
 pub struct DefaultPredicate<B: AuthnBackend, ST> {
-    pub(crate) _marker: PhantomData<(B, ST)>,
+    _marker: PhantomData<(B, ST)>,
+}
+
+impl<B: AuthnBackend, ST> Default for DefaultPredicate<B, ST> {
+    fn default() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
@@ -50,7 +58,7 @@ impl<F, B, ST, Fut> AsyncPredicate<B, ST> for F
 where
     F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
     Fut: Future<Output = bool> + Send + 'static,
-    B: AuthnBackend + AuthzBackend + 'static,
+    B: AuthnBackend + 'static,
     ST: Clone,
 {
     type Future = Fut;

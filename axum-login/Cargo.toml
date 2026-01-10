@@ -18,7 +18,7 @@ readme = "../README.md"
 
 [features]
 require-builder = ["dep:pin-project"]
-macros-middleware = []
+macros-middleware = ["require-builder"]
 default = ["macros-middleware"]
 
 [dependencies]
@@ -54,3 +54,4 @@ tower-sessions-sqlx-store = { version = "0.15.0", features = ["sqlite"] }
 [[bench]]
 name = "middleware_comparison"
 harness = false
+required-features = ["require-builder", "macros-middleware"]

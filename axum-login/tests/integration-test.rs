@@ -1,3 +1,5 @@
+#![cfg(feature = "macros-middleware")]
+
 use std::{
     collections::HashMap,
     process::{Child, Command},

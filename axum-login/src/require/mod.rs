@@ -2,9 +2,8 @@
 //!
 //! This module provides the [`Require`] type, which acts as a configurable
 //! middleware layer for enforcing authentication and access control in Axum
-//! applications. It uses a set of customizable predicate, changeable restrict
-//! and fallback handlers behaviors to control access to routes based on
-//! authentication.
+//! applications. It uses a customizable predicate with configurable restrict
+//! and fallback handlers to control access to routes based on authentication.
 //! ## Overview
 //!
 //! ```rust,no_run
@@ -85,10 +84,10 @@
 //!         .build();
 //!
 //!     let app = Router::new()
-//!         .route("/protected", get(todo!()))
+//!         .route("/protected", get::<(), _, _>(todo!()))
 //!         .route_layer(require)
-//!         .route("/login", post(todo!()))
-//!         .route("/login", get(todo!()))
+//!         .route("/login", post::<(), _, _>(todo!()))
+//!         .route("/login", get::<(), _, _>(todo!()))
 //!         .layer(auth_layer);
 //!
 //!     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -162,7 +161,7 @@ pub struct Require<
     /// Arbitrary user state available the predicate.
     pub state: ST,
     /// Internal marker to maintain type safety.
-    _phantom: PhantomData<(B, fn() -> T)>, //Sync trick
+    _phantom: PhantomData<(B, fn() -> T)>,
 }
 
 impl<B, Fb, Rs, Pr, ST, T> Require<B, ST, T, Fb, Rs, Pr>
