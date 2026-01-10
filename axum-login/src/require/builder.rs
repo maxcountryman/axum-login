@@ -161,13 +161,14 @@ use crate::{
 ///     .build();
 /// # let _builder: RequireBuilder<Backend> = Require::builder();
 /// ```
+#[derive(Clone)]
 pub struct RequireBuilder<B, ST = (), T = Body> {
     /// Decision predicate for the request.
-    decision: Box<dyn DecisionPredicate<B, ST>>,
+    decision: Arc<dyn DecisionPredicate<B, ST>>,
     /// Handler for unauthorized users.
-    unauthorized: Box<dyn ResponseHandler<T>>,
+    unauthorized: Arc<dyn ResponseHandler<T>>,
     /// Handler for unauthenticated users.
-    unauthenticated: Box<dyn ResponseHandler<T>>,
+    unauthenticated: Arc<dyn ResponseHandler<T>>,
     /// Shared state available to predicates and handlers.
     state: Arc<ST>,
 }
@@ -205,9 +206,9 @@ where
     /// - [`DefaultUnauthenticated`] returns `401 Unauthorized`.
     pub fn new() -> Self {
         Self {
-            decision: Box::new(DefaultAccess::default()),
-            unauthorized: Box::new(DefaultUnauthorized),
-            unauthenticated: Box::new(DefaultUnauthenticated),
+            decision: Arc::new(DefaultAccess::default()),
+            unauthorized: Arc::new(DefaultUnauthorized),
+            unauthenticated: Arc::new(DefaultUnauthenticated),
             state: Arc::new(()),
         }
     }
@@ -221,9 +222,9 @@ where
     /// Creates a new `RequireBuilder` with the given application state.
     pub fn new_with_state(state: ST) -> Self {
         Self {
-            decision: Box::new(DefaultAccess::default()),
-            unauthorized: Box::new(DefaultUnauthorized),
-            unauthenticated: Box::new(DefaultUnauthenticated),
+            decision: Arc::new(DefaultAccess::default()),
+            unauthorized: Arc::new(DefaultUnauthorized),
+            unauthenticated: Arc::new(DefaultUnauthenticated),
             state: Arc::new(state),
         }
     }
@@ -249,7 +250,7 @@ where
         Pr2: DecisionPredicate<B, ST> + 'static,
     {
         Self {
-            decision: Box::new(new_predicate),
+            decision: Arc::new(new_predicate),
             ..self
         }
     }
@@ -263,7 +264,7 @@ where
         Uh2: ResponseHandler<T> + 'static,
     {
         Self {
-            unauthenticated: Box::new(new_handler),
+            unauthenticated: Arc::new(new_handler),
             ..self
         }
     }
@@ -277,7 +278,7 @@ where
         Un2: ResponseHandler<T> + 'static,
     {
         Self {
-            unauthorized: Box::new(new_handler),
+            unauthorized: Arc::new(new_handler),
             ..self
         }
     }

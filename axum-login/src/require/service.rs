@@ -534,9 +534,9 @@ mod tests {
                 decision_future: Box::pin(async { Decision::Allow }),
             },
             inner: Arc::new(RequireState {
-                decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
-                unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
-                unauthenticated: Box::new(SimpleResponseHandler::text(
+                decision: Arc::new(DefaultAccess::<TestBackend, ()>::default()),
+                unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+                unauthenticated: Arc::new(SimpleResponseHandler::text(
                     StatusCode::UNAUTHORIZED,
                     "nope",
                 )),
@@ -563,9 +563,9 @@ mod tests {
                 decision_future: Box::pin(async { Decision::Unauthorized }),
             },
             inner: Arc::new(RequireState {
-                decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
-                unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
-                unauthenticated: Box::new(SimpleResponseHandler::text(
+                decision: Arc::new(DefaultAccess::<TestBackend, ()>::default()),
+                unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+                unauthenticated: Arc::new(SimpleResponseHandler::text(
                     StatusCode::UNAUTHORIZED,
                     "nope",
                 )),
@@ -592,9 +592,9 @@ mod tests {
                 decision_future: Box::pin(async { Decision::Unauthenticated }),
             },
             inner: Arc::new(RequireState {
-                decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
-                unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
-                unauthenticated: Box::new(SimpleResponseHandler::text(
+                decision: Arc::new(DefaultAccess::<TestBackend, ()>::default()),
+                unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+                unauthenticated: Arc::new(SimpleResponseHandler::text(
                     StatusCode::UNAUTHORIZED,
                     "nope",
                 )),

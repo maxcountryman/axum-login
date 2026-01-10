@@ -290,11 +290,11 @@ where
     B: AuthnBackend + Send + Sync + 'static,
 {
     /// The predicate that determines if access should be granted.
-    pub(crate) decision: Box<dyn DecisionPredicate<B, ST>>,
+    pub(crate) decision: Arc<dyn DecisionPredicate<B, ST>>,
     /// The response for authenticated but unauthorized requests.
-    pub(crate) unauthorized: Box<dyn ResponseHandler<T>>,
+    pub(crate) unauthorized: Arc<dyn ResponseHandler<T>>,
     /// The response for unauthenticated requests.
-    pub(crate) unauthenticated: Box<dyn ResponseHandler<T>>,
+    pub(crate) unauthenticated: Arc<dyn ResponseHandler<T>>,
     /// Arbitrary user state available to the predicate.
     pub(crate) state: Arc<ST>,
 }
@@ -313,9 +313,9 @@ where
         Uh: ResponseHandler<T> + 'static,
     {
         let inner = RequireState {
-            decision: Box::new(decision),
-            unauthorized: Box::new(unauthorized),
-            unauthenticated: Box::new(unauthenticated),
+            decision: Arc::new(decision),
+            unauthorized: Arc::new(unauthorized),
+            unauthenticated: Arc::new(unauthenticated),
             state: Arc::new(state),
         };
         Self {
