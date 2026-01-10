@@ -1,7 +1,7 @@
 use std::{
     future::Future,
-    marker::PhantomData,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -12,8 +12,8 @@ use tower_service::Service;
 
 use crate::{
     require::{
-        handler::{AsyncFallbackHandler, InternalErrorFallback},
-        predicate::AsyncPredicate,
+        handler::{AsyncHandler, InternalErrorFallback},
+        predicate::Decision,
         BoxFuture, Require,
     },
     AuthSession, AuthnBackend,
@@ -30,23 +30,20 @@ fn internal_error_response() -> Response<Body> {
 ///
 /// The service checks whether a request is authenticated. If it is, it
 /// evaluates the predicate and either forwards to the inner service or applies
-/// the restrict handler. If it is not, it applies the fallback handler.
+/// the unauthorized handler. If it is not, it applies the unauthenticated
+/// handler.
 #[must_use]
 #[derive(Debug)]
-pub struct RequireService<S, B: AuthnBackend, ST, T, Fb, Rs, Pr> {
+pub struct RequireService<S, B: AuthnBackend + Send + Sync + 'static, ST, T> {
     pub(crate) inner: S,
-    pub(crate) layer: Require<B, ST, T, Fb, Rs, Pr>,
+    pub(crate) layer: Require<B, ST, T>,
 }
 
 // Manual clone because Body isn't Clone on the service type.
-impl<S, B, Fb, Rs, Pr, ST, T> Clone for RequireService<S, B, ST, T, Fb, Rs, Pr>
+impl<S, B, ST, T> Clone for RequireService<S, B, ST, T>
 where
     S: Clone,
-    B: AuthnBackend,
-    Fb: Clone,
-    Rs: Clone,
-    Pr: Clone,
-    ST: Clone,
+    B: AuthnBackend + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         RequireService {
@@ -56,19 +53,16 @@ where
     }
 }
 
-impl<S, B, Fb, Rs, ST, T: 'static, Pr> Service<Request<T>>
-    for RequireService<S, B, ST, T, Fb, Rs, Pr>
+impl<S, B, ST, T: 'static> Service<Request<T>> for RequireService<S, B, ST, T>
 where
     S: Service<Request<T>, Response = Response<Body>> + Clone,
     B: AuthnBackend + Send + Sync + 'static,
-    ST: Clone + 'static,
-    Fb: AsyncFallbackHandler<T, Response = S::Response>,
-    Rs: AsyncFallbackHandler<T, Response = S::Response>,
-    Pr: AsyncPredicate<B, ST> + Clone + 'static,
+    ST: Send + Sync + 'static,
+    T: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = RequireFuture<S, T, Fb, Rs, Pr, B, ST>;
+    type Future = RequireFuture<S, T>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -81,21 +75,21 @@ where
         let mut inner = self.inner.clone();
         // Avoid cloning the inner service twice as recommended by tower.
         std::mem::swap(&mut self.inner, &mut inner);
+
         match auth_session {
             Some(auth_session) => {
-                // Check if user exists (async operation).
-                let backend = auth_session.backend().clone();
-                let user_future = Box::pin(async move { auth_session.user().await });
+                let decision_future = self
+                    .layer
+                    .decision
+                    .decide(auth_session, Arc::clone(&self.layer.state));
+
                 RequireFuture {
                     state: RequireFutureState::CheckingUser {
                         request: Some(req),
-                        backend,
-                        user_future,
+                        decision_future,
                     },
-                    fallback: self.layer.fallback.clone(),
-                    restrict: self.layer.restrict.clone(),
-                    predicate: self.layer.predicate.clone(),
-                    app_state: self.layer.state.clone(),
+                    unauthenticated: Arc::clone(&self.layer.unauthenticated),
+                    unauthorized: Arc::clone(&self.layer.unauthorized),
                     service: inner,
                 }
             }
@@ -107,10 +101,8 @@ where
                     state: RequireFutureState::InternalFallback {
                         internal_fallback_future,
                     },
-                    fallback: self.layer.fallback.clone(),
-                    restrict: self.layer.restrict.clone(),
-                    predicate: self.layer.predicate.clone(),
-                    app_state: self.layer.state.clone(),
+                    unauthenticated: Arc::clone(&self.layer.unauthenticated),
+                    unauthorized: Arc::clone(&self.layer.unauthorized),
                     service: inner,
                 }
             }
@@ -121,70 +113,46 @@ where
 #[pin_project]
 /// Response future for [`Require`].
 #[allow(missing_debug_implementations)]
-pub struct RequireFuture<S, T, Fb, Rs, Pr, B, ST>
+pub struct RequireFuture<S, T>
 where
     S: Service<Request<T>, Response = Response<Body>>,
-    Fb: AsyncFallbackHandler<T> + Clone,
-    Rs: AsyncFallbackHandler<T>,
-    Pr: AsyncPredicate<B, ST>,
-    B: AuthnBackend,
 {
     #[pin]
-    state: RequireFutureState<S::Future, T, Fb, Rs, B>,
+    state: RequireFutureState<S::Future, T>,
     service: S,
-    fallback: Fb,
-    restrict: Rs,
-    predicate: Pr,
-    app_state: ST,
+    unauthenticated: Arc<dyn AsyncHandler<T>>,
+    unauthorized: Arc<dyn AsyncHandler<T>>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
 #[allow(missing_debug_implementations)]
-pub(super) enum RequireFutureState<SFut, T, Fb, Rs, B>
-where
-    Fb: AsyncFallbackHandler<T>,
-    Rs: AsyncFallbackHandler<T>,
-    B: AuthnBackend,
-{
+pub(super) enum RequireFutureState<SFut, T> {
     CheckingUser {
         request: Option<Request<T>>,
         #[pin]
-        user_future: BoxFuture<'static, Option<B::User>>,
-        backend: B,
-    },
-    Predicate {
-        request: Option<Request<T>>,
-        #[pin]
-        predicate_future: BoxFuture<'static, bool>,
+        decision_future: BoxFuture<'static, Decision>,
     },
     Inner {
         #[pin]
         inner_future: SFut,
     },
-    Restrict {
+    Unauthorized {
         #[pin]
-        restrict_future: Rs::Future,
-        phantom_data: PhantomData<Rs>,
+        unauthorized_future: BoxFuture<'static, Response<Body>>,
     },
-    Fallback {
+    Unauthenticated {
         #[pin]
-        fallback_future: Fb::Future,
-        phantom_data: PhantomData<Fb>,
+        unauthenticated_future: BoxFuture<'static, Response<Body>>,
     },
     InternalFallback {
         #[pin]
-        internal_fallback_future: <InternalErrorFallback as AsyncFallbackHandler<T>>::Future,
+        internal_fallback_future: BoxFuture<'static, Response<Body>>,
     },
 }
 
-impl<S, T, Fb, Rs, Pr, B, ST> Future for RequireFuture<S, T, Fb, Rs, Pr, B, ST>
+impl<S, T> Future for RequireFuture<S, T>
 where
     S: Service<Request<T>, Response = Response<Body>> + Clone,
-    Fb: AsyncFallbackHandler<T, Response = Response<Body>>,
-    Rs: AsyncFallbackHandler<T, Response = Response<Body>>,
-    Pr: AsyncPredicate<B, ST> + Clone + 'static,
-    B: AuthnBackend + 'static,
-    ST: Clone + 'static,
 {
     type Output = Result<Response<Body>, S::Error>;
 
@@ -195,84 +163,51 @@ where
             match this.state.as_mut().project() {
                 RequireFutureStateProj::CheckingUser {
                     request,
-                    user_future,
-                    backend,
-                } => {
-                    match user_future.poll(cx) {
-                        Poll::Ready(Some(user)) => {
-                            // User is authenticated, check predicate
-                            let backend_clone = backend.clone();
-                            let predicate_future = Box::pin(this.predicate.predicate(
-                                backend_clone,
-                                user,
-                                this.app_state.clone(),
-                            ));
-
-                            let request = request.take();
-                            this.state.set(RequireFutureState::Predicate {
-                                request,
-                                predicate_future,
-                            });
-                        }
-                        Poll::Ready(None) => {
-                            // No user in session, use fallback
-                            let Some(request) = request.take() else {
-                                return Poll::Ready(Ok(internal_error_response()));
-                            };
-                            let fallback_future = this.fallback.handle(request);
-                            this.state.set(RequireFutureState::Fallback {
-                                fallback_future,
-                                phantom_data: PhantomData,
-                            });
-                        }
-                        Poll::Pending => return Poll::Pending,
+                    decision_future,
+                } => match decision_future.poll(cx) {
+                    Poll::Ready(Decision::Allow) => {
+                        let Some(request) = request.take() else {
+                            return Poll::Ready(Ok(internal_error_response()));
+                        };
+                        let inner_future = this.service.call(request);
+                        this.state.set(RequireFutureState::Inner { inner_future });
                     }
-                }
-                RequireFutureStateProj::Predicate {
-                    request,
-                    predicate_future,
-                } => {
-                    match predicate_future.poll(cx) {
-                        Poll::Ready(true) => {
-                            // Predicate passed, call inner service
-                            let Some(request) = request.take() else {
-                                return Poll::Ready(Ok(internal_error_response()));
-                            };
-                            let inner_future = this.service.call(request);
-                            this.state.set(RequireFutureState::Inner { inner_future });
-                        }
-                        Poll::Ready(false) => {
-                            // Predicate failed, call restrict handler
-                            let Some(request) = request.take() else {
-                                return Poll::Ready(Ok(internal_error_response()));
-                            };
-                            let restrict_future = this.restrict.handle(request);
-                            this.state.set(RequireFutureState::Restrict {
-                                restrict_future,
-                                phantom_data: PhantomData,
-                            });
-                        }
-                        Poll::Pending => return Poll::Pending,
+                    Poll::Ready(Decision::Unauthorized) => {
+                        let Some(request) = request.take() else {
+                            return Poll::Ready(Ok(internal_error_response()));
+                        };
+                        let unauthorized_future = this.unauthorized.handle(request);
+                        this.state
+                            .set(RequireFutureState::Unauthorized { unauthorized_future });
                     }
-                }
+                    Poll::Ready(Decision::Unauthenticated) => {
+                        let Some(request) = request.take() else {
+                            return Poll::Ready(Ok(internal_error_response()));
+                        };
+                        let unauthenticated_future = this.unauthenticated.handle(request);
+                        this.state
+                            .set(RequireFutureState::Unauthenticated { unauthenticated_future });
+                    }
+                    Poll::Pending => return Poll::Pending,
+                },
                 RequireFutureStateProj::Inner { inner_future } => {
                     return match inner_future.poll(cx) {
                         Poll::Ready(result) => Poll::Ready(result),
                         Poll::Pending => Poll::Pending,
                     }
                 }
-                RequireFutureStateProj::Restrict {
-                    restrict_future, ..
+                RequireFutureStateProj::Unauthorized {
+                    unauthorized_future,
                 } => {
-                    return match restrict_future.poll(cx) {
+                    return match unauthorized_future.poll(cx) {
                         Poll::Ready(response) => Poll::Ready(Ok(response)),
                         Poll::Pending => Poll::Pending,
                     }
                 }
-                RequireFutureStateProj::Fallback {
-                    fallback_future, ..
+                RequireFutureStateProj::Unauthenticated {
+                    unauthenticated_future,
                 } => {
-                    return match fallback_future.poll(cx) {
+                    return match unauthenticated_future.poll(cx) {
                         Poll::Ready(response) => Poll::Ready(Ok(response)),
                         Poll::Pending => Poll::Pending,
                     }

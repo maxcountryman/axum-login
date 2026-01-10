@@ -2,8 +2,9 @@
 //!
 //! This module provides the [`Require`] type, which acts as a configurable
 //! middleware layer for enforcing authentication and access control in Axum
-//! applications. It uses a customizable predicate with configurable restrict
-//! and fallback handlers to control access to routes based on authentication.
+//! applications. It uses a customizable decision predicate with configurable
+//! unauthenticated and unauthorized handlers to control access to routes based
+//! on authentication.
 //! ## Overview
 //!
 //! ```rust,no_run
@@ -63,7 +64,7 @@
 //!     Router,
 //! };
 //! use axum_login::{
-//!     require::{RedirectFallback, Require, SimplePredicate},
+//!     require::{PermissionsPredicate, RedirectHandler, Require},
 //!     tower_sessions::{MemoryStore, SessionManagerLayer},
 //!     AuthManagerLayerBuilder,
 //! };
@@ -80,7 +81,7 @@
 //!
 //!     // Permission control layer
 //!     let require = Require::<Backend>::builder()
-//!         .fallback(RedirectFallback::new().login_url("/login"))
+//!         .unauthenticated(RedirectHandler::new().login_url("/login"))
 //!         .build();
 //!
 //!     let app = Router::new()
@@ -102,7 +103,7 @@
 //! Require a permission and redirect unauthenticated users to `/login`:
 //!
 //! ```rust,no_run
-//! use axum_login::require::{RedirectFallback, Require, SimplePredicate};
+//! use axum_login::require::{PermissionsPredicate, RedirectHandler, Require};
 //! use axum_login::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 //!
 //! #[derive(Clone, Debug)]
@@ -150,12 +151,79 @@
 //!     type Permission = Permission;
 //! }
 //!
-//! let predicate = SimplePredicate::<Backend>::new()
+//! let predicate = PermissionsPredicate::<Backend>::new()
 //!     .with_permissions([Permission("admin.read")]);
 //!
 //! let require = Require::<Backend>::builder()
-//!     .predicate(predicate)
-//!     .fallback(RedirectFallback::new().login_url("/login"))
+//!     .decision(predicate)
+//!     .unauthenticated(RedirectHandler::new().login_url("/login"))
+//!     .build();
+//! ```
+//!
+//! Use shared state in a decision predicate:
+//!
+//! ```rust,no_run
+//! use std::sync::Arc;
+//!
+//! use axum_login::require::{Decision, Require};
+//! use axum_login::{AuthSession, AuthUser, AuthnBackend, UserId};
+//!
+//! #[derive(Clone, Debug)]
+//! struct User;
+//!
+//! impl AuthUser for User {
+//!     type Id = i64;
+//!
+//!     fn id(&self) -> Self::Id {
+//!         0
+//!     }
+//!
+//!     fn session_auth_hash(&self) -> &[u8] {
+//!         &[]
+//!     }
+//! }
+//!
+//! #[derive(Clone)]
+//! struct Backend;
+//!
+//! impl AuthnBackend for Backend {
+//!     type User = User;
+//!     type Credentials = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     async fn authenticate(
+//!         &self,
+//!         _: Self::Credentials,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//!
+//!     async fn get_user(
+//!         &self,
+//!         _: &UserId<Self>,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//! }
+//!
+//! #[derive(Clone)]
+//! struct AppState {
+//!     allow: bool,
+//! }
+//!
+//! let state = AppState { allow: true };
+//! let require = Require::<Backend, AppState>::builder_with_state(state)
+//!     .decision(|auth_session: AuthSession<Backend>, state: Arc<AppState>| async move {
+//!         if auth_session.user().await.is_none() {
+//!             return Decision::Unauthenticated;
+//!         }
+//!
+//!         if state.allow {
+//!             Decision::Allow
+//!         } else {
+//!             Decision::Unauthorized
+//!         }
+//!     })
 //!     .build();
 //! ```
 mod builder;
@@ -164,7 +232,7 @@ mod predicate;
 mod service;
 
 
-use std::{future::Future, marker::PhantomData, pin::Pin};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use axum::body::Body;
 use tower_layer::Layer;
@@ -172,10 +240,10 @@ use tower_layer::Layer;
 pub use self::{
     builder::RequireBuilder,
     handler::{
-        AsyncFallbackHandler, DefaultFallback, DefaultRestrict, RedirectFallback,
-        SimpleResponseFallback,
+        AsyncHandler, DefaultUnauthenticated, DefaultUnauthorized, RedirectHandler,
+        SimpleResponseHandler,
     },
-    predicate::{AsyncPredicate, CheckMode, DefaultPredicate, SimplePredicate},
+    predicate::{CheckMode, Decision, DecisionPredicate, DefaultDecision, PermissionsPredicate},
     service::RequireService,
 };
 use crate::AuthnBackend;
@@ -192,123 +260,120 @@ pub type RequireBuilderLayer<B, ST = (), T = Body> = RequireBuilder<B, ST, T>;
 /// A configurable authentication and access control layer.
 ///
 /// The [`Require`] struct serves as the core component of the authentication
-/// middleware. It determines whether a request satisfies an access predicate
-/// and applies restriction or fallback logic when access is denied.
+/// middleware. It determines whether a request is allowed and applies
+/// unauthorized or unauthenticated logic when access is denied.
 ///
 /// This type is typically constructed using the [`Require::builder`] or
 /// [`Require::builder_with_state`] methods.
+///
+/// Decision predicates and handlers are stored behind `Arc` to keep the public
+/// type stable and reduce generic noise.
 ///
 /// # Type Parameters
 /// - `B`: The authentication backend implementing [`AuthnBackend`].
 /// - `ST`: Shared state used by predicates or handlers.
 /// - `T`: Request body type (defaults to [`Body`]).
-/// - `Fb`: Fallback handler type (defaults to [`DefaultFallback`]).
-/// - `Rs`: Restriction handler type (defaults to [`DefaultRestrict`]).
-/// - `Pr`: Predicate type used to determine access (defaults to
-///   [`DefaultPredicate`]).
 ///
 /// For most use cases, prefer [`RequireLayer`] and [`RequireBuilderLayer`] to
 /// avoid explicit generic parameters.
 #[must_use]
-#[derive(Debug)]
-pub struct Require<
-    B,
-    ST = (),
-    T = Body,
-    Fb = DefaultFallback,
-    Rs = DefaultRestrict,
-    Pr = DefaultPredicate<B, ST>,
-> where
-    B: AuthnBackend,
+pub struct Require<B, ST = (), T = Body>
+where
+    B: AuthnBackend + Send + Sync + 'static,
 {
     /// The predicate that determines if access should be granted.
-    pub predicate: Pr,
-    /// The restriction response for when the predicate restricts access.
-    pub restrict: Rs,
-    /// The fallback response for missing authentication.
-    pub fallback: Fb,
-    /// Arbitrary user state available the predicate.
-    pub state: ST,
-    /// Internal marker to maintain type safety.
-    _phantom: PhantomData<(B, fn() -> T)>,
+    pub decision: Arc<dyn DecisionPredicate<B, ST>>,
+    /// The response for authenticated but unauthorized requests.
+    pub unauthorized: Arc<dyn AsyncHandler<T>>,
+    /// The response for unauthenticated requests.
+    pub unauthenticated: Arc<dyn AsyncHandler<T>>,
+    /// Arbitrary user state available to the predicate.
+    pub state: Arc<ST>,
 }
 
-impl<B, Fb, Rs, Pr, ST, T> Require<B, ST, T, Fb, Rs, Pr>
+impl<B, ST, T> Require<B, ST, T>
 where
-    B: AuthnBackend,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
-    /// Creates a new [`Require`] instance with the specified predicate,
-    /// restriction, fallback, and state.
-    pub fn new(predicate: Pr, restrict: Rs, fallback: Fb, state: ST) -> Self {
+    /// Creates a new [`Require`] instance with the specified decision,
+    /// unauthorized, unauthenticated, and state.
+    pub fn new<Pr, Un, Uh>(decision: Pr, unauthorized: Un, unauthenticated: Uh, state: ST) -> Self
+    where
+        Pr: DecisionPredicate<B, ST> + 'static,
+        Un: AsyncHandler<T> + 'static,
+        Uh: AsyncHandler<T> + 'static,
+    {
         Self {
-            predicate,
-            restrict,
-            fallback,
-            state,
-            _phantom: PhantomData,
+            decision: Arc::new(decision),
+            unauthorized: Arc::new(unauthorized),
+            unauthenticated: Arc::new(unauthenticated),
+            state: Arc::new(state),
         }
     }
 }
 
-// Manual clone, because of Body
-impl<B, Fb, Rs, ST, T, Pr> Clone for Require<B, ST, T, Fb, Rs, Pr>
+impl<B, ST, T> std::fmt::Debug for Require<B, ST, T>
 where
-    Fb: Clone,
-    Rs: Clone,
-    Pr: Clone,
-    ST: Clone,
-    B: AuthnBackend,
+    B: AuthnBackend + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Require")
+            .field("decision", &"DecisionPredicate")
+            .field("unauthorized", &"AsyncHandler")
+            .field("unauthenticated", &"AsyncHandler")
+            .field("state", &"Arc<ST>")
+            .finish()
+    }
+}
+
+impl<B, ST, T> Clone for Require<B, ST, T>
+where
+    B: AuthnBackend + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
-            predicate: self.predicate.clone(),
-            restrict: self.restrict.clone(),
-            fallback: self.fallback.clone(),
-            state: self.state.clone(),
-            _phantom: PhantomData,
+            decision: Arc::clone(&self.decision),
+            unauthorized: Arc::clone(&self.unauthorized),
+            unauthenticated: Arc::clone(&self.unauthenticated),
+            state: Arc::clone(&self.state),
         }
     }
 }
 
 impl<B, T> Require<B, (), T>
 where
-    B: AuthnBackend,
+    B: AuthnBackend + Send + Sync + 'static,
 {
     /// Returns a builder for constructing a [`Require`] layer with an empty
     /// state.
     #[inline]
-    pub fn builder(
-    ) -> RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict, DefaultPredicate<B, ()>> {
+    pub fn builder() -> RequireBuilder<B, (), T> {
         RequireBuilder::new()
     }
 }
 
 impl<B, ST, T> Require<B, ST, T>
 where
-    B: AuthnBackend,
-    DefaultPredicate<B, ST>: AsyncPredicate<B, ST>,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
     /// Returns a builder for constructing a [`Require`] layer with custom
     /// shared state.
     #[inline]
-    pub fn builder_with_state(
-        state: ST,
-    ) -> RequireBuilder<B, ST, T, DefaultFallback, DefaultRestrict, DefaultPredicate<B, ST>> {
+    pub fn builder_with_state(state: ST) -> RequireBuilder<B, ST, T> {
         RequireBuilder::new_with_state(state)
     }
 }
 
-impl<S, B, ST, T, Fb, Rs, Pr> Layer<S> for Require<B, ST, T, Fb, Rs, Pr>
+impl<S, B, ST, T> Layer<S> for Require<B, ST, T>
 where
     S: Clone,
-    B: Clone + AuthnBackend + Send + Sync + 'static,
-    Fb: Clone + Send + Sync + 'static,
-    Rs: Clone + Send + Sync + 'static,
-    Pr: Clone + Send + Sync + 'static,
-    ST: Clone + Send + Sync + 'static,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
     T: std::marker::Send + 'static,
 {
-    type Service = RequireService<S, B, ST, T, Fb, Rs, Pr>;
+    type Service = RequireService<S, B, ST, T>;
 
     #[doc(hidden)]
     /// Wraps the given service with the [`Require`] authentication layer.
@@ -322,7 +387,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, sync::Arc};
 
     use axum::{
         body::Body,
@@ -338,8 +403,9 @@ mod tests {
     use crate::{
         require::{
             builder::RequireBuilder,
-            handler::{RedirectFallback, SimpleResponseFallback},
-            predicate::SimplePredicate,
+            handler::{RedirectHandler, SimpleResponseHandler},
+            predicate::PermissionsPredicate,
+            Decision,
             Require,
         },
         AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend,
@@ -362,14 +428,23 @@ mod tests {
         req_perm: Vec<TestPermission>,
     }
 
-    async fn verify_permissions(backend: TestBackend, user: User, state: TestState) -> bool {
+    async fn verify_permissions(
+        auth_session: AuthSession<TestBackend>,
+        state: Arc<TestState>,
+    ) -> Decision {
         let req_perms = &state.req_perm;
-        let Ok(u_perms) = backend.get_user_permissions(&user).await else {
-            return false;
+        let Some(user) = auth_session.user().await else {
+            return Decision::Unauthenticated;
+        };
+        let Ok(u_perms) = auth_session.backend().get_user_permissions(&user).await else {
+            return Decision::Unauthorized;
         };
 
-        let allow = req_perms.iter().any(|perm| u_perms.contains(perm));
-        allow
+        if req_perms.iter().any(|perm| u_perms.contains(perm)) {
+            Decision::Allow
+        } else {
+            Decision::Unauthorized
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -558,7 +633,7 @@ mod tests {
         #[tokio::test]
         async fn test_login_required_parity_redirect() {
             let builder_layer = RequireBuilder::<TestBackend>::new()
-                .fallback(RedirectFallback::new().login_url("/login"))
+                .unauthenticated(RedirectHandler::new().login_url("/login"))
                 .build();
             let macro_layer = login_required!(TestBackend, login_url = "/login");
 
@@ -594,7 +669,7 @@ mod tests {
         #[tokio::test]
         async fn test_permission_required_parity_unauthenticated() {
             let builder_layer = RequireBuilder::<TestBackend>::new()
-                .predicate(SimplePredicate::new().with_permissions(vec!["test.read"]))
+                .decision(PermissionsPredicate::new().with_permissions(vec!["test.read"]))
                 .build();
             let macro_layer = permission_required!(TestBackend, "test.read");
 
@@ -629,7 +704,7 @@ mod tests {
         #[tokio::test]
         async fn test_permission_required_parity_authenticated() {
             let builder_layer = RequireBuilder::<TestBackend>::new()
-                .predicate(SimplePredicate::new().with_permissions(vec!["test.read"]))
+                .decision(PermissionsPredicate::new().with_permissions(vec!["test.read"]))
                 .build();
             let macro_layer = permission_required!(TestBackend, "test.read");
 
@@ -667,8 +742,8 @@ mod tests {
         #[tokio::test]
         async fn test_permission_required_parity_redirect() {
             let builder_layer = RequireBuilder::<TestBackend>::new()
-                .predicate(SimplePredicate::new().with_permissions(vec!["test.read"]))
-                .fallback(RedirectFallback::new().login_url("/login"))
+                .decision(PermissionsPredicate::new().with_permissions(vec!["test.read"]))
+                .unauthenticated(RedirectHandler::new().login_url("/login"))
                 .build();
             let macro_layer =
                 permission_required!(TestBackend, login_url = "/login", "test.read");
@@ -706,7 +781,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_required_with_login_url() {
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(RedirectFallback::new().login_url("/login"))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
             .build();
 
         let app = Router::new()
@@ -750,12 +825,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_required_with_login_url_and_redirect_field() {
-        let fallback = RedirectFallback::new()
+        let fallback = RedirectHandler::new()
             .redirect_field("next_uri")
             .login_url("/signin");
 
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(fallback)
+            .unauthenticated(fallback)
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -799,8 +874,8 @@ mod tests {
     #[tokio::test]
     async fn test_login_required_with_response_fallback() {
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(|_| async { StatusCode::GONE.into_response() })
-            .fallback(SimpleResponseFallback::text(StatusCode::GONE, "test"))
+            .unauthenticated(|_| async { StatusCode::GONE.into_response() })
+            .unauthenticated(SimpleResponseHandler::text(StatusCode::GONE, "test"))
             .build();
 
         let app = Router::new()
@@ -839,7 +914,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_required_with_custom_fallback() {
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(|_| async { StatusCode::GONE.into_response() })
+            .unauthenticated(|_| async { StatusCode::GONE.into_response() })
             .build();
 
         let app = Router::new()
@@ -879,7 +954,7 @@ mod tests {
     async fn test_permission_required() {
         let permissions: Vec<&str> = vec!["test.read"];
         let require = RequireBuilder::<TestBackend>::new()
-            .predicate(SimplePredicate::new().with_permissions(permissions))
+            .decision(PermissionsPredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -919,7 +994,7 @@ mod tests {
     async fn test_permission_required_multiple_permissions() {
         let permissions: Vec<&str> = vec!["test.read", "test.write"];
         let require = RequireBuilder::<TestBackend>::new()
-            .predicate(SimplePredicate::new().with_permissions(permissions))
+            .decision(PermissionsPredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -959,8 +1034,8 @@ mod tests {
     async fn test_permission_required_with_login_url() {
         let permissions: Vec<&str> = vec!["test.read"];
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(RedirectFallback::new().login_url("/login"))
-            .predicate(SimplePredicate::new().with_permissions(permissions))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
+            .decision(PermissionsPredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -1005,12 +1080,12 @@ mod tests {
     async fn test_permission_required_with_login_url_and_redirect_field() {
         let permissions: Vec<&str> = vec!["test.read"];
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(
-                RedirectFallback::new()
+            .unauthenticated(
+                RedirectHandler::new()
                     .redirect_field("next_uri")
                     .login_url("/signin"),
             )
-            .predicate(SimplePredicate::new().with_permissions(permissions))
+            .decision(PermissionsPredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -1055,7 +1130,7 @@ mod tests {
     async fn test_permission_required_missing_permissions() {
         let permissions: Vec<&str> = vec!["test.read", "test.write", "admin.read"];
         let require = RequireBuilder::<TestBackend>::new()
-            .predicate(SimplePredicate::new().with_permissions(permissions))
+            .decision(PermissionsPredicate::new().with_permissions(permissions))
             .build();
 
         let app = Router::new()
@@ -1094,7 +1169,7 @@ mod tests {
     #[tokio::test]
     async fn test_redirect_uri_query() {
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(RedirectFallback::new().login_url("/login"))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
             .build();
 
         let app = Router::new()
@@ -1119,7 +1194,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_url_query() {
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(RedirectFallback::new().login_url("/login?foo=bar&foo=baz"))
+            .unauthenticated(RedirectHandler::new().login_url("/login?foo=bar&foo=baz"))
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -1153,8 +1228,8 @@ mod tests {
     #[tokio::test]
     async fn test_login_url_explicit_redirect() {
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(
-                RedirectFallback::new()
+            .unauthenticated(
+                RedirectHandler::new()
                     .redirect_field("next_url")
                     .login_url("/login?next_url=%2Fdashboard"),
             )
@@ -1175,7 +1250,7 @@ mod tests {
         );
 
         let require = RequireBuilder::<TestBackend>::new()
-            .fallback(RedirectFallback::new().login_url("/login?next=%2Fdashboard"))
+            .unauthenticated(RedirectHandler::new().login_url("/login?next=%2Fdashboard"))
             .build();
         let app = Router::new()
             .route("/", axum::routing::get(|| async {}))
@@ -1196,7 +1271,7 @@ mod tests {
     #[tokio::test]
     async fn test_nested() {
         let require = Require::<TestBackend>::builder()
-            .fallback(RedirectFallback::new().login_url("/login"))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
             .build();
         let nested = Router::new()
             .route("/foo", axum::routing::get(|| async {}))
@@ -1223,13 +1298,13 @@ mod tests {
             req_perm: vec!["test.read".into()],
         };
 
-        let f = |backend: TestBackend, user: User, state: TestState| {
-            verify_permissions(backend, user, state)
+        let f = |auth_session: AuthSession<TestBackend>, state: Arc<TestState>| {
+            verify_permissions(auth_session, state)
         };
         let require_login = Require::<TestBackend, TestState>::builder_with_state(state.clone())
-            .fallback(RedirectFallback::new().login_url("/login"))
-            .restrict(|_| async { StatusCode::UNAUTHORIZED.into_response() })
-            .predicate(f)
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
+            .unauthorized(|_| async { StatusCode::UNAUTHORIZED.into_response() })
+            .decision(f)
             .build();
 
         let app = Router::new()
@@ -1270,16 +1345,16 @@ mod tests {
         let state = TestState {
             req_perm: vec!["test.read".into(), "test.write".into()],
         };
-        let f = |backend: TestBackend, user: User, state: TestState| {
-            verify_permissions(backend, user, state)
+        let f = |auth_session: AuthSession<TestBackend>, state: Arc<TestState>| {
+            verify_permissions(auth_session, state)
         };
 
-        let re = RequireBuilder::<TestBackend, TestState>::new_with_state(state.clone()).fallback(
-            RedirectFallback::new()
+        let re = RequireBuilder::<TestBackend, TestState>::new_with_state(state.clone()).unauthenticated(
+            RedirectHandler::new()
                 .redirect_field("next_url")
                 .login_url("/login?next_url=%2Fdashboard"),
         );
-        let pre = re.predicate(f);
+        let pre = re.decision(f);
         let require_login = pre.build();
 
         let app = Router::new()

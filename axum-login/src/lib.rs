@@ -280,7 +280,7 @@
 //! ## Builder-based middleware
 //!
 //! ```rust,no_run
-//! use axum_login::require::{RedirectFallback, Require};
+//! use axum_login::require::{RedirectHandler, Require};
 //! use axum_login::{AuthUser, AuthnBackend, UserId};
 //!
 //! #[derive(Clone, Debug)]
@@ -322,17 +322,20 @@
 //! }
 //!
 //! let require = Require::<Backend>::builder()
-//!     .fallback(RedirectFallback::new().login_url("/login"))
+//!     .unauthenticated(RedirectHandler::new().login_url("/login"))
 //!     .build();
 //! ```
+//!
+//! Use `.decision(...)` for custom access logic; it receives the auth session
+//! plus `Arc<state>` when you build with shared state.
 //!
 //! ## Behavior contract
 //!
 //! The middleware surfaces follow the same contract:
 //!
-//! - If the request is unauthenticated, the fallback handler is used.
-//! - If the request is authenticated but not authorized, the restrict handler
-//!   is used.
+//! - If the request is unauthenticated, the unauthenticated handler is used.
+//! - If the request is authenticated but not authorized, the unauthorized
+//!   handler is used.
 //! - Redirect fallbacks preserve explicit redirect query parameters if already
 //!   present and otherwise append the configured redirect field.
 //! - Redirect construction errors return `500 Internal Server Error`.

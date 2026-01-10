@@ -7,7 +7,7 @@ use axum::{
 };
 use axum_login::{
     login_required, permission_required,
-    require::{RedirectFallback, Require, SimplePredicate},
+    require::{RedirectHandler, Require, PermissionsPredicate},
     AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
@@ -276,7 +276,7 @@ fn benchmark_permission_check(c: &mut Criterion) {
             let auth_layer = setup_auth_layer!();
             let permissions: Vec<&str> = vec!["test.read"];
             let require = Require::<TestBackend>::builder()
-                .predicate(SimplePredicate::new().with_permissions(permissions))
+                .decision(PermissionsPredicate::new().with_permissions(permissions))
                 .build();
             let app = Router::new()
                 .route("/", axum::routing::get(|| async {}))
@@ -341,7 +341,7 @@ fn benchmark_redirect_fallback(c: &mut Criterion) {
         b.to_async(&runtime).iter(|| async {
             let auth_layer = setup_auth_layer!();
             let require = Require::<TestBackend>::builder()
-                .fallback(RedirectFallback::new().login_url("/login"))
+                .unauthenticated(RedirectHandler::new().login_url("/login"))
                 .build();
             let app = Router::new()
                 .route("/", axum::routing::get(|| async {}))

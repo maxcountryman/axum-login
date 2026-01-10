@@ -1,11 +1,11 @@
 #[cfg(all(feature = "require-builder", not(feature = "macros-middleware")))]
 mod require_builder_only {
-    use axum_login::require::{RedirectFallback, Require};
+    use axum_login::require::{RedirectHandler, Require};
 
     #[test]
     fn assert_builder_api_available() {
         let _layer = Require::<TestBackend>::builder()
-            .fallback(RedirectFallback::new().login_url("/login"))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
             .build();
     }
 

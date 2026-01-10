@@ -7,6 +7,9 @@
   depend on `require-builder`.
 - Share redirect helper across middleware surfaces and add feature-gate checks
   for `require-builder`-only builds.
+- Simplify the `Require` API by type-erasing handlers and predicates behind
+  `Arc`. `DecisionPredicate::decide` now receives `Arc<ST>` and `AsyncHandler`
+  is `Send + Sync` with `&self` (breaking).
 
 # 0.18.0
 

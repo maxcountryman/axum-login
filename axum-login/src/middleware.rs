@@ -9,8 +9,8 @@ macro_rules! login_required {
 
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
         $crate::require::Require::<$backend_type>::builder()
-            .fallback(
-                $crate::require::RedirectFallback::new()
+            .unauthenticated(
+                $crate::require::RedirectHandler::new()
                     .login_url($login_url)
                     .redirect_field($redirect_field),
             )
@@ -33,13 +33,13 @@ macro_rules! login_required {
 #[macro_export]
 macro_rules! permission_required {
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+ $(,)?) => {{
-        let predicate = $crate::require::SimplePredicate::<$backend_type>::new()
+        let predicate = $crate::require::PermissionsPredicate::<$backend_type>::new()
             .with_permissions([$($perm),+]);
 
         $crate::require::Require::<$backend_type>::builder()
-            .predicate(predicate)
-            .fallback(
-                $crate::require::RedirectFallback::new()
+            .decision(predicate)
+            .unauthenticated(
+                $crate::require::RedirectHandler::new()
                     .login_url($login_url)
                     .redirect_field($redirect_field),
             )
@@ -56,11 +56,11 @@ macro_rules! permission_required {
     };
 
     ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
-        let predicate = $crate::require::SimplePredicate::<$backend_type>::new()
+        let predicate = $crate::require::PermissionsPredicate::<$backend_type>::new()
             .with_permissions([$($perm),+]);
 
         $crate::require::Require::<$backend_type>::builder()
-            .predicate(predicate)
+            .decision(predicate)
             .build()
     }};
 }

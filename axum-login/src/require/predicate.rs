@@ -1,45 +1,50 @@
 use std::{
     collections::HashSet,
     fmt::Debug,
-    future::{ready, Future, Ready},
+    future::Future,
     marker::PhantomData,
-    pin::Pin,
-    task::{Context, Poll},
+    sync::Arc,
 };
 
-use pin_project::pin_project;
+use crate::{require::BoxFuture, AuthSession, AuthnBackend, AuthzBackend};
 
-use crate::{require::BoxFuture, AuthnBackend, AuthzBackend};
+/// The decision returned by a predicate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    /// Allow the request to proceed.
+    Allow,
+    /// The request is unauthenticated.
+    Unauthenticated,
+    /// The request is authenticated but unauthorized.
+    Unauthorized,
+}
 
 // Note: this takes owned values of backend and user to keep the async boundary
 // simple for callers.
 
-/// Trait for predicating requests.
+/// Trait for deciding access for a request.
 ///
-/// This trait takes owned `backend` and `user` values to keep async usage
-/// ergonomic. Implementations are expected to be cheap to clone (e.g., via
-/// `Arc` handles) so predicate evaluation doesn't incur heavy copies.
-pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
-    /// The future type returned by predicate
-    type Future: Future<Output = bool> + Send + 'static;
-
-    /// Allow a request based on a given predicate.
+/// This trait takes an owned [`AuthSession`] to keep async usage ergonomic.
+/// Implementations should be cheap to share across requests, typically by
+/// storing any internal data behind `Arc`.
+pub trait DecisionPredicate<B: AuthnBackend, ST = ()>: Send + Sync {
+    /// Decide whether a request is allowed.
     ///
-    /// The predicate takes the backend, the user and the state.
+    /// The predicate takes the auth session and the shared state as `Arc<ST>`.
     ///
-    /// See [`RequireBuilder::predicate`] for more details.
+    /// See [`RequireBuilder::decision`] for more details.
     ///
-    /// [`RequireBuilder::predicate`]: super::builder::RequireBuilder
-    fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, state: ST) -> Self::Future;
+    /// [`RequireBuilder::decision`]: super::builder::RequireBuilder
+    fn decide(&self, auth_session: AuthSession<B>, state: Arc<ST>) -> BoxFuture<'static, Decision>;
 }
 
-/// The default [`AsyncPredicate`] implementation used by [`super::Require`].
+/// The default [`DecisionPredicate`] implementation used by [`super::Require`].
 #[derive(Clone, Debug)]
-pub struct DefaultPredicate<B: AuthnBackend, ST> {
+pub struct DefaultDecision<B: AuthnBackend, ST> {
     _marker: PhantomData<(B, ST)>,
 }
 
-impl<B: AuthnBackend, ST> Default for DefaultPredicate<B, ST> {
+impl<B: AuthnBackend, ST> Default for DefaultDecision<B, ST> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -47,28 +52,30 @@ impl<B: AuthnBackend, ST> Default for DefaultPredicate<B, ST> {
     }
 }
 
-impl<B, ST> AsyncPredicate<B, ST> for DefaultPredicate<B, ST>
+impl<B, ST> DecisionPredicate<B, ST> for DefaultDecision<B, ST>
 where
-    B: AuthnBackend,
-    ST: Clone,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
-    type Future = Ready<bool>;
-
-    fn predicate(&self, _backend: B, _user: <B as AuthnBackend>::User, _state: ST) -> Self::Future {
-        ready(true)
+    fn decide(&self, auth_session: AuthSession<B>, _state: Arc<ST>) -> BoxFuture<'static, Decision> {
+        Box::pin(async move {
+            if auth_session.user().await.is_some() {
+                Decision::Allow
+            } else {
+                Decision::Unauthenticated
+            }
+        })
     }
 }
-impl<F, B, ST, Fut> AsyncPredicate<B, ST> for F
+impl<F, B, ST, Fut> DecisionPredicate<B, ST> for F
 where
-    F: Fn(B, <B as AuthnBackend>::User, ST) -> Fut,
-    Fut: Future<Output = bool> + Send + 'static,
+    F: Fn(AuthSession<B>, Arc<ST>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Decision> + Send + 'static,
     B: AuthnBackend + 'static,
-    ST: Clone,
+    ST: Send + Sync + 'static,
 {
-    type Future = Fut;
-
-    fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, state: ST) -> Self::Future {
-        (self)(backend, user, state)
+    fn decide(&self, auth_session: AuthSession<B>, state: Arc<ST>) -> BoxFuture<'static, Decision> {
+        Box::pin((self)(auth_session, state))
     }
 }
 
@@ -90,7 +97,7 @@ pub enum CheckMode {
 /// # Example
 ///
 /// ```rust,no_run
-/// use axum_login::require::{CheckMode, Require, SimplePredicate};
+/// use axum_login::require::{CheckMode, Require, PermissionsPredicate};
 /// use axum_login::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 ///
 /// #[derive(Clone, Debug)]
@@ -138,121 +145,88 @@ pub enum CheckMode {
 ///     type Permission = Permission;
 /// }
 ///
-/// let predicate = SimplePredicate::<Backend>::new()
+/// let predicate = PermissionsPredicate::<Backend>::new()
 ///     .with_permissions([Permission("admin.read")])
 ///     .with_mode(CheckMode::All);
 ///
-/// let require = Require::<Backend>::builder().predicate(predicate).build();
+/// let require = Require::<Backend>::builder().decision(predicate).build();
 /// ```
-pub struct SimplePredicate<B: AuthzBackend + AuthnBackend> {
+pub struct PermissionsPredicate<B: AuthzBackend + AuthnBackend> {
     pub(crate) _marker: PhantomData<B>,
     // PERF: could add a single permission variant
-    permissions: HashSet<B::Permission>,
+    permissions: Arc<HashSet<B::Permission>>,
     check_mode: CheckMode,
 }
 
-impl<B: AuthnBackend + AuthzBackend> Default for SimplePredicate<B> {
+impl<B: AuthnBackend + AuthzBackend> Default for PermissionsPredicate<B> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<B: AuthnBackend + AuthzBackend> SimplePredicate<B> {
-    /// Create a new SimplePredicate with a single permission and ALL check mode
+impl<B: AuthnBackend + AuthzBackend> PermissionsPredicate<B> {
+    /// Create a new predicate with a single permission and ALL check mode.
     pub fn new() -> Self {
         let permissions: HashSet<B::Permission> = HashSet::new();
         Self {
             _marker: PhantomData,
-            permissions,
+            permissions: Arc::new(permissions),
             check_mode: CheckMode::All,
         }
     }
-    /// Set the check mode for this predicate
+    /// Set the check mode for this predicate.
     pub fn with_mode(mut self, mode: CheckMode) -> Self {
         self.check_mode = mode;
         self
     }
 
-    /// Add permissions to the predicate
+    /// Add permissions to the predicate.
     pub fn with_permissions<I, P>(mut self, permissions: I) -> Self
     where
         I: IntoIterator<Item = P>,
         P: Into<B::Permission>,
     {
-        self.permissions = permissions.into_iter().map(Into::into).collect();
+        let permissions = permissions.into_iter().map(Into::into).collect();
+        self.permissions = Arc::new(permissions);
         self
     }
 }
 
-impl<B> AsyncPredicate<B, ()> for SimplePredicate<B>
+impl<B, ST> DecisionPredicate<B, ST> for PermissionsPredicate<B>
 where
-    B: AuthnBackend + AuthzBackend + 'static,
-    B::Permission: Clone,
+    B: AuthnBackend + AuthzBackend + Send + Sync + 'static,
+    B::Permission: Clone + Send + Sync,
+    ST: Send + Sync + 'static,
 {
-    type Future = SimplePredicateFuture<B>;
-
-    fn predicate(&self, backend: B, user: <B as AuthnBackend>::User, _state: ()) -> Self::Future {
-        let required_permissions = self.permissions.clone();
+    fn decide(&self, auth_session: AuthSession<B>, _state: Arc<ST>) -> BoxFuture<'static, Decision> {
+        let required_permissions = Arc::clone(&self.permissions);
         let check_mode = self.check_mode;
 
-        SimplePredicateFuture::GetPermissions {
-            future: Box::pin(async move { backend.get_all_permissions(&user).await }),
-            required_permissions,
-            check_mode,
-        }
-    }
-}
+        Box::pin(async move {
+            let Some(user) = auth_session.user().await else {
+                return Decision::Unauthenticated;
+            };
 
-#[pin_project(project = SimplePredicateFutureProj)]
-#[allow(missing_debug_implementations)]
-pub enum SimplePredicateFuture<B: AuthnBackend + AuthzBackend> {
-    GetPermissions {
-        #[pin]
-        future: BoxFuture<'static, Result<HashSet<B::Permission>, B::Error>>,
-        required_permissions: HashSet<B::Permission>,
-        check_mode: CheckMode,
-    },
-    Ready {
-        result: bool,
-    },
-}
+            match auth_session.backend().get_all_permissions(&user).await {
+                Ok(user_permissions) => {
+                    let allow = match check_mode {
+                        CheckMode::Any => required_permissions
+                            .iter()
+                            .any(|perm| user_permissions.contains(perm)),
+                        CheckMode::All => required_permissions
+                            .iter()
+                            .all(|perm| user_permissions.contains(perm)),
+                        CheckMode::Exact => user_permissions == *required_permissions,
+                    };
 
-impl<B> Future for SimplePredicateFuture<B>
-where
-    B: AuthnBackend + AuthzBackend,
-    B::Permission: Clone + Eq + std::hash::Hash,
-{
-    type Output = bool;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        loop {
-            match self.as_mut().project() {
-                SimplePredicateFutureProj::GetPermissions {
-                    future,
-                    required_permissions,
-                    check_mode,
-                } => match future.poll(cx) {
-                    Poll::Ready(Ok(user_permissions)) => {
-                        let result = match check_mode {
-                            CheckMode::Any => required_permissions
-                                .iter()
-                                .any(|perm| user_permissions.contains(perm)),
-                            CheckMode::All => required_permissions
-                                .iter()
-                                .all(|perm| user_permissions.contains(perm)),
-                            CheckMode::Exact => user_permissions == *required_permissions,
-                        };
-                        self.set(SimplePredicateFuture::Ready { result });
+                    if allow {
+                        Decision::Allow
+                    } else {
+                        Decision::Unauthorized
                     }
-                    Poll::Ready(Err(_)) => {
-                        self.set(SimplePredicateFuture::Ready { result: false });
-                    }
-                    Poll::Pending => return Poll::Pending,
-                },
-                SimplePredicateFutureProj::Ready { result } => {
-                    return Poll::Ready(*result);
                 }
+                Err(_) => Decision::Unauthorized,
             }
-        }
+        })
     }
 }

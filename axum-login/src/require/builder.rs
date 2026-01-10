@@ -4,41 +4,45 @@
 //! API for defining how authentication and authorization checks are performed
 //! in your Axum application.
 //!
-//! It allows you to define **predicates**, **restriction behavior**, and
-//! **fallback responses**, making it easy to handle cases such as
+//! The builder stores predicates and handlers behind `Arc` to keep the public
+//! type simple while still accepting concrete implementations.
+//!
+//! It allows you to define **decisions**, **unauthorized responses**, and
+//! **unauthenticated responses**, making it easy to handle cases such as
 //! - redirecting unauthenticated users to a login page,
 //! - returning a `403 Forbidden` for users without permission,
 //! - applying custom logic for access control checks.
 //!
 //! ## Concepts
 //!
-//! - **Predicate**: Determines if a request is allowed to proceed. It receives
-//!   the Backend, User, and State (if any). If it returns `false`, the
-//!   restriction handler is triggered.
+//! - **Decision**: Determines if a request is allowed to proceed. It receives
+//!   the auth session and state (if any). It can allow, deny as unauthorized,
+//!   or deny as unauthenticated.
 //!
-//! - **Fallback**: Handles cases when there is *no authenticated user* (e.g.,
-//!   redirect to login page).
+//! - **Unauthenticated**: Handles cases when there is *no authenticated user*
+//!   (e.g., redirect to login page).
 //!
-//! - **Restrict**: Handles cases when there *is* an authenticated user, but the
-//!   user is not authorized (e.g., return `403 Forbidden`).
+//! - **Unauthorized**: Handles cases when there *is* an authenticated user,
+//!   but the user is not authorized (e.g., return `403 Forbidden`).
 //!
-//! - **State**: Optional shared data accessible by predicate.
+//! - **State**: Optional shared data accessible by predicates. The state is
+//!   stored once and provided as `Arc<ST>` to avoid per-request cloning.
 //!
 //! ## Default Behavior
 //!
 //! If you don't customize anything, `RequireBuilder` will use:
 //!
-//! - [`DefaultPredicate`] — allows all authenticated users.
-//! - [`DefaultRestrict`] — returns a `403 Forbidden` response for unauthorized
+//! - [`DefaultDecision`] — allows all authenticated users.
+//! - [`DefaultUnauthorized`] — returns a `403 Forbidden` response for unauthorized
 //!   users.
-//! - [`DefaultFallback`] — returns a `401 Unauthorized` response for
+//! - [`DefaultUnauthenticated`] — returns a `401 Unauthorized` response for
 //!   unauthenticated
 //!
 //! ## Example
 //!
 //! ```rust,no_run
 //! use axum_login::{AuthUser, AuthnBackend, UserId};
-//! use axum_login::require::{RedirectFallback, Require};
+//! use axum_login::require::{RedirectHandler, Require};
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -79,18 +83,18 @@
 //! }
 //!
 //! let require = Require::<Backend>::builder()
-//!     .fallback(RedirectFallback::new().login_url("/login"))
+//!     .unauthenticated(RedirectHandler::new().login_url("/login"))
 //!     .build();
 //! ```
 
-use std::marker::PhantomData;
+use std::sync::Arc;
 
 use axum::body::Body;
 
 use crate::{
     require::{
-        handler::{AsyncFallbackHandler, DefaultFallback, DefaultRestrict},
-        predicate::{AsyncPredicate, DefaultPredicate},
+        handler::{AsyncHandler, DefaultUnauthenticated, DefaultUnauthorized},
+        predicate::{DecisionPredicate, DefaultDecision},
         Require,
     },
     AuthnBackend,
@@ -101,9 +105,9 @@ use crate::{
 ///
 /// The `RequireBuilder` provides a fluent API for composing authentication
 /// logic in your Axum application. Each call to a method like
-/// [`predicate`](#method.predicate), [`fallback`](#method.fallback), or
-/// [`restrict`](#method.restrict) returns a new builder with the specified
-/// configuration.
+/// [`decision`](#method.decision), [`unauthenticated`](#method.unauthenticated),
+/// or [`unauthorized`](#method.unauthorized) returns a new builder with the
+/// specified configuration.
 ///
 /// For the default configuration, you can use the
 /// [`crate::require::RequireBuilderLayer`] type alias for shorter type
@@ -112,7 +116,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust,no_run
-/// use axum_login::require::{RedirectFallback, Require, RequireBuilder};
+/// use axum_login::require::{RedirectHandler, Require, RequireBuilder};
 /// use axum_login::{AuthUser, AuthnBackend, UserId};
 ///
 /// #[derive(Clone, Debug)]
@@ -154,138 +158,129 @@ use crate::{
 /// }
 ///
 /// let require = Require::<Backend>::builder()
-///     .fallback(RedirectFallback::new().login_url("/login"))
+///     .unauthenticated(RedirectHandler::new().login_url("/login"))
 ///     .build();
 /// # let _builder: RequireBuilder<Backend> = Require::builder();
 /// ```
-#[derive(Debug, Clone)]
-pub struct RequireBuilder<
-    B,
-    ST = (),
-    T = Body,
-    Fb = DefaultFallback,
-    Rs = DefaultRestrict,
-    Pr = DefaultPredicate<B, ST>,
-> {
-    /// Function for checking user permissions.
-    predicate: Pr,
-    /// Handler for user lacking permissions.
-    restrict: Rs,
+#[derive(Clone)]
+pub struct RequireBuilder<B, ST = (), T = Body> {
+    /// Decision predicate for the request.
+    decision: Arc<dyn DecisionPredicate<B, ST>>,
+    /// Handler for unauthorized users.
+    unauthorized: Arc<dyn AsyncHandler<T>>,
     /// Handler for unauthenticated users.
-    fallback: Fb,
+    unauthenticated: Arc<dyn AsyncHandler<T>>,
     /// Shared state available to predicates and handlers.
-    state: ST,
-    /// Internal marker to maintain type safety.
-    _phantom: PhantomData<(B, fn() -> T)>,
+    state: Arc<ST>,
 }
 
-impl<B, T> Default for RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict>
+impl<B, ST, T> std::fmt::Debug for RequireBuilder<B, ST, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequireBuilder")
+            .field("decision", &"DecisionPredicate")
+            .field("unauthorized", &"AsyncHandler")
+            .field("unauthenticated", &"AsyncHandler")
+            .field("state", &"Arc<ST>")
+            .finish()
+    }
+}
+
+impl<B, T> Default for RequireBuilder<B, (), T>
 where
-    B: AuthnBackend,
+    B: AuthnBackend + Send + Sync + 'static,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<B, T> RequireBuilder<B, (), T, DefaultFallback, DefaultRestrict, DefaultPredicate<B, ()>>
+impl<B, T> RequireBuilder<B, (), T>
 where
-    B: AuthnBackend,
+    B: AuthnBackend + Send + Sync + 'static,
 {
     /// Creates a new `RequireBuilder` with the default configuration.
     ///
     /// The default:
-    /// - [`DefaultPredicate`] allows all authenticated users.
-    /// - [`DefaultRestrict`] returns `403 Forbidden`.
-    /// - [`DefaultFallback`] returns `401 Unauthorized`.
+    /// - [`DefaultDecision`] allows authenticated users and returns
+    ///   `Unauthenticated` otherwise.
+    /// - [`DefaultUnauthorized`] returns `403 Forbidden`.
+    /// - [`DefaultUnauthenticated`] returns `401 Unauthorized`.
     pub fn new() -> Self {
         Self {
-            predicate: DefaultPredicate::default(),
-            restrict: DefaultRestrict,
-            fallback: DefaultFallback,
-            state: (),
-            _phantom: PhantomData,
+            decision: Arc::new(DefaultDecision::default()),
+            unauthorized: Arc::new(DefaultUnauthorized),
+            unauthenticated: Arc::new(DefaultUnauthenticated),
+            state: Arc::new(()),
         }
     }
 }
 
-impl<B, ST, T> RequireBuilder<B, ST, T, DefaultFallback, DefaultRestrict, DefaultPredicate<B, ST>>
+impl<B, ST, T> RequireBuilder<B, ST, T>
 where
-    DefaultPredicate<B, ST>: AsyncPredicate<B, ST>,
-    B: AuthnBackend,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
     /// Creates a new `RequireBuilder` with the given application state.
     pub fn new_with_state(state: ST) -> Self {
         Self {
-            predicate: DefaultPredicate::default(),
-            restrict: DefaultRestrict,
-            fallback: DefaultFallback,
-            state,
-            _phantom: PhantomData,
+            decision: Arc::new(DefaultDecision::default()),
+            unauthorized: Arc::new(DefaultUnauthorized),
+            unauthenticated: Arc::new(DefaultUnauthenticated),
+            state: Arc::new(state),
         }
     }
 }
 
-impl<B, ST, T, Fb, Rs, Pr> RequireBuilder<B, ST, T, Fb, Rs, Pr>
+impl<B, ST, T> RequireBuilder<B, ST, T>
 where
-    B: AuthnBackend,
-    ST: Clone,
-    Fb: AsyncFallbackHandler<T>,
-    Rs: AsyncFallbackHandler<T>,
-    Pr: AsyncPredicate<B, ST>,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
-    /// Sets a custom authorization predicate.
+    /// Sets a custom decision predicate.
     ///
-/// The predicate determines whether a request is permitted to proceed.
-/// It runs for every request and has access to the authenticated user and
-/// request data.
-///
-/// The predicate receives owned `backend` and `user` values; keep these types
-/// cheap to clone (for example, by storing shared state in `Arc`).
-pub fn predicate<Pr2>(self, new_predicate: Pr2) -> RequireBuilder<B, ST, T, Fb, Rs, Pr2>
+    /// The predicate determines whether a request is permitted to proceed.
+    /// It receives the auth session plus an `Arc<ST>` of the shared state.
+    /// It runs for every request and has access to the auth session and
+    /// request state.
+    ///
+    /// The predicate receives an owned [`AuthSession`](crate::AuthSession);
+    /// keep this type cheap to clone (for example, by storing shared state in
+    /// `Arc`).
+    pub fn decision<Pr2>(self, new_predicate: Pr2) -> Self
     where
-        Pr2: AsyncPredicate<B, ST>,
+        Pr2: DecisionPredicate<B, ST> + 'static,
     {
-        RequireBuilder {
-            predicate: new_predicate,
-            restrict: self.restrict,
-            fallback: self.fallback,
-            state: self.state,
-            _phantom: PhantomData,
+        Self {
+            decision: Arc::new(new_predicate),
+            ..self
         }
     }
 
-    /// Sets a custom fallback handler for unauthenticated requests.
+    /// Sets a custom handler for unauthenticated requests.
     ///
     /// This handler is used when a request requires authentication, but no user
     /// is logged in.
-    pub fn fallback<Fb2>(self, new_fallback: Fb2) -> RequireBuilder<B, ST, T, Fb2, Rs, Pr>
+    pub fn unauthenticated<Uh2>(self, new_handler: Uh2) -> Self
     where
-        Fb2: AsyncFallbackHandler<T>,
+        Uh2: AsyncHandler<T> + 'static,
     {
-        RequireBuilder {
-            predicate: self.predicate,
-            restrict: self.restrict,
-            fallback: new_fallback,
-            state: self.state,
-            _phantom: PhantomData,
+        Self {
+            unauthenticated: Arc::new(new_handler),
+            ..self
         }
     }
 
-    /// Sets a custom restriction handler for unauthorized requests.
+    /// Sets a custom handler for unauthorized requests.
     ///
     /// This handler is used when a user is authenticated but lacks permission
     /// to access the requested resource.
-    pub fn restrict<Rs2>(self, new_restrict: Rs2) -> RequireBuilder<B, ST, T, Fb, Rs2, Pr>
+    pub fn unauthorized<Un2>(self, new_handler: Un2) -> Self
     where
-        Rs2: AsyncFallbackHandler<T>,
+        Un2: AsyncHandler<T> + 'static,
     {
-        RequireBuilder {
-            predicate: self.predicate,
-            restrict: new_restrict,
-            fallback: self.fallback,
-            state: self.state,
-            _phantom: PhantomData,
+        Self {
+            unauthorized: Arc::new(new_handler),
+            ..self
         }
     }
 
@@ -293,13 +288,12 @@ pub fn predicate<Pr2>(self, new_predicate: Pr2) -> RequireBuilder<B, ST, T, Fb, 
     ///
     /// This method consumes the builder and produces the middleware that can be
     /// applied to an Axum `Router` or `Service`.
-    pub fn build(self) -> Require<B, ST, T, Fb, Rs, Pr> {
+    pub fn build(self) -> Require<B, ST, T> {
         Require {
-            predicate: self.predicate,
-            restrict: self.restrict,
-            fallback: self.fallback,
+            decision: self.decision,
+            unauthorized: self.unauthorized,
+            unauthenticated: self.unauthenticated,
             state: self.state,
-            _phantom: PhantomData,
         }
     }
 }

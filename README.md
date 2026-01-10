@@ -65,7 +65,7 @@ We recommend reviewing our [`sqlite` example][sqlite-example]. There is also a [
 ### Builder quick start
 
 ```rust
-use axum_login::require::{RedirectFallback, Require};
+use axum_login::require::{RedirectHandler, Require};
 use axum_login::{AuthUser, AuthnBackend, UserId};
 
 #[derive(Clone, Debug)]
@@ -107,16 +107,19 @@ impl AuthnBackend for Backend {
 }
 
 let require = Require::<Backend>::builder()
-    .fallback(RedirectFallback::new().login_url("/login"))
+    .unauthenticated(RedirectHandler::new().login_url("/login"))
     .build();
 ```
+
+You can customize access logic with `.decision(...)`, which receives an
+`AuthSession` plus `Arc<state>` when you build with shared state.
 
 ## ✅ Behavior Contract
 
 The middleware surfaces follow the same contract:
 
-- If the request is unauthenticated, the fallback handler is used.
-- If the request is authenticated but not authorized, the restrict handler is used.
+- If the request is unauthenticated, the unauthenticated handler is used.
+- If the request is authenticated but not authorized, the unauthorized handler is used.
 - Redirect fallbacks preserve explicit redirect query parameters if already present and otherwise append the configured redirect field.
 - Redirect construction errors return `500 Internal Server Error`.
 

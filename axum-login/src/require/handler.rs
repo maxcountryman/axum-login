@@ -1,111 +1,88 @@
-use std::{
-    collections::HashMap,
-    future::{ready, Future, Ready},
-};
+use std::{collections::HashMap, future::Future};
 
 use axum::{
     body::Body,
     extract::{OriginalUri, Request},
     http::{HeaderName, HeaderValue, Response, StatusCode},
+    response::IntoResponse,
 };
 use tracing::error;
+
+use crate::require::BoxFuture;
 
 const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
 
-/// Trait for [`super::Require`] middleware fallback/restrict handlers.
-pub trait AsyncFallbackHandler<Req>: Clone {
-    /// Future returned by the handler.
-    type Future: Future<Output = Self::Response>;
-
-    /// Type of the successful response.
-    type Response;
-
+/// Trait for [`super::Require`] middleware handlers.
+pub trait AsyncHandler<Req>: Send + Sync {
     /// Handle a request.
-    fn handle(&mut self, request: Request<Req>) -> Self::Future;
+    fn handle(&self, request: Request<Req>) -> BoxFuture<'static, Response<Body>>;
 }
 
-impl<F, ReqInBody, Fut, Res> AsyncFallbackHandler<ReqInBody> for F
+impl<F, ReqInBody, Fut, Res> AsyncHandler<ReqInBody> for F
 where
-    F: FnMut(Request<ReqInBody>) -> Fut + Clone,
-    Fut: Future<Output = Res>,
+    F: Fn(Request<ReqInBody>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'static,
+    Res: IntoResponse + 'static,
+    ReqInBody: Send + 'static,
 {
-    type Future = Fut;
-    type Response = Res;
-
-    fn handle(&mut self, request: Request<ReqInBody>) -> Self::Future {
-        (self)(request)
+    fn handle(&self, request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
+        let fut = (self)(request);
+        Box::pin(async move { fut.await.into_response() })
     }
 }
 
-/// The default [`AsyncFallbackHandler`] implementation used by
-/// [`super::Require`] for requests missing authentication.
+/// The default handler for unauthenticated requests.
 #[derive(Clone, Debug)]
-pub struct DefaultFallback;
+pub struct DefaultUnauthenticated;
 
-impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for DefaultFallback
-where
-    ReqInBody: Send + 'static,
-{
-    type Future = Ready<Response<Body>>;
-    type Response = Response<Body>;
-
-    fn handle(&mut self, _request: Request<ReqInBody>) -> Self::Future {
-        ready(
+impl<ReqInBody> AsyncHandler<ReqInBody> for DefaultUnauthenticated {
+    fn handle(&self, _request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
+        Box::pin(async move {
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
                 .body(Body::from("Unauthorized"))
-                .unwrap(),
-        )
+                .unwrap()
+        })
     }
 }
 
-/// The default [`AsyncFallbackHandler`] implementation used by
-/// [`super::Require`] for requests restricted by the predicate.
+/// The default handler for unauthorized requests.
 #[derive(Clone, Debug)]
-pub struct DefaultRestrict;
+pub struct DefaultUnauthorized;
 
-impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for DefaultRestrict
-where
-    ReqInBody: Send + 'static,
-{
-    type Future = Ready<Response<Body>>;
-    type Response = Response<Body>;
-
-    fn handle(&mut self, _request: Request<ReqInBody>) -> Self::Future {
-        ready(
+impl<ReqInBody> AsyncHandler<ReqInBody> for DefaultUnauthorized {
+    fn handle(&self, _request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
+        Box::pin(async move {
             Response::builder()
                 .status(StatusCode::FORBIDDEN)
                 .body(Body::from("Forbidden"))
-                .unwrap(),
-        )
+                .unwrap()
+        })
     }
 }
 
 #[derive(Clone)]
 pub(super) struct InternalErrorFallback;
 
-impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for InternalErrorFallback {
-    type Future = Ready<Response<Body>>;
-    type Response = Response<Body>;
-
-    fn handle(&mut self, _request: Request<ReqInBody>) -> Self::Future {
-        ready(
+impl<ReqInBody> AsyncHandler<ReqInBody> for InternalErrorFallback {
+    fn handle(&self, _request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
+        Box::pin(async move {
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Body::from("Internal server error"))
-                .unwrap(),
-        )
+                .unwrap()
+        })
     }
 }
-/// A simple redirect-based fallback handler used when authentication fails.
+/// A simple redirect-based handler that redirects to a login URL.
 ///
-/// Used with [`RequireBuilder`](crate::require::builder::RequireBuilder)
+/// Used with [`RequireBuilder`](crate::require::builder::RequireBuilder).
 ///
 /// # Example
 ///
 /// ```rust,no_run
-/// use axum_login::require::{RedirectFallback, Require};
+/// use axum_login::require::{RedirectHandler, Require};
 /// use axum_login::{AuthUser, AuthnBackend, UserId};
 ///
 /// #[derive(Clone, Debug)]
@@ -147,15 +124,15 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for InternalErrorFallback {
 /// }
 ///
 /// let require = Require::<Backend>::builder()
-///     .fallback(
-///         RedirectFallback::new()
+///     .unauthenticated(
+///         RedirectHandler::new()
 ///             .login_url("/login")
 ///             .redirect_field("next"),
 ///     )
 ///     .build();
 /// ```
 #[derive(Clone, Debug, Default)]
-pub struct RedirectFallback {
+pub struct RedirectHandler {
     /// Optional name of the query parameter used to store
     /// the redirect target (e.g., `"next"`).
     pub redirect_field: Option<String>,
@@ -164,11 +141,11 @@ pub struct RedirectFallback {
     pub login_url: Option<String>,
 }
 
-impl RedirectFallback {
-    /// Creates a new [`RedirectFallback`] with no `login_url` or
+impl RedirectHandler {
+    /// Creates a new [`RedirectHandler`] with no `login_url` or
     /// `redirect_field` set.
     ///
-    /// This is equivalent to calling `RedirectFallback::default()`.
+    /// This is equivalent to calling `RedirectHandler::default()`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -187,11 +164,11 @@ impl RedirectFallback {
     }
 }
 
-impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
-    type Future = Ready<axum::response::Response<Body>>;
-    type Response = axum::response::Response<Body>;
-
-    fn handle(&mut self, req: Request<ReqInBody>) -> Self::Future {
+impl<ReqInBody> AsyncHandler<ReqInBody> for RedirectHandler
+where
+    ReqInBody: Send + 'static,
+{
+    fn handle(&self, req: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
         let login_url = self
             .login_url
             .clone()
@@ -201,40 +178,40 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
             .clone()
             .unwrap_or(DEFAULT_REDIRECT_FIELD.to_string());
 
-        let original_uri = req
-            .extensions()
-            .get::<OriginalUri>()
-            .map(|uri| uri.0.clone())
-            .unwrap_or_else(|| req.uri().clone());
+        Box::pin(async move {
+            let original_uri = req
+                .extensions()
+                .get::<OriginalUri>()
+                .map(|uri| uri.0.clone())
+                .unwrap_or_else(|| req.uri().clone());
 
-        let resp = match crate::url_with_redirect_query(&login_url, &redirect_field, original_uri) {
-            Ok(url) => axum::response::Response::builder()
-                .status(StatusCode::TEMPORARY_REDIRECT)
-                .header("Location", url.to_string())
-                .body("Redirecting...".into())
-                .unwrap(),
-            Err(err) => {
-                error!(err = %err);
-                axum::response::Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body("Internal Server Error".into())
-                    .unwrap()
+            match crate::url_with_redirect_query(&login_url, &redirect_field, original_uri) {
+                Ok(url) => axum::response::Response::builder()
+                    .status(StatusCode::TEMPORARY_REDIRECT)
+                    .header("Location", url.to_string())
+                    .body("Redirecting...".into())
+                    .unwrap(),
+                Err(err) => {
+                    error!(err = %err);
+                    axum::response::Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body("Internal Server Error".into())
+                        .unwrap()
+                }
             }
-        };
-
-        ready(resp)
+        })
     }
 }
 
-/// Customizable response fallback handler for authentication failure responses
+/// Customizable response handler for unauthenticated or unauthorized responses.
 ///
-/// Used with [`RequireBuilder`](crate::require::builder::RequireBuilder)
+/// Used with [`RequireBuilder`](crate::require::builder::RequireBuilder).
 ///
 /// # Example
 ///
 /// ```rust,no_run
 /// use axum::http::StatusCode;
-/// use axum_login::require::{Require, SimpleResponseFallback};
+/// use axum_login::require::{Require, SimpleResponseHandler};
 /// use axum_login::{AuthUser, AuthnBackend, UserId};
 ///
 /// #[derive(Clone, Debug)]
@@ -276,14 +253,14 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
 /// }
 ///
 /// let require = Require::<Backend>::builder()
-///     .fallback(SimpleResponseFallback::text(
+///     .unauthenticated(SimpleResponseHandler::text(
 ///         StatusCode::UNAUTHORIZED,
 ///         "Sign in to continue",
 ///     ))
 ///     .build();
 /// ```
 #[derive(Clone, Debug)]
-pub struct SimpleResponseFallback {
+pub struct SimpleResponseHandler {
     /// HTTP status code to return
     pub status_code: StatusCode,
     /// Response body content
@@ -294,7 +271,7 @@ pub struct SimpleResponseFallback {
     pub headers: HashMap<String, String>,
 }
 
-impl Default for SimpleResponseFallback {
+impl Default for SimpleResponseHandler {
     fn default() -> Self {
         Self {
             status_code: StatusCode::UNAUTHORIZED,
@@ -305,8 +282,8 @@ impl Default for SimpleResponseFallback {
     }
 }
 
-impl SimpleResponseFallback {
-    /// Create a new `SimpleResponseFallback` with default values.
+impl SimpleResponseHandler {
+    /// Create a new `SimpleResponseHandler` with default values.
     pub fn new() -> Self {
         Self::default()
     }
@@ -397,38 +374,40 @@ impl SimpleResponseFallback {
     }
 }
 
-impl<ReqBody> AsyncFallbackHandler<ReqBody> for SimpleResponseFallback {
-    type Future = Ready<Response<Body>>;
-    type Response = Response<Body>;
+impl<ReqBody> AsyncHandler<ReqBody> for SimpleResponseHandler {
+    fn handle(&self, _req: Request<ReqBody>) -> BoxFuture<'static, Response<Body>> {
+        let status_code = self.status_code;
+        let body = self.body.clone();
+        let content_type = self.content_type.clone();
+        let headers = self.headers.clone();
 
-    fn handle(&mut self, _req: Request<ReqBody>) -> Self::Future {
-        let mut response_builder = Response::builder().status(self.status_code);
+        Box::pin(async move {
+            let mut response_builder = Response::builder().status(status_code);
 
-        // Set content type
-        if let Ok(content_type) = HeaderValue::from_str(&self.content_type) {
-            response_builder = response_builder.header("Content-Type", content_type);
-        }
+            // Set content type
+            if let Ok(content_type) = HeaderValue::from_str(&content_type) {
+                response_builder = response_builder.header("Content-Type", content_type);
+            }
 
-        // Build the response
-        let mut response = response_builder
-            .body(self.body.clone().into())
-            .unwrap_or_else(|_| {
+            // Build the response
+            let mut response = response_builder.body(body.into()).unwrap_or_else(|_| {
                 Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::from("Internal Server Error"))
                     .unwrap()
             });
 
-        for (name, value) in &self.headers {
-            if let (Ok(header_name), Ok(header_value)) = (
-                HeaderName::from_bytes(name.as_bytes()),
-                HeaderValue::from_str(value),
-            ) {
-                response.headers_mut().insert(header_name, header_value);
+            for (name, value) in &headers {
+                if let (Ok(header_name), Ok(header_value)) = (
+                    HeaderName::from_bytes(name.as_bytes()),
+                    HeaderValue::from_str(value),
+                ) {
+                    response.headers_mut().insert(header_name, header_value);
+                }
             }
-        }
 
-        ready(response)
+            response
+        })
     }
 }
 
@@ -440,7 +419,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_default_response() {
-        let mut handler = SimpleResponseFallback::new();
+        let handler = SimpleResponseHandler::new();
         let request = Request::builder().body(()).unwrap();
 
         let response = handler.handle(request).await;
@@ -450,7 +429,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_custom_headers() {
-        let mut handler = SimpleResponseFallback::new().header("X-Custom-Header", "custom-value");
+        let handler = SimpleResponseHandler::new().header("X-Custom-Header", "custom-value");
 
         let request = Request::builder().body(()).unwrap();
         let response = handler.handle(request).await;
