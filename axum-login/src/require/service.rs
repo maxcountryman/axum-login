@@ -14,7 +14,7 @@ use crate::{
     require::{
         handler::{InternalErrorFallback, ResponseHandler},
         predicate::Decision,
-        BoxFuture, Require,
+        BoxFuture, Require, RequireState,
     },
     AuthSession, AuthnBackend,
 };
@@ -62,7 +62,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = RequireFuture<S, T>;
+    type Future = RequireFuture<S, B, ST, T>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         // Always ready: only poll the inner service once the decision allows.
@@ -91,8 +91,7 @@ where
                         request: Box::new(Some(req)),
                         decision_future,
                     },
-                    unauthenticated: Arc::clone(&self.layer.inner.unauthenticated),
-                    unauthorized: Arc::clone(&self.layer.inner.unauthorized),
+                    shared: Arc::clone(&self.layer.inner),
                     service: inner,
                 }
             }
@@ -104,8 +103,7 @@ where
                     state: RequireFutureState::InternalFallback {
                         internal_fallback_future,
                     },
-                    unauthenticated: Arc::clone(&self.layer.inner.unauthenticated),
-                    unauthorized: Arc::clone(&self.layer.inner.unauthorized),
+                    shared: Arc::clone(&self.layer.inner),
                     service: inner,
                 }
             }
@@ -116,15 +114,16 @@ where
 #[pin_project]
 /// Response future for [`Require`].
 #[allow(missing_debug_implementations)]
-pub struct RequireFuture<S, T>
+pub struct RequireFuture<S, B, ST, T>
 where
     S: Service<Request<T>, Response = Response<Body>>,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
     #[pin]
     state: RequireFutureState<S::Future, T>,
     service: S,
-    unauthenticated: Arc<dyn ResponseHandler<T>>,
-    unauthorized: Arc<dyn ResponseHandler<T>>,
+    shared: Arc<RequireState<B, ST, T>>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
@@ -156,9 +155,11 @@ pub(super) enum RequireFutureState<SFut, T> {
     },
 }
 
-impl<S, T> Future for RequireFuture<S, T>
+impl<S, B, ST, T> Future for RequireFuture<S, B, ST, T>
 where
     S: Service<Request<T>, Response = Response<Body>> + Clone,
+    B: AuthnBackend + Send + Sync + 'static,
+    ST: Send + Sync + 'static,
 {
     type Output = Result<Response<Body>, S::Error>;
 
@@ -183,7 +184,7 @@ where
                         let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
-                        let unauthorized_future = this.unauthorized.handle(request);
+                        let unauthorized_future = this.shared.unauthorized.handle(request);
                         this.state.set(RequireFutureState::Unauthorized {
                             unauthorized_future,
                         });
@@ -192,7 +193,7 @@ where
                         let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
-                        let unauthenticated_future = this.unauthenticated.handle(request);
+                        let unauthenticated_future = this.shared.unauthenticated.handle(request);
                         this.state.set(RequireFutureState::Unauthenticated {
                             unauthenticated_future,
                         });
@@ -264,7 +265,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        require::{Decision, Require, SimpleResponseHandler},
+        require::{Decision, DefaultAccess, Require, SimpleResponseHandler},
         AuthSession, AuthUser, AuthnBackend,
     };
 
@@ -532,11 +533,15 @@ mod tests {
                 request: Box::new(None),
                 decision_future: Box::pin(async { Decision::Allow }),
             },
-            unauthenticated: Arc::new(SimpleResponseHandler::text(
-                StatusCode::UNAUTHORIZED,
-                "nope",
-            )),
-            unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+            shared: Arc::new(RequireState {
+                decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
+                unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+                unauthenticated: Box::new(SimpleResponseHandler::text(
+                    StatusCode::UNAUTHORIZED,
+                    "nope",
+                )),
+                state: Arc::new(()),
+            }),
             service: GateService::new(),
         };
 
@@ -557,11 +562,15 @@ mod tests {
                 request: Box::new(None),
                 decision_future: Box::pin(async { Decision::Unauthorized }),
             },
-            unauthenticated: Arc::new(SimpleResponseHandler::text(
-                StatusCode::UNAUTHORIZED,
-                "nope",
-            )),
-            unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+            shared: Arc::new(RequireState {
+                decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
+                unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+                unauthenticated: Box::new(SimpleResponseHandler::text(
+                    StatusCode::UNAUTHORIZED,
+                    "nope",
+                )),
+                state: Arc::new(()),
+            }),
             service: GateService::new(),
         };
 
@@ -582,11 +591,15 @@ mod tests {
                 request: Box::new(None),
                 decision_future: Box::pin(async { Decision::Unauthenticated }),
             },
-            unauthenticated: Arc::new(SimpleResponseHandler::text(
-                StatusCode::UNAUTHORIZED,
-                "nope",
-            )),
-            unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+            shared: Arc::new(RequireState {
+                decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
+                unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+                unauthenticated: Box::new(SimpleResponseHandler::text(
+                    StatusCode::UNAUTHORIZED,
+                    "nope",
+                )),
+                state: Arc::new(()),
+            }),
             service: GateService::new(),
         };
 
