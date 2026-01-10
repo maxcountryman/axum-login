@@ -96,6 +96,68 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Common patterns
+//!
+//! Require a permission and redirect unauthenticated users to `/login`:
+//!
+//! ```rust,no_run
+//! use axum_login::require::{RedirectFallback, Require, SimplePredicate};
+//! use axum_login::{AuthUser, AuthnBackend, AuthzBackend, UserId};
+//!
+//! #[derive(Clone, Debug)]
+//! struct User;
+//!
+//! impl AuthUser for User {
+//!     type Id = i64;
+//!
+//!     fn id(&self) -> Self::Id {
+//!         0
+//!     }
+//!
+//!     fn session_auth_hash(&self) -> &[u8] {
+//!         &[]
+//!     }
+//! }
+//!
+//! #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+//! struct Permission(&'static str);
+//!
+//! #[derive(Clone)]
+//! struct Backend;
+//!
+//! impl AuthnBackend for Backend {
+//!     type User = User;
+//!     type Credentials = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     async fn authenticate(
+//!         &self,
+//!         _: Self::Credentials,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//!
+//!     async fn get_user(
+//!         &self,
+//!         _: &UserId<Self>,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//! }
+//!
+//! impl AuthzBackend for Backend {
+//!     type Permission = Permission;
+//! }
+//!
+//! let predicate = SimplePredicate::<Backend>::new()
+//!     .with_permissions([Permission("admin.read")]);
+//!
+//! let require = Require::<Backend>::builder()
+//!     .predicate(predicate)
+//!     .fallback(RedirectFallback::new().login_url("/login"))
+//!     .build();
+//! ```
 mod builder;
 mod handler;
 mod predicate;
@@ -115,7 +177,7 @@ pub use self::{
         AsyncFallbackHandler, DefaultFallback, DefaultRestrict, RedirectFallback,
         SimpleResponseFallback,
     },
-    predicate::{AsyncPredicate, DefaultPredicate, SimplePredicate},
+    predicate::{AsyncPredicate, CheckMode, DefaultPredicate, SimplePredicate},
     service::RequireService,
 };
 use crate::AuthnBackend;

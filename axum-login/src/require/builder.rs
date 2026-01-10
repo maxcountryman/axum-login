@@ -33,6 +33,55 @@
 //!   users.
 //! - [`DefaultFallback`] — returns a `401 Unauthorized` response for
 //!   unauthenticated
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use axum_login::{AuthUser, AuthnBackend, UserId};
+//! use axum_login::require::{RedirectFallback, Require};
+//!
+//! #[derive(Clone, Debug)]
+//! struct User;
+//!
+//! impl AuthUser for User {
+//!     type Id = i64;
+//!
+//!     fn id(&self) -> Self::Id {
+//!         0
+//!     }
+//!
+//!     fn session_auth_hash(&self) -> &[u8] {
+//!         &[]
+//!     }
+//! }
+//!
+//! #[derive(Clone)]
+//! struct Backend;
+//!
+//! impl AuthnBackend for Backend {
+//!     type User = User;
+//!     type Credentials = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     async fn authenticate(
+//!         &self,
+//!         _: Self::Credentials,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//!
+//!     async fn get_user(
+//!         &self,
+//!         _: &UserId<Self>,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//! }
+//!
+//! let require = Require::<Backend>::builder()
+//!     .fallback(RedirectFallback::new().login_url("/login"))
+//!     .build();
+//! ```
 
 use std::marker::PhantomData;
 
@@ -55,6 +104,56 @@ use crate::{
 /// [`predicate`](#method.predicate), [`fallback`](#method.fallback), or
 /// [`restrict`](#method.restrict) returns a new builder with the specified
 /// configuration.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum_login::require::{RedirectFallback, Require, RequireBuilder};
+/// use axum_login::{AuthUser, AuthnBackend, UserId};
+///
+/// #[derive(Clone, Debug)]
+/// struct User;
+///
+/// impl AuthUser for User {
+///     type Id = i64;
+///
+///     fn id(&self) -> Self::Id {
+///         0
+///     }
+///
+///     fn session_auth_hash(&self) -> &[u8] {
+///         &[]
+///     }
+/// }
+///
+/// #[derive(Clone)]
+/// struct Backend;
+///
+/// impl AuthnBackend for Backend {
+///     type User = User;
+///     type Credentials = ();
+///     type Error = std::convert::Infallible;
+///
+///     async fn authenticate(
+///         &self,
+///         _: Self::Credentials,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+///
+///     async fn get_user(
+///         &self,
+///         _: &UserId<Self>,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+/// }
+///
+/// let require = Require::<Backend>::builder()
+///     .fallback(RedirectFallback::new().login_url("/login"))
+///     .build();
+/// # let _builder: RequireBuilder<Backend> = Require::builder();
+/// ```
 #[derive(Debug, Clone)]
 pub struct RequireBuilder<
     B,

@@ -62,6 +62,55 @@ We recommend reviewing our [`sqlite` example][sqlite-example]. There is also a [
 > [!NOTE]
 > See the [crate documentation][docs] for usage information.
 
+### Builder quick start
+
+```rust
+use axum_login::require::{RedirectFallback, Require};
+use axum_login::{AuthUser, AuthnBackend, UserId};
+
+#[derive(Clone, Debug)]
+struct User;
+
+impl AuthUser for User {
+    type Id = i64;
+
+    fn id(&self) -> Self::Id {
+        0
+    }
+
+    fn session_auth_hash(&self) -> &[u8] {
+        &[]
+    }
+}
+
+#[derive(Clone)]
+struct Backend;
+
+impl AuthnBackend for Backend {
+    type User = User;
+    type Credentials = ();
+    type Error = std::convert::Infallible;
+
+    async fn authenticate(
+        &self,
+        _: Self::Credentials,
+    ) -> Result<Option<Self::User>, Self::Error> {
+        Ok(Some(User))
+    }
+
+    async fn get_user(
+        &self,
+        _: &UserId<Self>,
+    ) -> Result<Option<Self::User>, Self::Error> {
+        Ok(Some(User))
+    }
+}
+
+let require = Require::<Backend>::builder()
+    .fallback(RedirectFallback::new().login_url("/login"))
+    .build();
+```
+
 ## ✅ Behavior Contract
 
 The middleware surfaces follow the same contract:

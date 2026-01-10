@@ -101,6 +101,59 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for InternalErrorFallback {
 /// A simple redirect-based fallback handler used when authentication fails.
 ///
 /// Used with [`RequireBuilder`](crate::require::builder::RequireBuilder)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum_login::require::{RedirectFallback, Require};
+/// use axum_login::{AuthUser, AuthnBackend, UserId};
+///
+/// #[derive(Clone, Debug)]
+/// struct User;
+///
+/// impl AuthUser for User {
+///     type Id = i64;
+///
+///     fn id(&self) -> Self::Id {
+///         0
+///     }
+///
+///     fn session_auth_hash(&self) -> &[u8] {
+///         &[]
+///     }
+/// }
+///
+/// #[derive(Clone)]
+/// struct Backend;
+///
+/// impl AuthnBackend for Backend {
+///     type User = User;
+///     type Credentials = ();
+///     type Error = std::convert::Infallible;
+///
+///     async fn authenticate(
+///         &self,
+///         _: Self::Credentials,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+///
+///     async fn get_user(
+///         &self,
+///         _: &UserId<Self>,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+/// }
+///
+/// let require = Require::<Backend>::builder()
+///     .fallback(
+///         RedirectFallback::new()
+///             .login_url("/login")
+///             .redirect_field("next"),
+///     )
+///     .build();
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct RedirectFallback {
     /// Optional name of the query parameter used to store
@@ -176,6 +229,59 @@ impl<ReqInBody> AsyncFallbackHandler<ReqInBody> for RedirectFallback {
 /// Customizable response fallback handler for authentication failure responses
 ///
 /// Used with [`RequireBuilder`](crate::require::builder::RequireBuilder)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum::http::StatusCode;
+/// use axum_login::require::{Require, SimpleResponseFallback};
+/// use axum_login::{AuthUser, AuthnBackend, UserId};
+///
+/// #[derive(Clone, Debug)]
+/// struct User;
+///
+/// impl AuthUser for User {
+///     type Id = i64;
+///
+///     fn id(&self) -> Self::Id {
+///         0
+///     }
+///
+///     fn session_auth_hash(&self) -> &[u8] {
+///         &[]
+///     }
+/// }
+///
+/// #[derive(Clone)]
+/// struct Backend;
+///
+/// impl AuthnBackend for Backend {
+///     type User = User;
+///     type Credentials = ();
+///     type Error = std::convert::Infallible;
+///
+///     async fn authenticate(
+///         &self,
+///         _: Self::Credentials,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+///
+///     async fn get_user(
+///         &self,
+///         _: &UserId<Self>,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+/// }
+///
+/// let require = Require::<Backend>::builder()
+///     .fallback(SimpleResponseFallback::text(
+///         StatusCode::UNAUTHORIZED,
+///         "Sign in to continue",
+///     ))
+///     .build();
+/// ```
 #[derive(Clone, Debug)]
 pub struct SimpleResponseFallback {
     /// HTTP status code to return

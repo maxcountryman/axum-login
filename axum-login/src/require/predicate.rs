@@ -82,6 +82,64 @@ pub enum CheckMode {
 #[derive(Debug, Clone)]
 /// A simple stateless predicate that checks if the user has a set of
 /// permissions.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum_login::require::{CheckMode, Require, SimplePredicate};
+/// use axum_login::{AuthUser, AuthnBackend, AuthzBackend, UserId};
+///
+/// #[derive(Clone, Debug)]
+/// struct User;
+///
+/// impl AuthUser for User {
+///     type Id = i64;
+///
+///     fn id(&self) -> Self::Id {
+///         0
+///     }
+///
+///     fn session_auth_hash(&self) -> &[u8] {
+///         &[]
+///     }
+/// }
+///
+/// #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// struct Permission(&'static str);
+///
+/// #[derive(Clone)]
+/// struct Backend;
+///
+/// impl AuthnBackend for Backend {
+///     type User = User;
+///     type Credentials = ();
+///     type Error = std::convert::Infallible;
+///
+///     async fn authenticate(
+///         &self,
+///         _: Self::Credentials,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+///
+///     async fn get_user(
+///         &self,
+///         _: &UserId<Self>,
+///     ) -> Result<Option<Self::User>, Self::Error> {
+///         Ok(Some(User))
+///     }
+/// }
+///
+/// impl AuthzBackend for Backend {
+///     type Permission = Permission;
+/// }
+///
+/// let predicate = SimplePredicate::<Backend>::new()
+///     .with_permissions([Permission("admin.read")])
+///     .with_mode(CheckMode::All);
+///
+/// let require = Require::<Backend>::builder().predicate(predicate).build();
+/// ```
 pub struct SimplePredicate<B: AuthzBackend + AuthnBackend> {
     pub(crate) _marker: PhantomData<B>,
     // PERF: could add a single permission variant

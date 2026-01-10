@@ -187,7 +187,6 @@
 //!
 //!     Redirect::to("/protected").into_response()
 //! }
-//! # #[cfg(not(feature = "macros-middleware"))]
 //! # fn main() {}
 //! ```
 //!
@@ -268,7 +267,6 @@
 //!         )
 //!         .route_layer(login_required!(Backend, login_url = "/login"))
 //! }
-//! # #[cfg(not(feature = "macros-middleware"))]
 //! # fn main() {}
 //! ```
 //!
@@ -278,6 +276,55 @@
 //!
 //! Likewise, [`permission_required`] can be used to require user or
 //! group permissions in order to access the protected resource.
+//!
+//! ## Builder-based middleware
+//!
+//! ```rust,no_run
+//! use axum_login::require::{RedirectFallback, Require};
+//! use axum_login::{AuthUser, AuthnBackend, UserId};
+//!
+//! #[derive(Clone, Debug)]
+//! struct User;
+//!
+//! impl AuthUser for User {
+//!     type Id = i64;
+//!
+//!     fn id(&self) -> Self::Id {
+//!         0
+//!     }
+//!
+//!     fn session_auth_hash(&self) -> &[u8] {
+//!         &[]
+//!     }
+//! }
+//!
+//! #[derive(Clone)]
+//! struct Backend;
+//!
+//! impl AuthnBackend for Backend {
+//!     type User = User;
+//!     type Credentials = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     async fn authenticate(
+//!         &self,
+//!         _: Self::Credentials,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//!
+//!     async fn get_user(
+//!         &self,
+//!         _: &UserId<Self>,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//! }
+//!
+//! let require = Require::<Backend>::builder()
+//!     .fallback(RedirectFallback::new().login_url("/login"))
+//!     .build();
+//! ```
 //!
 //! ## Behavior contract
 //!
@@ -367,8 +414,7 @@
 //! };
 //!
 //! # #[cfg(feature = "macros-middleware")]
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! async fn run() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Session layer.
 //!     let session_store = MemoryStore::default();
 //!     let session_layer = SessionManagerLayer::new(session_store);
@@ -389,7 +435,6 @@
 //!
 //!     Ok(())
 //! }
-//! # #[cfg(not(feature = "macros-middleware"))]
 //! # fn main() {}
 //! ```
 //!
