@@ -65,7 +65,9 @@ where
     type Future = RequireFuture<S, T>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+        // Always ready: only poll the inner service once the decision allows.
+        let _ = cx;
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
@@ -132,6 +134,9 @@ pub(super) enum RequireFutureState<SFut, T> {
         #[pin]
         decision_future: BoxFuture<'static, Decision>,
     },
+    WaitingReady {
+        request: Box<Option<Request<T>>>,
+    },
     Inner {
         #[pin]
         inner_future: SFut,
@@ -169,8 +174,9 @@ where
                         let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
-                        let inner_future = this.service.call(request);
-                        this.state.set(RequireFutureState::Inner { inner_future });
+                        this.state.set(RequireFutureState::WaitingReady {
+                            request: Box::new(Some(request)),
+                        });
                     }
                     Poll::Ready(Decision::Unauthorized) => {
                         let Some(request) = request.as_mut().take() else {
@@ -198,6 +204,18 @@ where
                         Poll::Pending => Poll::Pending,
                     }
                 }
+                RequireFutureStateProj::WaitingReady { request } => match this.service.poll_ready(cx)
+                {
+                    Poll::Ready(Ok(())) => {
+                        let Some(request) = request.as_mut().take() else {
+                            return Poll::Ready(Ok(internal_error_response()));
+                        };
+                        let inner_future = this.service.call(request);
+                        this.state.set(RequireFutureState::Inner { inner_future });
+                    }
+                    Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+                    Poll::Pending => return Poll::Pending,
+                },
                 RequireFutureStateProj::Unauthorized {
                     unauthorized_future,
                 } => {
