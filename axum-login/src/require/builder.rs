@@ -94,7 +94,7 @@ use crate::{
     require::{
         handler::{DefaultUnauthenticated, DefaultUnauthorized, ResponseHandler},
         predicate::{DecisionPredicate, DefaultAccess},
-        Require,
+        Require, RequireState,
     },
     AuthnBackend,
 };
@@ -288,11 +288,14 @@ where
     /// This method consumes the builder and produces the middleware that can be
     /// applied to an Axum `Router` or `Service`.
     pub fn build(self) -> Require<B, ST, T> {
-        Require {
+        let inner = RequireState {
             decision: self.decision,
             unauthorized: self.unauthorized,
             unauthenticated: self.unauthenticated,
             state: self.state,
+        };
+        Require {
+            inner: Arc::new(inner),
         }
     }
 }
@@ -369,8 +372,9 @@ mod tests {
             .unwrap();
 
         let decision = require
+            .inner
             .decision
-            .decide(auth_session, std::sync::Arc::clone(&require.state))
+            .decide(auth_session, std::sync::Arc::clone(&require.inner.state))
             .await;
 
         assert_eq!(decision, Decision::Unauthorized);

@@ -282,14 +282,21 @@ pub struct Require<B, ST = (), T = Body>
 where
     B: AuthnBackend + Send + Sync + 'static,
 {
+    pub(crate) inner: Arc<RequireState<B, ST, T>>,
+}
+
+pub(crate) struct RequireState<B, ST, T>
+where
+    B: AuthnBackend + Send + Sync + 'static,
+{
     /// The predicate that determines if access should be granted.
-    pub decision: Arc<dyn DecisionPredicate<B, ST>>,
+    pub(crate) decision: Arc<dyn DecisionPredicate<B, ST>>,
     /// The response for authenticated but unauthorized requests.
-    pub unauthorized: Arc<dyn ResponseHandler<T>>,
+    pub(crate) unauthorized: Arc<dyn ResponseHandler<T>>,
     /// The response for unauthenticated requests.
-    pub unauthenticated: Arc<dyn ResponseHandler<T>>,
+    pub(crate) unauthenticated: Arc<dyn ResponseHandler<T>>,
     /// Arbitrary user state available to the predicate.
-    pub state: Arc<ST>,
+    pub(crate) state: Arc<ST>,
 }
 
 impl<B, ST, T> Require<B, ST, T>
@@ -305,11 +312,14 @@ where
         Un: ResponseHandler<T> + 'static,
         Uh: ResponseHandler<T> + 'static,
     {
-        Self {
+        let inner = RequireState {
             decision: Arc::new(decision),
             unauthorized: Arc::new(unauthorized),
             unauthenticated: Arc::new(unauthenticated),
             state: Arc::new(state),
+        };
+        Self {
+            inner: Arc::new(inner),
         }
     }
 }
@@ -334,10 +344,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            decision: Arc::clone(&self.decision),
-            unauthorized: Arc::clone(&self.unauthorized),
-            unauthenticated: Arc::clone(&self.unauthenticated),
-            state: Arc::clone(&self.state),
+            inner: Arc::clone(&self.inner),
         }
     }
 }

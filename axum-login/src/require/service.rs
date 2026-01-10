@@ -82,16 +82,17 @@ where
             Some(auth_session) => {
                 let decision_future = self
                     .layer
+                    .inner
                     .decision
-                    .decide(auth_session, Arc::clone(&self.layer.state));
+                    .decide(auth_session, Arc::clone(&self.layer.inner.state));
 
                 RequireFuture {
                     state: RequireFutureState::CheckingUser {
                         request: Box::new(Some(req)),
                         decision_future,
                     },
-                    unauthenticated: Arc::clone(&self.layer.unauthenticated),
-                    unauthorized: Arc::clone(&self.layer.unauthorized),
+                    unauthenticated: Arc::clone(&self.layer.inner.unauthenticated),
+                    unauthorized: Arc::clone(&self.layer.inner.unauthorized),
                     service: inner,
                 }
             }
@@ -103,8 +104,8 @@ where
                     state: RequireFutureState::InternalFallback {
                         internal_fallback_future,
                     },
-                    unauthenticated: Arc::clone(&self.layer.unauthenticated),
-                    unauthorized: Arc::clone(&self.layer.unauthorized),
+                    unauthenticated: Arc::clone(&self.layer.inner.unauthenticated),
+                    unauthorized: Arc::clone(&self.layer.inner.unauthorized),
                     service: inner,
                 }
             }
