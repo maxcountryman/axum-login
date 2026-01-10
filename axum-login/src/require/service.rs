@@ -91,7 +91,7 @@ where
                         request: Box::new(Some(req)),
                         decision_future,
                     },
-                    shared: Arc::clone(&self.layer.inner),
+                    inner: Arc::clone(&self.layer.inner),
                     service: inner,
                 }
             }
@@ -103,7 +103,7 @@ where
                     state: RequireFutureState::InternalFallback {
                         internal_fallback_future,
                     },
-                    shared: Arc::clone(&self.layer.inner),
+                    inner: Arc::clone(&self.layer.inner),
                     service: inner,
                 }
             }
@@ -123,7 +123,7 @@ where
     #[pin]
     state: RequireFutureState<S::Future, T>,
     service: S,
-    shared: Arc<RequireState<B, ST, T>>,
+    inner: Arc<RequireState<B, ST, T>>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
@@ -184,7 +184,7 @@ where
                         let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
-                        let unauthorized_future = this.shared.unauthorized.handle(request);
+                        let unauthorized_future = this.inner.unauthorized.handle(request);
                         this.state.set(RequireFutureState::Unauthorized {
                             unauthorized_future,
                         });
@@ -193,7 +193,7 @@ where
                         let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
-                        let unauthenticated_future = this.shared.unauthenticated.handle(request);
+                        let unauthenticated_future = this.inner.unauthenticated.handle(request);
                         this.state.set(RequireFutureState::Unauthenticated {
                             unauthenticated_future,
                         });
@@ -533,7 +533,7 @@ mod tests {
                 request: Box::new(None),
                 decision_future: Box::pin(async { Decision::Allow }),
             },
-            shared: Arc::new(RequireState {
+            inner: Arc::new(RequireState {
                 decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
                 unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
                 unauthenticated: Box::new(SimpleResponseHandler::text(
@@ -562,7 +562,7 @@ mod tests {
                 request: Box::new(None),
                 decision_future: Box::pin(async { Decision::Unauthorized }),
             },
-            shared: Arc::new(RequireState {
+            inner: Arc::new(RequireState {
                 decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
                 unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
                 unauthenticated: Box::new(SimpleResponseHandler::text(
@@ -591,7 +591,7 @@ mod tests {
                 request: Box::new(None),
                 decision_future: Box::pin(async { Decision::Unauthenticated }),
             },
-            shared: Arc::new(RequireState {
+            inner: Arc::new(RequireState {
                 decision: Box::new(DefaultAccess::<TestBackend, ()>::default()),
                 unauthorized: Box::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
                 unauthenticated: Box::new(SimpleResponseHandler::text(
