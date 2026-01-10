@@ -105,6 +105,10 @@ use crate::{
 /// [`restrict`](#method.restrict) returns a new builder with the specified
 /// configuration.
 ///
+/// For the default configuration, you can use the
+/// [`crate::require::RequireBuilderLayer`] type alias for shorter type
+/// signatures.
+///
 /// # Example
 ///
 /// ```rust,no_run
