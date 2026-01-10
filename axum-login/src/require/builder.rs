@@ -236,10 +236,13 @@ where
 {
     /// Sets a custom authorization predicate.
     ///
-    /// The predicate determines whether a request is permitted to proceed.
-    /// It runs for every request and has access to the authenticated user and
-    /// request data.
-    pub fn predicate<Pr2>(self, new_predicate: Pr2) -> RequireBuilder<B, ST, T, Fb, Rs, Pr2>
+/// The predicate determines whether a request is permitted to proceed.
+/// It runs for every request and has access to the authenticated user and
+/// request data.
+///
+/// The predicate receives owned `backend` and `user` values; keep these types
+/// cheap to clone (for example, by storing shared state in `Arc`).
+pub fn predicate<Pr2>(self, new_predicate: Pr2) -> RequireBuilder<B, ST, T, Fb, Rs, Pr2>
     where
         Pr2: AsyncPredicate<B, ST>,
     {

@@ -14,12 +14,16 @@ use crate::{require::BoxFuture, AuthnBackend, AuthzBackend};
 // Note: this takes owned values of backend and user to keep the async boundary
 // simple for callers.
 
-/// Trait for predicating requests
+/// Trait for predicating requests.
+///
+/// This trait takes owned `backend` and `user` values to keep async usage
+/// ergonomic. Implementations are expected to be cheap to clone (e.g., via
+/// `Arc` handles) so predicate evaluation doesn't incur heavy copies.
 pub trait AsyncPredicate<B: AuthnBackend, ST = ()> {
     /// The future type returned by predicate
     type Future: Future<Output = bool> + Send + 'static;
 
-    /// Allow request, based on a given predicate
+    /// Allow a request based on a given predicate.
     ///
     /// The predicate takes the backend, the user and the state.
     ///
