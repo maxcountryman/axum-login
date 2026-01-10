@@ -22,8 +22,8 @@
 //! - **Unauthenticated**: Handles cases when there is *no authenticated user*
 //!   (e.g., redirect to login page).
 //!
-//! - **Unauthorized**: Handles cases when there *is* an authenticated user,
-//!   but the user is not authorized (e.g., return `403 Forbidden`).
+//! - **Unauthorized**: Handles cases when there *is* an authenticated user, but
+//!   the user is not authorized (e.g., return `403 Forbidden`).
 //!
 //! - **State**: Optional shared data accessible by predicates. The state is
 //!   stored once and provided as `Arc<ST>` to avoid per-request cloning.
@@ -32,17 +32,19 @@
 //!
 //! If you don't customize anything, `RequireBuilder` will use:
 //!
-//! - [`DefaultDecision`] — allows all authenticated users.
-//! - [`DefaultUnauthorized`] — returns a `403 Forbidden` response for unauthorized
-//!   users.
+//! - [`DefaultAccess`] — allows all authenticated users.
+//! - [`DefaultUnauthorized`] — returns a `403 Forbidden` response for
+//!   unauthorized users.
 //! - [`DefaultUnauthenticated`] — returns a `401 Unauthorized` response for
 //!   unauthenticated
 //!
 //! ## Example
 //!
 //! ```rust,no_run
-//! use axum_login::{AuthUser, AuthnBackend, UserId};
-//! use axum_login::require::{RedirectHandler, Require};
+//! use axum_login::{
+//!     require::{RedirectHandler, Require},
+//!     AuthUser, AuthnBackend, UserId,
+//! };
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -74,10 +76,7 @@
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(
-//!         &self,
-//!         _: &UserId<Self>,
-//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -93,8 +92,8 @@ use axum::body::Body;
 
 use crate::{
     require::{
-        handler::{AsyncHandler, DefaultUnauthenticated, DefaultUnauthorized},
-        predicate::{DecisionPredicate, DefaultDecision},
+        handler::{DefaultUnauthenticated, DefaultUnauthorized, ResponseHandler},
+        predicate::{DecisionPredicate, DefaultAccess},
         Require,
     },
     AuthnBackend,
@@ -105,9 +104,9 @@ use crate::{
 ///
 /// The `RequireBuilder` provides a fluent API for composing authentication
 /// logic in your Axum application. Each call to a method like
-/// [`decision`](#method.decision), [`unauthenticated`](#method.unauthenticated),
-/// or [`unauthorized`](#method.unauthorized) returns a new builder with the
-/// specified configuration.
+/// [`decision`](#method.decision),
+/// [`unauthenticated`](#method.unauthenticated), or [`unauthorized`](#method.
+/// unauthorized) returns a new builder with the specified configuration.
 ///
 /// For the default configuration, you can use the
 /// [`crate::require::RequireBuilderLayer`] type alias for shorter type
@@ -116,8 +115,10 @@ use crate::{
 /// # Example
 ///
 /// ```rust,no_run
-/// use axum_login::require::{RedirectHandler, Require, RequireBuilder};
-/// use axum_login::{AuthUser, AuthnBackend, UserId};
+/// use axum_login::{
+///     require::{RedirectHandler, Require, RequireBuilder},
+///     AuthUser, AuthnBackend, UserId,
+/// };
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -149,10 +150,7 @@ use crate::{
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(
-///         &self,
-///         _: &UserId<Self>,
-///     ) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -167,9 +165,9 @@ pub struct RequireBuilder<B, ST = (), T = Body> {
     /// Decision predicate for the request.
     decision: Arc<dyn DecisionPredicate<B, ST>>,
     /// Handler for unauthorized users.
-    unauthorized: Arc<dyn AsyncHandler<T>>,
+    unauthorized: Arc<dyn ResponseHandler<T>>,
     /// Handler for unauthenticated users.
-    unauthenticated: Arc<dyn AsyncHandler<T>>,
+    unauthenticated: Arc<dyn ResponseHandler<T>>,
     /// Shared state available to predicates and handlers.
     state: Arc<ST>,
 }
@@ -178,8 +176,8 @@ impl<B, ST, T> std::fmt::Debug for RequireBuilder<B, ST, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RequireBuilder")
             .field("decision", &"DecisionPredicate")
-            .field("unauthorized", &"AsyncHandler")
-            .field("unauthenticated", &"AsyncHandler")
+            .field("unauthorized", &"ResponseHandler")
+            .field("unauthenticated", &"ResponseHandler")
             .field("state", &"Arc<ST>")
             .finish()
     }
@@ -201,13 +199,13 @@ where
     /// Creates a new `RequireBuilder` with the default configuration.
     ///
     /// The default:
-    /// - [`DefaultDecision`] allows authenticated users and returns
+    /// - [`DefaultAccess`] allows authenticated users and returns
     ///   `Unauthenticated` otherwise.
     /// - [`DefaultUnauthorized`] returns `403 Forbidden`.
     /// - [`DefaultUnauthenticated`] returns `401 Unauthorized`.
     pub fn new() -> Self {
         Self {
-            decision: Arc::new(DefaultDecision::default()),
+            decision: Arc::new(DefaultAccess::default()),
             unauthorized: Arc::new(DefaultUnauthorized),
             unauthenticated: Arc::new(DefaultUnauthenticated),
             state: Arc::new(()),
@@ -223,7 +221,7 @@ where
     /// Creates a new `RequireBuilder` with the given application state.
     pub fn new_with_state(state: ST) -> Self {
         Self {
-            decision: Arc::new(DefaultDecision::default()),
+            decision: Arc::new(DefaultAccess::default()),
             unauthorized: Arc::new(DefaultUnauthorized),
             unauthenticated: Arc::new(DefaultUnauthenticated),
             state: Arc::new(state),
@@ -262,7 +260,7 @@ where
     /// is logged in.
     pub fn unauthenticated<Uh2>(self, new_handler: Uh2) -> Self
     where
-        Uh2: AsyncHandler<T> + 'static,
+        Uh2: ResponseHandler<T> + 'static,
     {
         Self {
             unauthenticated: Arc::new(new_handler),
@@ -276,7 +274,7 @@ where
     /// to access the requested resource.
     pub fn unauthorized<Un2>(self, new_handler: Un2) -> Self
     where
-        Un2: AsyncHandler<T> + 'static,
+        Un2: ResponseHandler<T> + 'static,
     {
         Self {
             unauthorized: Arc::new(new_handler),

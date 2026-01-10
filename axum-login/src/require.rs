@@ -103,8 +103,10 @@
 //! Require a permission and redirect unauthenticated users to `/login`:
 //!
 //! ```rust,no_run
-//! use axum_login::require::{PermissionsPredicate, RedirectHandler, Require};
-//! use axum_login::{AuthUser, AuthnBackend, AuthzBackend, UserId};
+//! use axum_login::{
+//!     require::{PermissionsPredicate, RedirectHandler, Require},
+//!     AuthUser, AuthnBackend, AuthzBackend, UserId,
+//! };
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -139,10 +141,7 @@
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(
-//!         &self,
-//!         _: &UserId<Self>,
-//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -151,8 +150,8 @@
 //!     type Permission = Permission;
 //! }
 //!
-//! let predicate = PermissionsPredicate::<Backend>::new()
-//!     .with_permissions([Permission("admin.read")]);
+//! let predicate =
+//!     PermissionsPredicate::<Backend>::new().with_permissions([Permission("admin.read")]);
 //!
 //! let require = Require::<Backend>::builder()
 //!     .decision(predicate)
@@ -165,8 +164,10 @@
 //! ```rust,no_run
 //! use std::sync::Arc;
 //!
-//! use axum_login::require::{Decision, Require};
-//! use axum_login::{AuthSession, AuthUser, AuthnBackend, UserId};
+//! use axum_login::{
+//!     require::{Decision, Require},
+//!     AuthSession, AuthUser, AuthnBackend, UserId,
+//! };
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -198,10 +199,7 @@
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(
-//!         &self,
-//!         _: &UserId<Self>,
-//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -213,24 +211,25 @@
 //!
 //! let state = AppState { allow: true };
 //! let require = Require::<Backend, AppState>::builder_with_state(state)
-//!     .decision(|auth_session: AuthSession<Backend>, state: Arc<AppState>| async move {
-//!         if auth_session.user().await.is_none() {
-//!             return Decision::Unauthenticated;
-//!         }
+//!     .decision(
+//!         |auth_session: AuthSession<Backend>, state: Arc<AppState>| async move {
+//!             if auth_session.user().await.is_none() {
+//!                 return Decision::Unauthenticated;
+//!             }
 //!
-//!         if state.allow {
-//!             Decision::Allow
-//!         } else {
-//!             Decision::Unauthorized
-//!         }
-//!     })
+//!             if state.allow {
+//!                 Decision::Allow
+//!             } else {
+//!                 Decision::Unauthorized
+//!             }
+//!         },
+//!     )
 //!     .build();
 //! ```
 mod builder;
 mod handler;
 mod predicate;
 mod service;
-
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -240,10 +239,12 @@ use tower_layer::Layer;
 pub use self::{
     builder::RequireBuilder,
     handler::{
-        AsyncHandler, DefaultUnauthenticated, DefaultUnauthorized, RedirectHandler,
+        DefaultUnauthenticated, DefaultUnauthorized, RedirectHandler, ResponseHandler,
         SimpleResponseHandler,
     },
-    predicate::{CheckMode, Decision, DecisionPredicate, DefaultDecision, PermissionsPredicate},
+    predicate::{
+        Decision, DecisionPredicate, DefaultAccess, PermissionMatch, PermissionsPredicate,
+    },
     service::RequireService,
 };
 use crate::AuthnBackend;
@@ -284,9 +285,9 @@ where
     /// The predicate that determines if access should be granted.
     pub decision: Arc<dyn DecisionPredicate<B, ST>>,
     /// The response for authenticated but unauthorized requests.
-    pub unauthorized: Arc<dyn AsyncHandler<T>>,
+    pub unauthorized: Arc<dyn ResponseHandler<T>>,
     /// The response for unauthenticated requests.
-    pub unauthenticated: Arc<dyn AsyncHandler<T>>,
+    pub unauthenticated: Arc<dyn ResponseHandler<T>>,
     /// Arbitrary user state available to the predicate.
     pub state: Arc<ST>,
 }
@@ -301,8 +302,8 @@ where
     pub fn new<Pr, Un, Uh>(decision: Pr, unauthorized: Un, unauthenticated: Uh, state: ST) -> Self
     where
         Pr: DecisionPredicate<B, ST> + 'static,
-        Un: AsyncHandler<T> + 'static,
-        Uh: AsyncHandler<T> + 'static,
+        Un: ResponseHandler<T> + 'static,
+        Uh: ResponseHandler<T> + 'static,
     {
         Self {
             decision: Arc::new(decision),
@@ -320,8 +321,8 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Require")
             .field("decision", &"DecisionPredicate")
-            .field("unauthorized", &"AsyncHandler")
-            .field("unauthenticated", &"AsyncHandler")
+            .field("unauthorized", &"ResponseHandler")
+            .field("unauthenticated", &"ResponseHandler")
             .field("state", &"Arc<ST>")
             .finish()
     }
@@ -390,7 +391,7 @@ mod tests {
     use std::{collections::HashSet, sync::Arc};
 
     use axum::{
-        body::Body,
+        body::{to_bytes, Body},
         http::{header, Request, Response, StatusCode},
         response::IntoResponse,
         Router,
@@ -405,8 +406,7 @@ mod tests {
             builder::RequireBuilder,
             handler::{RedirectHandler, SimpleResponseHandler},
             predicate::PermissionsPredicate,
-            Decision,
-            Require,
+            Decision, PermissionMatch, Require,
         },
         AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend,
     };
@@ -745,8 +745,7 @@ mod tests {
                 .decision(PermissionsPredicate::new().with_permissions(vec!["test.read"]))
                 .unauthenticated(RedirectHandler::new().login_url("/login"))
                 .build();
-            let macro_layer =
-                permission_required!(TestBackend, login_url = "/login", "test.read");
+            let macro_layer = permission_required!(TestBackend, login_url = "/login", "test.read");
 
             let app_builder = Router::new()
                 .route("/", get(|| async {}))
@@ -1167,6 +1166,149 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_permission_required_custom_unauthorized_handler() {
+        let permissions: Vec<&str> = vec!["test.read", "test.write", "admin.read"];
+        let require = RequireBuilder::<TestBackend>::new()
+            .decision(PermissionsPredicate::new().with_permissions(permissions))
+            .unauthorized(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope"))
+            .build();
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(require)
+            .route(
+                "/login",
+                axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(body, "nope");
+    }
+
+    #[tokio::test]
+    async fn test_login_required_custom_unauthenticated_body() {
+        let require = RequireBuilder::<TestBackend>::new()
+            .unauthenticated(SimpleResponseHandler::text(
+                StatusCode::UNAUTHORIZED,
+                "sign in",
+            ))
+            .build();
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(require)
+            .layer(auth_layer!());
+
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(body, "sign in");
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_any_mode() {
+        let permissions: Vec<&str> = vec!["missing.read", "test.read"];
+        let require = RequireBuilder::<TestBackend>::new()
+            .decision(
+                PermissionsPredicate::new()
+                    .with_permissions(permissions)
+                    .with_mode(PermissionMatch::Any),
+            )
+            .build();
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(require)
+            .route(
+                "/login",
+                axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_permission_required_exact_mode_denies_extra_permissions() {
+        let permissions: Vec<&str> = vec!["test.read"];
+        let require = RequireBuilder::<TestBackend>::new()
+            .decision(
+                PermissionsPredicate::new()
+                    .with_permissions(permissions)
+                    .with_mode(PermissionMatch::Exact),
+            )
+            .build();
+
+        let app = Router::new()
+            .route("/", axum::routing::get(|| async {}))
+            .route_layer(require)
+            .route(
+                "/login",
+                axum::routing::get(|auth_session: AuthSession<TestBackend>| async move {
+                    auth_session.login(&User).await.unwrap();
+                }),
+            )
+            .layer(auth_layer!());
+
+        let req = Request::builder()
+            .uri("/login")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let session_cookie =
+            get_session_cookie(&res).expect("Response should have a valid session cookie");
+
+        let req = Request::builder()
+            .uri("/")
+            .header(header::COOKIE, session_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
     async fn test_redirect_uri_query() {
         let require = RequireBuilder::<TestBackend>::new()
             .unauthenticated(RedirectHandler::new().login_url("/login"))
@@ -1349,11 +1491,12 @@ mod tests {
             verify_permissions(auth_session, state)
         };
 
-        let re = RequireBuilder::<TestBackend, TestState>::new_with_state(state.clone()).unauthenticated(
-            RedirectHandler::new()
-                .redirect_field("next_url")
-                .login_url("/login?next_url=%2Fdashboard"),
-        );
+        let re = RequireBuilder::<TestBackend, TestState>::new_with_state(state.clone())
+            .unauthenticated(
+                RedirectHandler::new()
+                    .redirect_field("next_url")
+                    .login_url("/login?next_url=%2Fdashboard"),
+            );
         let pre = re.decision(f);
         let require_login = pre.build();
 

@@ -1,10 +1,4 @@
-use std::{
-    collections::HashSet,
-    fmt::Debug,
-    future::Future,
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{collections::HashSet, fmt::Debug, future::Future, marker::PhantomData, sync::Arc};
 
 use crate::{require::BoxFuture, AuthSession, AuthnBackend, AuthzBackend};
 
@@ -40,11 +34,11 @@ pub trait DecisionPredicate<B: AuthnBackend, ST = ()>: Send + Sync {
 
 /// The default [`DecisionPredicate`] implementation used by [`super::Require`].
 #[derive(Clone, Debug)]
-pub struct DefaultDecision<B: AuthnBackend, ST> {
+pub struct DefaultAccess<B: AuthnBackend, ST> {
     _marker: PhantomData<(B, ST)>,
 }
 
-impl<B: AuthnBackend, ST> Default for DefaultDecision<B, ST> {
+impl<B: AuthnBackend, ST> Default for DefaultAccess<B, ST> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -52,12 +46,16 @@ impl<B: AuthnBackend, ST> Default for DefaultDecision<B, ST> {
     }
 }
 
-impl<B, ST> DecisionPredicate<B, ST> for DefaultDecision<B, ST>
+impl<B, ST> DecisionPredicate<B, ST> for DefaultAccess<B, ST>
 where
     B: AuthnBackend + Send + Sync + 'static,
     ST: Send + Sync + 'static,
 {
-    fn decide(&self, auth_session: AuthSession<B>, _state: Arc<ST>) -> BoxFuture<'static, Decision> {
+    fn decide(
+        &self,
+        auth_session: AuthSession<B>,
+        _state: Arc<ST>,
+    ) -> BoxFuture<'static, Decision> {
         Box::pin(async move {
             if auth_session.user().await.is_some() {
                 Decision::Allow
@@ -79,9 +77,9 @@ where
     }
 }
 
-/// Defines how permissions should be checked
+/// Defines how permissions should be matched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckMode {
+pub enum PermissionMatch {
     /// User must have ANY of the specified permissions
     Any,
     /// User must have All the specified permissions
@@ -97,8 +95,10 @@ pub enum CheckMode {
 /// # Example
 ///
 /// ```rust,no_run
-/// use axum_login::require::{CheckMode, Require, PermissionsPredicate};
-/// use axum_login::{AuthUser, AuthnBackend, AuthzBackend, UserId};
+/// use axum_login::{
+///     require::{PermissionMatch, PermissionsPredicate, Require},
+///     AuthUser, AuthnBackend, AuthzBackend, UserId,
+/// };
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -133,10 +133,7 @@ pub enum CheckMode {
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(
-///         &self,
-///         _: &UserId<Self>,
-///     ) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -147,7 +144,7 @@ pub enum CheckMode {
 ///
 /// let predicate = PermissionsPredicate::<Backend>::new()
 ///     .with_permissions([Permission("admin.read")])
-///     .with_mode(CheckMode::All);
+///     .with_mode(PermissionMatch::All);
 ///
 /// let require = Require::<Backend>::builder().decision(predicate).build();
 /// ```
@@ -155,7 +152,7 @@ pub struct PermissionsPredicate<B: AuthzBackend + AuthnBackend> {
     pub(crate) _marker: PhantomData<B>,
     // PERF: could add a single permission variant
     permissions: Arc<HashSet<B::Permission>>,
-    check_mode: CheckMode,
+    match_mode: PermissionMatch,
 }
 
 impl<B: AuthnBackend + AuthzBackend> Default for PermissionsPredicate<B> {
@@ -165,18 +162,18 @@ impl<B: AuthnBackend + AuthzBackend> Default for PermissionsPredicate<B> {
 }
 
 impl<B: AuthnBackend + AuthzBackend> PermissionsPredicate<B> {
-    /// Create a new predicate with a single permission and ALL check mode.
+    /// Create a new predicate with a single permission and ALL match mode.
     pub fn new() -> Self {
         let permissions: HashSet<B::Permission> = HashSet::new();
         Self {
             _marker: PhantomData,
             permissions: Arc::new(permissions),
-            check_mode: CheckMode::All,
+            match_mode: PermissionMatch::All,
         }
     }
-    /// Set the check mode for this predicate.
-    pub fn with_mode(mut self, mode: CheckMode) -> Self {
-        self.check_mode = mode;
+    /// Set the match mode for this predicate.
+    pub fn with_mode(mut self, mode: PermissionMatch) -> Self {
+        self.match_mode = mode;
         self
     }
 
@@ -198,9 +195,13 @@ where
     B::Permission: Clone + Send + Sync,
     ST: Send + Sync + 'static,
 {
-    fn decide(&self, auth_session: AuthSession<B>, _state: Arc<ST>) -> BoxFuture<'static, Decision> {
+    fn decide(
+        &self,
+        auth_session: AuthSession<B>,
+        _state: Arc<ST>,
+    ) -> BoxFuture<'static, Decision> {
         let required_permissions = Arc::clone(&self.permissions);
-        let check_mode = self.check_mode;
+        let match_mode = self.match_mode;
 
         Box::pin(async move {
             let Some(user) = auth_session.user().await else {
@@ -209,14 +210,14 @@ where
 
             match auth_session.backend().get_all_permissions(&user).await {
                 Ok(user_permissions) => {
-                    let allow = match check_mode {
-                        CheckMode::Any => required_permissions
+                    let allow = match match_mode {
+                        PermissionMatch::Any => required_permissions
                             .iter()
                             .any(|perm| user_permissions.contains(perm)),
-                        CheckMode::All => required_permissions
+                        PermissionMatch::All => required_permissions
                             .iter()
                             .all(|perm| user_permissions.contains(perm)),
-                        CheckMode::Exact => user_permissions == *required_permissions,
+                        PermissionMatch::Exact => user_permissions == *required_permissions,
                     };
 
                     if allow {

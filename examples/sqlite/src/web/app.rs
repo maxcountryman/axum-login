@@ -1,5 +1,5 @@
 use axum_login::{
-    login_required,
+    require::{RedirectHandler, Require},
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
@@ -56,8 +56,12 @@ impl App {
         let backend = Backend::new(self.db);
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
+        let require_login = Require::<Backend>::builder()
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
+            .build();
+
         let app = protected::router()
-            .route_layer(login_required!(Backend, login_url = "/login"))
+            .route_layer(require_login)
             .merge(auth::router())
             .layer(MessagesManagerLayer)
             .layer(auth_layer);

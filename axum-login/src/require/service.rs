@@ -12,7 +12,7 @@ use tower_service::Service;
 
 use crate::{
     require::{
-        handler::{AsyncHandler, InternalErrorFallback},
+        handler::{InternalErrorFallback, ResponseHandler},
         predicate::Decision,
         BoxFuture, Require,
     },
@@ -85,7 +85,7 @@ where
 
                 RequireFuture {
                     state: RequireFutureState::CheckingUser {
-                        request: Some(req),
+                        request: Box::new(Some(req)),
                         decision_future,
                     },
                     unauthenticated: Arc::clone(&self.layer.unauthenticated),
@@ -120,15 +120,15 @@ where
     #[pin]
     state: RequireFutureState<S::Future, T>,
     service: S,
-    unauthenticated: Arc<dyn AsyncHandler<T>>,
-    unauthorized: Arc<dyn AsyncHandler<T>>,
+    unauthenticated: Arc<dyn ResponseHandler<T>>,
+    unauthorized: Arc<dyn ResponseHandler<T>>,
 }
 
 #[pin_project(project = RequireFutureStateProj)]
 #[allow(missing_debug_implementations)]
 pub(super) enum RequireFutureState<SFut, T> {
     CheckingUser {
-        request: Option<Request<T>>,
+        request: Box<Option<Request<T>>>,
         #[pin]
         decision_future: BoxFuture<'static, Decision>,
     },
@@ -166,27 +166,29 @@ where
                     decision_future,
                 } => match decision_future.poll(cx) {
                     Poll::Ready(Decision::Allow) => {
-                        let Some(request) = request.take() else {
+                        let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
                         let inner_future = this.service.call(request);
                         this.state.set(RequireFutureState::Inner { inner_future });
                     }
                     Poll::Ready(Decision::Unauthorized) => {
-                        let Some(request) = request.take() else {
+                        let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
                         let unauthorized_future = this.unauthorized.handle(request);
-                        this.state
-                            .set(RequireFutureState::Unauthorized { unauthorized_future });
+                        this.state.set(RequireFutureState::Unauthorized {
+                            unauthorized_future,
+                        });
                     }
                     Poll::Ready(Decision::Unauthenticated) => {
-                        let Some(request) = request.take() else {
+                        let Some(request) = request.as_mut().take() else {
                             return Poll::Ready(Ok(internal_error_response()));
                         };
                         let unauthenticated_future = this.unauthenticated.handle(request);
-                        this.state
-                            .set(RequireFutureState::Unauthenticated { unauthenticated_future });
+                        this.state.set(RequireFutureState::Unauthenticated {
+                            unauthenticated_future,
+                        });
                     }
                     Poll::Pending => return Poll::Pending,
                 },

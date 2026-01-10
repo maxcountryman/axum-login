@@ -20,7 +20,8 @@
 //!   macros, and via the builder-based [`require`] module (feature
 //!   `require-builder`). The builder is the long-term primary surface; macros
 //!   are convenience wrappers over the same behavior. Or bring your own by
-//!   using [`AuthSession`] directly with [`from_fn`](axum::middleware::from_fn).
+//!   using [`AuthSession`] directly with
+//!   [`from_fn`](axum::middleware::from_fn).
 //! - **Rock-solid Session Management**: Uses [`tower-sessions`](tower_sessions)
 //!   for high-performing and ergonomic session management. *Look ma, no
 //!   deadlocks!*
@@ -280,8 +281,10 @@
 //! ## Builder-based middleware
 //!
 //! ```rust,no_run
-//! use axum_login::require::{RedirectHandler, Require};
-//! use axum_login::{AuthUser, AuthnBackend, UserId};
+//! use axum_login::{
+//!     require::{RedirectHandler, Require},
+//!     AuthUser, AuthnBackend, UserId,
+//! };
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -313,10 +316,7 @@
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(
-//!         &self,
-//!         _: &UserId<Self>,
-//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -476,7 +476,7 @@ pub mod require;
 
 #[cfg(any(feature = "macros-middleware", feature = "require-builder"))]
 pub use redirect::url_with_redirect_query;
-#[cfg(any(feature = "macros-middleware", feature = "require-builder"))]
-mod redirect;
 #[cfg(feature = "macros-middleware")]
 mod middleware;
+#[cfg(any(feature = "macros-middleware", feature = "require-builder"))]
+mod redirect;

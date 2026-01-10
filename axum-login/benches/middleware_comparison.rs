@@ -7,7 +7,7 @@ use axum::{
 };
 use axum_login::{
     login_required, permission_required,
-    require::{RedirectHandler, Require, PermissionsPredicate},
+    require::{PermissionsPredicate, RedirectHandler, Require},
     AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};

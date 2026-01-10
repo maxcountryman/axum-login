@@ -14,12 +14,12 @@ const DEFAULT_LOGIN_URL: &str = "/signin";
 const DEFAULT_REDIRECT_FIELD: &str = "next";
 
 /// Trait for [`super::Require`] middleware handlers.
-pub trait AsyncHandler<Req>: Send + Sync {
+pub trait ResponseHandler<Req>: Send + Sync {
     /// Handle a request.
     fn handle(&self, request: Request<Req>) -> BoxFuture<'static, Response<Body>>;
 }
 
-impl<F, ReqInBody, Fut, Res> AsyncHandler<ReqInBody> for F
+impl<F, ReqInBody, Fut, Res> ResponseHandler<ReqInBody> for F
 where
     F: Fn(Request<ReqInBody>) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'static,
@@ -36,7 +36,7 @@ where
 #[derive(Clone, Debug)]
 pub struct DefaultUnauthenticated;
 
-impl<ReqInBody> AsyncHandler<ReqInBody> for DefaultUnauthenticated {
+impl<ReqInBody> ResponseHandler<ReqInBody> for DefaultUnauthenticated {
     fn handle(&self, _request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
         Box::pin(async move {
             Response::builder()
@@ -51,7 +51,7 @@ impl<ReqInBody> AsyncHandler<ReqInBody> for DefaultUnauthenticated {
 #[derive(Clone, Debug)]
 pub struct DefaultUnauthorized;
 
-impl<ReqInBody> AsyncHandler<ReqInBody> for DefaultUnauthorized {
+impl<ReqInBody> ResponseHandler<ReqInBody> for DefaultUnauthorized {
     fn handle(&self, _request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
         Box::pin(async move {
             Response::builder()
@@ -65,7 +65,7 @@ impl<ReqInBody> AsyncHandler<ReqInBody> for DefaultUnauthorized {
 #[derive(Clone)]
 pub(super) struct InternalErrorFallback;
 
-impl<ReqInBody> AsyncHandler<ReqInBody> for InternalErrorFallback {
+impl<ReqInBody> ResponseHandler<ReqInBody> for InternalErrorFallback {
     fn handle(&self, _request: Request<ReqInBody>) -> BoxFuture<'static, Response<Body>> {
         Box::pin(async move {
             Response::builder()
@@ -82,8 +82,10 @@ impl<ReqInBody> AsyncHandler<ReqInBody> for InternalErrorFallback {
 /// # Example
 ///
 /// ```rust,no_run
-/// use axum_login::require::{RedirectHandler, Require};
-/// use axum_login::{AuthUser, AuthnBackend, UserId};
+/// use axum_login::{
+///     require::{RedirectHandler, Require},
+///     AuthUser, AuthnBackend, UserId,
+/// };
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -115,10 +117,7 @@ impl<ReqInBody> AsyncHandler<ReqInBody> for InternalErrorFallback {
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(
-///         &self,
-///         _: &UserId<Self>,
-///     ) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -164,7 +163,7 @@ impl RedirectHandler {
     }
 }
 
-impl<ReqInBody> AsyncHandler<ReqInBody> for RedirectHandler
+impl<ReqInBody> ResponseHandler<ReqInBody> for RedirectHandler
 where
     ReqInBody: Send + 'static,
 {
@@ -211,8 +210,10 @@ where
 ///
 /// ```rust,no_run
 /// use axum::http::StatusCode;
-/// use axum_login::require::{Require, SimpleResponseHandler};
-/// use axum_login::{AuthUser, AuthnBackend, UserId};
+/// use axum_login::{
+///     require::{Require, SimpleResponseHandler},
+///     AuthUser, AuthnBackend, UserId,
+/// };
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -244,10 +245,7 @@ where
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(
-///         &self,
-///         _: &UserId<Self>,
-///     ) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -374,7 +372,7 @@ impl SimpleResponseHandler {
     }
 }
 
-impl<ReqBody> AsyncHandler<ReqBody> for SimpleResponseHandler {
+impl<ReqBody> ResponseHandler<ReqBody> for SimpleResponseHandler {
     fn handle(&self, _req: Request<ReqBody>) -> BoxFuture<'static, Response<Body>> {
         let status_code = self.status_code;
         let body = self.body.clone();
@@ -441,5 +439,15 @@ mod tests {
         // assert!(response
         //     .headers()
         //     .contains_key("Access-Control-Allow-Origin"));
+    }
+
+    #[tokio::test]
+    async fn test_redirect_handler_invalid_login_url() {
+        let handler = RedirectHandler::new().login_url("http://[::1");
+        let request = Request::builder().uri("/").body(()).unwrap();
+
+        let response = handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

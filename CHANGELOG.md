@@ -1,15 +1,13 @@
 # Unreleased
 
 - Remove `mut` in AuthSession::{logout, login}. #300
+- Align macro middleware with the `Require` core and make `macros-middleware`
+  depend on `require-builder`.
+- Introduce the new `require` API (breaking): builder-based middleware with
+  explicit authn/authz decisions, type-erased predicates/handlers, and clearer
+  naming (`PermissionMatch`, `DefaultAccess`, `ResponseHandler`).
 - `permission_required` now returns `401 Unauthorized` when unauthenticated and
   `403 Forbidden` only when authenticated but missing permissions.
-- Unify macro middleware with the `Require` core and make `macros-middleware`
-  depend on `require-builder`.
-- Share redirect helper across middleware surfaces and add feature-gate checks
-  for `require-builder`-only builds.
-- Simplify the `Require` API by type-erasing handlers and predicates behind
-  `Arc`. `DecisionPredicate::decide` now receives `Arc<ST>` and `AsyncHandler`
-  is `Send + Sync` with `&self` (breaking).
 
 # 0.18.0
 
