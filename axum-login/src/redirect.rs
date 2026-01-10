@@ -22,13 +22,39 @@ pub fn url_with_redirect_query(
 ) -> Result<Uri, http::Error> {
     let uri = url.parse::<Uri>()?;
 
-    if uri.query().is_some_and(|q| q.contains(redirect_field)) {
-        return Ok(uri);
-    };
+    if let Some(query) = uri.query() {
+        let has_redirect =
+            form_urlencoded::parse(query.as_bytes()).any(|(key, _)| key == redirect_field);
+        if has_redirect {
+            return Ok(uri);
+        }
+    }
 
     let redirect_uri_string = redirect_uri.to_string();
     let redirect_uri_encoded = urlencoding::encode(&redirect_uri_string);
     let redirect_query = format!("{redirect_field}={redirect_uri_encoded}");
 
     update_query(&uri, redirect_query)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn appends_redirect_when_query_contains_substring() {
+        let redirect = "/dashboard".parse::<Uri>().unwrap();
+        let uri = url_with_redirect_query("/login?context=1", "next", redirect).unwrap();
+
+        assert_eq!(uri.to_string(), "/login?next=%2Fdashboard&context=1");
+    }
+
+    #[test]
+    fn preserves_existing_redirect_param() {
+        let redirect = "/dashboard".parse::<Uri>().unwrap();
+        let uri =
+            url_with_redirect_query("/login?next=%2Fkeep&context=1", "next", redirect).unwrap();
+
+        assert_eq!(uri.to_string(), "/login?next=%2Fkeep&context=1");
+    }
 }

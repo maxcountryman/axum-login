@@ -296,3 +296,83 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{require::Decision, AuthSession, AuthUser};
+
+    #[derive(Clone, Debug)]
+    struct TestUser;
+
+    impl AuthUser for TestUser {
+        type Id = i64;
+
+        fn id(&self) -> Self::Id {
+            1
+        }
+
+        fn session_auth_hash(&self) -> &[u8] {
+            &[]
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestBackend;
+
+    impl AuthnBackend for TestBackend {
+        type User = TestUser;
+        type Credentials = ();
+        type Error = std::convert::Infallible;
+
+        async fn authenticate(
+            &self,
+            _: Self::Credentials,
+        ) -> Result<Option<Self::User>, Self::Error> {
+            Ok(Some(TestUser))
+        }
+
+        async fn get_user(&self, _: &i64) -> Result<Option<Self::User>, Self::Error> {
+            Ok(Some(TestUser))
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct TestState(i32);
+
+    #[test]
+    fn builder_debug_includes_type() {
+        let builder = RequireBuilder::<TestBackend>::new();
+        let formatted = format!("{:?}", builder);
+
+        assert!(formatted.contains("RequireBuilder"));
+    }
+
+    #[test]
+    fn builder_with_state_sets_state() {
+        let state = TestState(42);
+        let builder = RequireBuilder::<TestBackend, TestState>::new_with_state(state);
+
+        assert_eq!(*builder.state, TestState(42));
+    }
+
+    #[tokio::test]
+    async fn builder_decision_override_is_used() {
+        let builder =
+            RequireBuilder::<TestBackend>::new().decision(|_, _| async { Decision::Unauthorized });
+        let require = builder.build();
+
+        let store = std::sync::Arc::new(tower_sessions::MemoryStore::default());
+        let session = tower_sessions::Session::new(None, store, None);
+        let auth_session = AuthSession::from_session(session, TestBackend, "axum-login.data")
+            .await
+            .unwrap();
+
+        let decision = require
+            .decision
+            .decide(auth_session, std::sync::Arc::clone(&require.state))
+            .await;
+
+        assert_eq!(decision, Decision::Unauthorized);
+    }
+}

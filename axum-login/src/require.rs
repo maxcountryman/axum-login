@@ -1537,4 +1537,12 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
+
+    #[test]
+    fn require_debug_includes_type() {
+        let require = Require::<TestBackend>::builder().build();
+        let formatted = format!("{:?}", require);
+
+        assert!(formatted.contains("Require"));
+    }
 }

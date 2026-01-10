@@ -379,6 +379,31 @@ mod tests {
         )
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct ReadyError;
+
+    #[derive(Clone)]
+    struct ErrorReadyService;
+
+    impl Service<Request<Body>> for ErrorReadyService {
+        type Response = Response<Body>;
+        type Error = ReadyError;
+        type Future = BoxFuture<'static, Result<Response<Body>, Self::Error>>;
+
+        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Err(ReadyError))
+        }
+
+        fn call(&mut self, _req: Request<Body>) -> Self::Future {
+            Box::pin(async move {
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from("ok"))
+                    .unwrap())
+            })
+        }
+    }
+
     fn noop_waker() -> Waker {
         struct NoopWake;
 
@@ -482,5 +507,95 @@ mod tests {
         assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(gate.poll_ready_calls.load(Ordering::SeqCst), 0);
         assert_eq!(gate.call_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn allow_propagates_inner_ready_error() {
+        let require = require_allow();
+        let mut service = RequireService {
+            inner: ErrorReadyService,
+            layer: require,
+        };
+
+        let mut req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        req.extensions_mut().insert(auth_session().await);
+
+        let err = service.call(req).await.unwrap_err();
+        assert_eq!(err, ReadyError);
+    }
+
+    #[test]
+    fn checking_user_missing_request_returns_internal_error() {
+        let mut fut = RequireFuture {
+            state: RequireFutureState::CheckingUser {
+                request: Box::new(None),
+                decision_future: Box::pin(async { Decision::Allow }),
+            },
+            unauthenticated: Arc::new(SimpleResponseHandler::text(
+                StatusCode::UNAUTHORIZED,
+                "nope",
+            )),
+            unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+            service: GateService::new(),
+        };
+
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let res = match Pin::new(&mut fut).poll(&mut cx) {
+            Poll::Ready(Ok(res)) => res,
+            other => panic!("expected ready response, got {other:?}"),
+        };
+
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn unauthorized_missing_request_returns_internal_error() {
+        let mut fut = RequireFuture {
+            state: RequireFutureState::CheckingUser {
+                request: Box::new(None),
+                decision_future: Box::pin(async { Decision::Unauthorized }),
+            },
+            unauthenticated: Arc::new(SimpleResponseHandler::text(
+                StatusCode::UNAUTHORIZED,
+                "nope",
+            )),
+            unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+            service: GateService::new(),
+        };
+
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let res = match Pin::new(&mut fut).poll(&mut cx) {
+            Poll::Ready(Ok(res)) => res,
+            other => panic!("expected ready response, got {other:?}"),
+        };
+
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn unauthenticated_missing_request_returns_internal_error() {
+        let mut fut = RequireFuture {
+            state: RequireFutureState::CheckingUser {
+                request: Box::new(None),
+                decision_future: Box::pin(async { Decision::Unauthenticated }),
+            },
+            unauthenticated: Arc::new(SimpleResponseHandler::text(
+                StatusCode::UNAUTHORIZED,
+                "nope",
+            )),
+            unauthorized: Arc::new(SimpleResponseHandler::text(StatusCode::FORBIDDEN, "nope")),
+            service: GateService::new(),
+        };
+
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let res = match Pin::new(&mut fut).poll(&mut cx) {
+            Poll::Ready(Ok(res)) => res,
+            other => panic!("expected ready response, got {other:?}"),
+        };
+
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

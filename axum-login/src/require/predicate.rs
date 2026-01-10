@@ -231,3 +231,120 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use tower_sessions::{MemoryStore, Session};
+
+    use super::*;
+    use crate::{AuthSession, AuthUser};
+
+    #[derive(Clone, Debug)]
+    struct TestUser;
+
+    impl AuthUser for TestUser {
+        type Id = i64;
+
+        fn id(&self) -> Self::Id {
+            1
+        }
+
+        fn session_auth_hash(&self) -> &[u8] {
+            &[]
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestBackend;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct TestError;
+
+    impl std::fmt::Display for TestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("test error")
+        }
+    }
+
+    impl std::error::Error for TestError {}
+
+    impl AuthnBackend for TestBackend {
+        type User = TestUser;
+        type Credentials = ();
+        type Error = TestError;
+
+        async fn authenticate(
+            &self,
+            _: Self::Credentials,
+        ) -> Result<Option<Self::User>, Self::Error> {
+            Ok(Some(TestUser))
+        }
+
+        async fn get_user(&self, _: &i64) -> Result<Option<Self::User>, Self::Error> {
+            Ok(Some(TestUser))
+        }
+    }
+
+    impl AuthzBackend for TestBackend {
+        type Permission = &'static str;
+
+        async fn get_all_permissions(
+            &self,
+            _user: &Self::User,
+        ) -> Result<HashSet<Self::Permission>, Self::Error> {
+            Err(TestError)
+        }
+    }
+
+    async fn auth_session_with_user() -> AuthSession<TestBackend> {
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        let auth_session = AuthSession::from_session(session, TestBackend, "axum-login.data")
+            .await
+            .unwrap();
+        auth_session.login(&TestUser).await.unwrap();
+        auth_session
+    }
+
+    async fn auth_session_without_user() -> AuthSession<TestBackend> {
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        AuthSession::from_session(session, TestBackend, "axum-login.data")
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn default_access_returns_unauthenticated() {
+        let predicate = DefaultAccess::<TestBackend, ()>::default();
+        let auth_session = auth_session_without_user().await;
+
+        let decision = predicate.decide(auth_session, Arc::new(())).await;
+
+        assert_eq!(decision, Decision::Unauthenticated);
+    }
+
+    #[tokio::test]
+    async fn default_access_returns_allow() {
+        let predicate = DefaultAccess::<TestBackend, ()>::default();
+        let auth_session = auth_session_with_user().await;
+
+        let decision = predicate.decide(auth_session, Arc::new(())).await;
+
+        assert_eq!(decision, Decision::Allow);
+    }
+
+    #[tokio::test]
+    async fn permissions_predicate_denies_on_backend_error() {
+        let predicate = PermissionsPredicate::<TestBackend>::new()
+            .with_permissions(["admin.read"])
+            .with_mode(PermissionMatch::Any);
+        let auth_session = auth_session_with_user().await;
+
+        let decision = predicate.decide(auth_session, Arc::new(())).await;
+
+        assert_eq!(decision, Decision::Unauthorized);
+    }
+}

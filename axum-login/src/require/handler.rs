@@ -411,7 +411,10 @@ impl<ReqBody> ResponseHandler<ReqBody> for SimpleResponseHandler {
 
 #[cfg(test)]
 mod tests {
-    use axum::http::Request;
+    use axum::{
+        extract::OriginalUri,
+        http::{header, Request, Uri},
+    };
 
     use super::*;
 
@@ -449,5 +452,88 @@ mod tests {
         let response = handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn test_redirect_handler_uses_original_uri() {
+        let handler = RedirectHandler::new().login_url("/login");
+        let mut request = Request::builder().uri("/ignored").body(()).unwrap();
+        let original_uri = "/return".parse::<Uri>().unwrap();
+        request.extensions_mut().insert(OriginalUri(original_uri));
+
+        let response = handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/login?next=%2Freturn"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_redirect_handler_defaults() {
+        let handler = RedirectHandler::new();
+        let request = Request::builder().uri("/").body(()).unwrap();
+
+        let response = handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/signin?next=%2F"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_redirect_handler_preserves_existing_redirect_param() {
+        let handler = RedirectHandler::new().login_url("/login?next=%2Fkeep");
+        let request = Request::builder().uri("/").body(()).unwrap();
+
+        let response = handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/login?next=%2Fkeep"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_response_handler_from_closure() {
+        let handler = |_: Request<()>| async { StatusCode::IM_A_TEAPOT };
+        let request = Request::builder().body(()).unwrap();
+
+        let response = handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::IM_A_TEAPOT);
+    }
+
+    #[tokio::test]
+    async fn test_simple_response_handler_invalid_headers_ignored() {
+        let handler = SimpleResponseHandler::new()
+            .content_type("\n")
+            .header("bad header", "value")
+            .header("X-Good", "ok");
+
+        let request = Request::builder().body(()).unwrap();
+        let response = handler.handle(request).await;
+
+        assert!(response.headers().get(header::CONTENT_TYPE).is_none());
+        assert!(response.headers().get("bad header").is_none());
+        assert_eq!(response.headers().get("X-Good").unwrap(), "ok");
+    }
+
+    #[tokio::test]
+    async fn test_simple_response_handler_error_page() {
+        let handler =
+            SimpleResponseHandler::error_page(StatusCode::UNAUTHORIZED, "Denied", "No access");
+        let request = Request::builder().body(()).unwrap();
+        let response = handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
     }
 }
