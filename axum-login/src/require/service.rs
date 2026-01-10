@@ -22,17 +22,15 @@ use crate::{
 fn internal_error_response() -> Response<Body> {
     http::Response::builder()
         .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Body::from("Internal server error"))
+        .body(Body::from("Internal Server Error"))
         .unwrap_or_else(|_| http::Response::new(Body::empty()))
 }
 
-/// A Tower service that enforces authentication and authorization
-/// requirements.
+/// A Tower service that enforces authentication and authorization.
 ///
-/// This service checks for authentication, if it fails, it responds with
-/// fallback applies a predicate function to determine if the request should
-/// be allowed to proceed. If the predicate fails, it applies either a
-/// restriction response or a fallback response.
+/// The service checks whether a request is authenticated. If it is, it
+/// evaluates the predicate and either forwards to the inner service or applies
+/// the restrict handler. If it is not, it applies the fallback handler.
 #[must_use]
 #[derive(Debug)]
 pub struct RequireService<S, B: AuthnBackend, ST, T, Fb, Rs, Pr> {
@@ -40,7 +38,7 @@ pub struct RequireService<S, B: AuthnBackend, ST, T, Fb, Rs, Pr> {
     pub(crate) layer: Require<B, ST, T, Fb, Rs, Pr>,
 }
 
-// Manual clone, because of Body
+// Manual clone because Body isn't Clone on the service type.
 impl<S, B, Fb, Rs, Pr, ST, T> Clone for RequireService<S, B, ST, T, Fb, Rs, Pr>
 where
     S: Clone,
@@ -77,16 +75,15 @@ where
     }
 
     fn call(&mut self, req: Request<T>) -> Self::Future {
-        // [`super::predicate::AsyncPredicate`]
         let auth_session = req.extensions().get::<AuthSession<B>>().cloned();
 
-        // Clone inner service for the future
+        // Clone inner service for the future.
         let mut inner = self.inner.clone();
-        // mem::swap due to https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
+        // Avoid cloning the inner service twice as recommended by tower.
         std::mem::swap(&mut self.inner, &mut inner);
         match auth_session {
             Some(auth_session) => {
-                // Check if user exists (async operation)
+                // Check if user exists (async operation).
                 let backend = auth_session.backend().clone();
                 let user_future = Box::pin(async move { auth_session.user().await });
                 RequireFuture {
@@ -103,7 +100,7 @@ where
                 }
             }
             None => {
-                // Missing required extensions - return internal server error
+                // Missing required extensions: return internal server error.
                 let internal_fallback_future = InternalErrorFallback.handle(req);
 
                 RequireFuture {
@@ -145,8 +142,6 @@ where
 #[allow(missing_debug_implementations)]
 pub(super) enum RequireFutureState<SFut, T, Fb, Rs, B>
 where
-    // Pr: AsyncPredicate<B, ST>,
-    // S: Service<Request<T>, Response = Response<Body>>,
     Fb: AsyncFallbackHandler<T>,
     Rs: AsyncFallbackHandler<T>,
     B: AuthnBackend,
