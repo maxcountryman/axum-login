@@ -1,3 +1,5 @@
+#![cfg(feature = "macros-middleware")]
+
 use std::{
     collections::HashMap,
     process::{Child, Command},
@@ -103,10 +105,10 @@ async fn permissions_example() {
         "Expected 'id' cookie to be set after successful login"
     );
 
-    // Try to access restricted page.
+    // Try to access restricted page as an authenticated but unauthorized user.
     let res = client.get(url("/restricted")).send().await.unwrap();
-    assert_eq!(*res.url(), url("/login?next=%2Frestricted"));
-    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(*res.url(), url("/restricted"));
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
     // Log in with valid credentials.
     let res = login(&client, "admin", "hunter42").await;

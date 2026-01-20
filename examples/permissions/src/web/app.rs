@@ -1,5 +1,6 @@
+use axum::http::StatusCode;
 use axum_login::{
-    permission_required,
+    require::{PermissionsPredicate, RedirectHandler, Require, SimpleResponseHandler},
     tower_sessions::{Expiry, MemoryStore, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
@@ -40,18 +41,24 @@ impl App {
         let backend = Backend::new(self.db);
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
+        let unauthorized_handler = SimpleResponseHandler::text(StatusCode::FORBIDDEN, "Forbidden");
+
+        let restricted_require = Require::<Backend>::builder()
+            .decision(PermissionsPredicate::new().with_permissions(["restricted.read"]))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
+            .unauthorized(unauthorized_handler.clone())
+            .build();
+
+        let protected_require = Require::<Backend>::builder()
+            .decision(PermissionsPredicate::new().with_permissions(["protected.read"]))
+            .unauthenticated(RedirectHandler::new().login_url("/login"))
+            .unauthorized(unauthorized_handler)
+            .build();
+
         let app = restricted::router()
-            .route_layer(permission_required!(
-                Backend,
-                login_url = "/login",
-                "restricted.read",
-            ))
+            .route_layer(restricted_require)
             .merge(protected::router())
-            .route_layer(permission_required!(
-                Backend,
-                login_url = "/login",
-                "protected.read",
-            ))
+            .route_layer(protected_require)
             .merge(auth::router())
             .layer(auth_layer);
 

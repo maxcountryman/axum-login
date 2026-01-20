@@ -1,64 +1,20 @@
-use axum::http::{self, Uri};
-
-fn update_query(uri: &Uri, new_query: String) -> Result<Uri, http::Error> {
-    let query = form_urlencoded::parse(uri.query().map(|q| q.as_bytes()).unwrap_or_default());
-    let updated_query = form_urlencoded::Serializer::new(new_query)
-        .extend_pairs(query)
-        .finish();
-
-    let mut parts = uri.clone().into_parts();
-    parts.path_and_query = Some(format!("{}?{}", uri.path(), updated_query).parse()?);
-
-    Ok(Uri::from_parts(parts)?)
-}
-
-/// This is intended for internal use only and subject to change in the future
-/// without warning!
-#[doc(hidden)]
-pub fn url_with_redirect_query(
-    url: &str,
-    redirect_field: &str,
-    redirect_uri: Uri,
-) -> Result<Uri, http::Error> {
-    let uri = url.parse::<Uri>()?;
-
-    if uri.query().is_some_and(|q| q.contains(redirect_field)) {
-        return Ok(uri);
-    };
-
-    let redirect_uri_string = redirect_uri.to_string();
-    let redirect_uri_encoded = urlencoding::encode(&redirect_uri_string);
-    let redirect_query = format!("{redirect_field}={redirect_uri_encoded}");
-
-    update_query(&uri, redirect_query)
-}
-
 /// Login predicate middleware.
 ///
 /// Requires that the user is authenticated.
 #[macro_export]
 macro_rules! login_required {
     ($backend_type:ty) => {{
-        async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            auth_session.user().await.is_some()
-        }
-
-        $crate::predicate_required!(
-            is_authenticated,
-            $crate::axum::http::StatusCode::UNAUTHORIZED
-        )
+        $crate::require::Require::<$backend_type>::builder().build()
     }};
 
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr) => {{
-        async fn is_authenticated(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            auth_session.user().await.is_some()
-        }
-
-        $crate::predicate_required!(
-            is_authenticated,
-            login_url = $login_url,
-            redirect_field = $redirect_field
-        )
+        $crate::require::Require::<$backend_type>::builder()
+            .unauthenticated(
+                $crate::require::RedirectHandler::new()
+                    .login_url($login_url)
+                    .redirect_field($redirect_field),
+            )
+            .build()
     }};
 
     ($backend_type:ty, login_url = $login_url:expr) => {
@@ -77,26 +33,17 @@ macro_rules! login_required {
 #[macro_export]
 macro_rules! permission_required {
     ($backend_type:ty, login_url = $login_url:expr, redirect_field = $redirect_field:expr, $($perm:expr),+ $(,)?) => {{
-        use $crate::AuthzBackend;
+        let predicate = $crate::require::PermissionsPredicate::<$backend_type>::new()
+            .with_permissions([$($perm),+]);
 
-        async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user().await {
-                let mut has_all_permissions = true;
-                $(
-                    has_all_permissions = has_all_permissions &&
-                        auth_session.backend().has_perm(user, $perm.into()).await.unwrap_or(false);
-                )+
-                has_all_permissions
-            } else {
-                false
-            }
-        }
-
-        $crate::predicate_required!(
-            is_authorized,
-            login_url = $login_url,
-            redirect_field = $redirect_field
-        )
+        $crate::require::Require::<$backend_type>::builder()
+            .decision(predicate)
+            .unauthenticated(
+                $crate::require::RedirectHandler::new()
+                    .login_url($login_url)
+                    .redirect_field($redirect_field),
+            )
+            .build()
     }};
 
     ($backend_type:ty, login_url = $login_url:expr, $($perm:expr),+ $(,)?) => {
@@ -109,25 +56,12 @@ macro_rules! permission_required {
     };
 
     ($backend_type:ty, $($perm:expr),+ $(,)?) => {{
-        use $crate::AuthzBackend;
+        let predicate = $crate::require::PermissionsPredicate::<$backend_type>::new()
+            .with_permissions([$($perm),+]);
 
-        async fn is_authorized(auth_session: $crate::AuthSession<$backend_type>) -> bool {
-            if let Some(ref user) = auth_session.user().await {
-                let mut has_all_permissions = true;
-                $(
-                    has_all_permissions = has_all_permissions &&
-                        auth_session.backend().has_perm(user, $perm.into()).await.unwrap_or(false);
-                )+
-                has_all_permissions
-            } else {
-                false
-            }
-        }
-
-        $crate::predicate_required!(
-            is_authorized,
-            $crate::axum::http::StatusCode::FORBIDDEN
-        )
+        $crate::require::Require::<$backend_type>::builder()
+            .decision(predicate)
+            .build()
     }};
 }
 
@@ -442,7 +376,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
         let req = Request::builder()
             .uri("/login")
@@ -476,7 +410,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
         let req = Request::builder()
             .uri("/login")
@@ -604,7 +538,7 @@ mod tests {
 
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
         let req = Request::builder()
             .uri("/login")

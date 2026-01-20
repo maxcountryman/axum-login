@@ -39,9 +39,10 @@ It offers:
   `AuthzBackend` trait, which allows applications to define custom
   permissions. Both user and group permissions are supported.
 - **Convenient Route Protection**: Middleware for protecting access to
-  routes are provided via the `login_required` and `permission_required`
-  macros. Or bring your own by using `AuthSession` directly with
-  `from_fn`.
+  routes is available via the `login_required` and `permission_required`
+  macros, and via the `require` builder (`require-builder` feature). The
+  builder is the long-term primary surface; macros are convenience wrappers
+  over the same behavior.
 - **Rock-solid Session Management**: Uses [`tower-sessions`](https://github.com/maxcountryman/tower-sessions)
   for high-performing and ergonomic session management. _Look ma, no deadlocks!_
 
@@ -60,6 +61,79 @@ We recommend reviewing our [`sqlite` example][sqlite-example]. There is also a [
 
 > [!NOTE]
 > See the [crate documentation][docs] for usage information.
+
+### Builder quick start
+
+```rust
+use axum_login::require::{RedirectHandler, Require};
+use axum_login::{AuthUser, AuthnBackend, UserId};
+
+#[derive(Clone, Debug)]
+struct User;
+
+impl AuthUser for User {
+    type Id = i64;
+
+    fn id(&self) -> Self::Id {
+        0
+    }
+
+    fn session_auth_hash(&self) -> &[u8] {
+        &[]
+    }
+}
+
+#[derive(Clone)]
+struct Backend;
+
+impl AuthnBackend for Backend {
+    type User = User;
+    type Credentials = ();
+    type Error = std::convert::Infallible;
+
+    async fn authenticate(
+        &self,
+        _: Self::Credentials,
+    ) -> Result<Option<Self::User>, Self::Error> {
+        Ok(Some(User))
+    }
+
+    async fn get_user(
+        &self,
+        _: &UserId<Self>,
+    ) -> Result<Option<Self::User>, Self::Error> {
+        Ok(Some(User))
+    }
+}
+
+let require = Require::<Backend>::builder()
+    .unauthenticated(RedirectHandler::new().login_url("/login"))
+    .build();
+```
+
+You can customize access logic with `.decision(...)`, which receives an
+`AuthSession` plus `Arc<state>` when you build with shared state.
+
+## ✅ Behavior Contract
+
+The middleware surfaces follow the same contract:
+
+- If the request is unauthenticated, the unauthenticated handler is used.
+- If the request is authenticated but not authorized, the unauthorized handler is used.
+- Redirect fallbacks preserve explicit redirect query parameters if already present and otherwise append the configured redirect field.
+- Redirect construction errors return `500 Internal Server Error`.
+
+## 🧩 Feature Flags
+
+- `require-builder`: Enables the builder-based `require` module, which is the primary middleware surface.
+- `macros-middleware`: Enables the `login_required!` and `permission_required!` macros. These are convenience wrappers over the builder and are enabled by default.
+
+Example (builder only, no macros):
+
+```toml
+[dependencies]
+axum-login = { version = "0.18.0", default-features = false, features = ["require-builder"] }
+```
 
 ## 🦺 Safety
 

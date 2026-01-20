@@ -16,8 +16,11 @@
 //!   [`AuthzBackend`] trait, which allows applications to define custom
 //!   permissions. Both user and group permissions are supported.
 //! - **Convenient Route Protection**: Middleware for protecting access to
-//!   routes are provided via the [`login_required`] and [`permission_required`]
-//!   macros. Or bring your own by using [`AuthSession`] directly with
+//!   routes is available via the [`login_required`] and [`permission_required`]
+//!   macros, and via the builder-based [`require`] module (feature
+//!   `require-builder`). The builder is the long-term primary surface; macros
+//!   are convenience wrappers over the same behavior. Or bring your own by
+//!   using [`AuthSession`] directly with
 //!   [`from_fn`](axum::middleware::from_fn).
 //! - **Rock-solid Session Management**: Uses [`tower-sessions`](tower_sessions)
 //!   for high-performing and ergonomic session management. *Look ma, no
@@ -185,6 +188,7 @@
 //!
 //!     Redirect::to("/protected").into_response()
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! This handler uses a `Form` extractor to retrieve credentials and then uses
@@ -250,9 +254,12 @@
 //! #         Ok(self.users.get(user_id).cloned())
 //! #     }
 //! # }
+//! # #[cfg(feature = "macros-middleware")]
 //! use axum::{routing::get, Router};
+//! # #[cfg(feature = "macros-middleware")]
 //! use axum_login::login_required;
 //!
+//! # #[cfg(feature = "macros-middleware")]
 //! fn protected_routes() -> Router {
 //!     Router::new()
 //!         .route(
@@ -261,6 +268,7 @@
 //!         )
 //!         .route_layer(login_required!(Backend, login_url = "/login"))
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! Routes defined in this way can be protected by the middleware, in this case
@@ -269,6 +277,74 @@
 //!
 //! Likewise, [`permission_required`] can be used to require user or
 //! group permissions in order to access the protected resource.
+//!
+//! ## Builder-based middleware
+//!
+//! ```rust,no_run
+//! use axum_login::{
+//!     require::{RedirectHandler, Require},
+//!     AuthUser, AuthnBackend, UserId,
+//! };
+//!
+//! #[derive(Clone, Debug)]
+//! struct User;
+//!
+//! impl AuthUser for User {
+//!     type Id = i64;
+//!
+//!     fn id(&self) -> Self::Id {
+//!         0
+//!     }
+//!
+//!     fn session_auth_hash(&self) -> &[u8] {
+//!         &[]
+//!     }
+//! }
+//!
+//! #[derive(Clone)]
+//! struct Backend;
+//!
+//! impl AuthnBackend for Backend {
+//!     type User = User;
+//!     type Credentials = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     async fn authenticate(
+//!         &self,
+//!         _: Self::Credentials,
+//!     ) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//!
+//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+//!         Ok(Some(User))
+//!     }
+//! }
+//!
+//! let require = Require::<Backend>::builder()
+//!     .unauthenticated(RedirectHandler::new().login_url("/login"))
+//!     .build();
+//! ```
+//!
+//! Use `.decision(...)` for custom access logic; it receives the auth session
+//! plus `Arc<state>` when you build with shared state.
+//!
+//! ## Behavior contract
+//!
+//! The middleware surfaces follow the same contract:
+//!
+//! - If the request is unauthenticated, the unauthenticated handler is used.
+//! - If the request is authenticated but not authorized, the unauthorized
+//!   handler is used.
+//! - Redirect fallbacks preserve explicit redirect query parameters if already
+//!   present and otherwise append the configured redirect field.
+//! - Redirect construction errors return `500 Internal Server Error`.
+//!
+//! ## Feature flags
+//!
+//! - `require-builder`: Enables the builder-based `require` module.
+//! - `macros-middleware`: Enables the macro middleware and depends on
+//!   `require-builder`. This is enabled by default.
 //!
 //! ## Setting up an auth service
 //!
@@ -328,18 +404,20 @@
 //! #         Ok(self.users.get(user_id).cloned())
 //! #     }
 //! # }
+//! # #[cfg(feature = "macros-middleware")]
 //! use axum::{
 //!     routing::{get, post},
 //!     Router,
 //! };
+//! # #[cfg(feature = "macros-middleware")]
 //! use axum_login::{
 //!     login_required,
 //!     tower_sessions::{MemoryStore, SessionManagerLayer},
 //!     AuthManagerLayerBuilder,
 //! };
 //!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # #[cfg(feature = "macros-middleware")]
+//! async fn run() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Session layer.
 //!     let session_store = MemoryStore::default();
 //!     let session_layer = SessionManagerLayer::new(session_store);
@@ -349,10 +427,10 @@
 //!     let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 //!
 //!     let app = Router::new()
-//!         .route("/protected", get(todo!()))
+//!         .route("/protected", get::<(), _, _>(todo!()))
 //!         .route_layer(login_required!(Backend, login_url = "/login"))
-//!         .route("/login", post(todo!()))
-//!         .route("/login", get(todo!()))
+//!         .route("/login", post::<(), _, _>(todo!()))
+//!         .route("/login", get::<(), _, _>(todo!()))
 //!         .layer(auth_layer);
 //!
 //!     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -360,6 +438,7 @@
 //!
 //!     Ok(())
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! ## One more thing
@@ -382,7 +461,6 @@
 pub use axum;
 pub use backend::{AuthUser, AuthnBackend, AuthzBackend, UserId};
 #[doc(hidden)]
-pub use middleware::url_with_redirect_query;
 pub use service::{AuthManager, AuthManagerLayer, AuthManagerLayerBuilder};
 pub use session::{AuthSession, Error};
 pub use tower_sessions;
@@ -390,6 +468,15 @@ pub use tracing;
 
 mod backend;
 mod extract;
-mod middleware;
 mod service;
 mod session;
+
+#[cfg(feature = "require-builder")]
+pub mod require;
+
+#[cfg(any(feature = "macros-middleware", feature = "require-builder"))]
+pub use redirect::url_with_redirect_query;
+#[cfg(feature = "macros-middleware")]
+mod middleware;
+#[cfg(any(feature = "macros-middleware", feature = "require-builder"))]
+mod redirect;
