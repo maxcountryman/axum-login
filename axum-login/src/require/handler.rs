@@ -86,6 +86,7 @@ impl<ReqInBody> ResponseHandler<ReqInBody> for InternalErrorFallback {
 ///     require::{RedirectHandler, Require},
 ///     AuthUser, AuthnBackend, UserId,
 /// };
+/// use tower_sessions::Session;
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -113,11 +114,12 @@ impl<ReqInBody> ResponseHandler<ReqInBody> for InternalErrorFallback {
 ///     async fn authenticate(
 ///         &self,
 ///         _: Self::Credentials,
+///         _: &Session,
 ///     ) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -214,6 +216,7 @@ where
 ///     require::{Require, SimpleResponseHandler},
 ///     AuthUser, AuthnBackend, UserId,
 /// };
+/// use tower_sessions::Session;
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -241,11 +244,12 @@ where
 ///     async fn authenticate(
 ///         &self,
 ///         _: Self::Credentials,
+///         _: &Session,
 ///     ) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }

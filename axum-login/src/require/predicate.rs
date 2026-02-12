@@ -99,6 +99,7 @@ pub enum PermissionMatch {
 ///     require::{PermissionMatch, PermissionsPredicate, Require},
 ///     AuthUser, AuthnBackend, AuthzBackend, UserId,
 /// };
+/// use tower_sessions::Session;
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -129,11 +130,12 @@ pub enum PermissionMatch {
 ///     async fn authenticate(
 ///         &self,
 ///         _: Self::Credentials,
+///         _: &Session,
 ///     ) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -208,7 +210,11 @@ where
                 return Decision::Unauthenticated;
             };
 
-            match auth_session.backend().get_all_permissions(&user).await {
+            match auth_session
+                .backend()
+                .get_all_permissions(&user, &auth_session.session().await)
+                .await
+            {
                 Ok(user_permissions) => {
                     let allow = match match_mode {
                         PermissionMatch::Any => required_permissions
@@ -278,11 +284,12 @@ mod tests {
         async fn authenticate(
             &self,
             _: Self::Credentials,
+            _: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(TestUser))
         }
 
-        async fn get_user(&self, _: &i64) -> Result<Option<Self::User>, Self::Error> {
+        async fn get_user(&self, _: &i64, _: &Session) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(TestUser))
         }
     }
@@ -293,6 +300,7 @@ mod tests {
         async fn get_all_permissions(
             &self,
             _user: &Self::User,
+            _: &Session,
         ) -> Result<HashSet<Self::Permission>, Self::Error> {
             Err(TestError)
         }

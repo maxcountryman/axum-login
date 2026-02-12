@@ -97,6 +97,11 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         self.inner.lock().await.user.clone()
     }
 
+    /// Returns the underlying session.
+    pub async fn session(&self) -> Session {
+        self.inner.lock().await.session.clone()
+    }
+
     /// Verifies the provided credentials via the backend returning the
     /// authenticated user if valid and otherwise `None`.
     #[tracing::instrument(level = "debug", skip_all, fields(user.id), ret, err)]
@@ -104,9 +109,10 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         &self,
         creds: Backend::Credentials,
     ) -> Result<Option<Backend::User>, Error<Backend>> {
+        let session = self.session().await;
         let result = self
             .backend
-            .authenticate(creds)
+            .authenticate(creds, &session)
             .await
             .map_err(Error::Backend);
 
@@ -168,7 +174,10 @@ impl<Backend: AuthnBackend> AuthSession<Backend> {
         let mut data: Data<_> = session.get(data_key).await?.unwrap_or_default();
 
         let mut user = if let Some(ref user_id) = data.user_id {
-            backend.get_user(user_id).await.map_err(Error::Backend)?
+            backend
+                .get_user(user_id, &session)
+                .await
+                .map_err(Error::Backend)?
         } else {
             None
         };
@@ -219,8 +228,8 @@ mod tests {
             type Credentials = MockCredentials;
             type Error = MockError;
 
-            async fn authenticate(&self, creds: MockCredentials) -> Result<Option<MockUser>, MockError>;
-            async fn get_user(&self, user_id: &i64) -> Result<Option<MockUser>, MockError>;
+            async fn authenticate(&self, creds: MockCredentials, _session: &Session) -> Result<Option<MockUser>, MockError>;
+            async fn get_user(&self, user_id: &i64, _session: &Session) -> Result<Option<MockUser>, MockError>;
 
         }
     }
@@ -268,9 +277,9 @@ mod tests {
 
         mock_backend
             .expect_authenticate()
-            .with(eq(creds.clone()))
+            .with(eq(creds.clone()), always())
             .times(1)
-            .returning(move |_| Ok(Some(mock_user.clone())));
+            .returning(move |_, _| Ok(Some(mock_user.clone())));
 
         let store = Arc::new(MemoryStore::default());
 
@@ -298,9 +307,9 @@ mod tests {
 
         mock_backend
             .expect_authenticate()
-            .with(eq(bad_creds.clone()))
+            .with(eq(bad_creds.clone()), always())
             .times(1)
-            .returning(|_| Ok(None));
+            .returning(|_, _| Ok(None));
 
         let store = Arc::new(MemoryStore::default());
 
@@ -392,9 +401,9 @@ mod tests {
 
         mock_backend
             .expect_get_user()
-            .with(eq(mock_user.id))
+            .with(eq(mock_user.id), always())
             .times(1)
-            .returning(move |_| Ok(Some(mock_user.clone())));
+            .returning(move |_, _| Ok(Some(mock_user.clone())));
 
         let store = Arc::new(MemoryStore::default());
         let session = Session::new(None, store.clone(), None);
@@ -425,9 +434,9 @@ mod tests {
 
         mock_backend
             .expect_get_user()
-            .with(eq(mock_user.id))
+            .with(eq(mock_user.id), always())
             .times(1)
-            .returning(move |_| Ok(Some(mock_user.clone())));
+            .returning(move |_, _| Ok(Some(mock_user.clone())));
 
         let store = Arc::new(MemoryStore::default());
         let session = Session::new(None, store.clone(), None);

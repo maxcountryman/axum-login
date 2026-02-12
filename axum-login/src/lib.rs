@@ -37,6 +37,7 @@
 //! use std::collections::HashMap;
 //!
 //! use axum_login::{AuthUser, AuthnBackend, UserId};
+//! use tower_sessions::Session;
 //!
 //! #[derive(Debug, Clone)]
 //! struct User {
@@ -74,6 +75,7 @@
 //!     async fn authenticate(
 //!         &self,
 //!         Credentials { user_id }: Self::Credentials,
+//!         _: &Session,
 //!     ) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(self.users.get(&user_id).cloned())
 //!     }
@@ -81,6 +83,7 @@
 //!     async fn get_user(
 //!         &self,
 //!         user_id: &UserId<Self>,
+//!         _: &Session,
 //!     ) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(self.users.get(user_id).cloned())
 //!     }
@@ -116,6 +119,7 @@
 //! # use std::collections::HashMap;
 //! #
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
+//! # use tower_sessions::Session;
 //! #
 //! # #[derive(Debug, Clone)]
 //! # struct User {
@@ -153,6 +157,7 @@
 //! #     async fn authenticate(
 //! #         &self,
 //! #         Credentials { user_id }: Self::Credentials,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(&user_id).cloned())
 //! #     }
@@ -160,6 +165,7 @@
 //! #     async fn get_user(
 //! #         &self,
 //! #         user_id: &UserId<Self>,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(user_id).cloned())
 //! #     }
@@ -206,6 +212,7 @@
 //! # use std::collections::HashMap;
 //! #
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
+//! # use tower_sessions::Session;
 //! #
 //! # #[derive(Debug, Clone)]
 //! # struct User {
@@ -243,6 +250,7 @@
 //! #     async fn authenticate(
 //! #         &self,
 //! #         Credentials { user_id }: Self::Credentials,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(&user_id).cloned())
 //! #     }
@@ -250,6 +258,7 @@
 //! #     async fn get_user(
 //! #         &self,
 //! #         user_id: &UserId<Self>,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(user_id).cloned())
 //! #     }
@@ -285,6 +294,7 @@
 //!     require::{RedirectHandler, Require},
 //!     AuthUser, AuthnBackend, UserId,
 //! };
+//! use tower_sessions::Session;
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -312,11 +322,12 @@
 //!     async fn authenticate(
 //!         &self,
 //!         _: Self::Credentials,
+//!         _: &Session,
 //!     ) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -356,6 +367,7 @@
 //! # use std::collections::HashMap;
 //! #
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
+//! # use tower_sessions::Session;
 //! #
 //! # #[derive(Debug, Clone)]
 //! # struct User {
@@ -393,6 +405,7 @@
 //! #     async fn authenticate(
 //! #         &self,
 //! #         Credentials { user_id }: Self::Credentials,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(&user_id).cloned())
 //! #     }
@@ -400,6 +413,7 @@
 //! #     async fn get_user(
 //! #         &self,
 //! #         user_id: &UserId<Self>,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(user_id).cloned())
 //! #     }

@@ -11,6 +11,7 @@
 //! # use std::collections::HashMap;
 //! #
 //! # use axum_login::{AuthUser, AuthnBackend, UserId};
+//! # use tower_sessions::Session;
 //! #
 //! # #[derive(Debug, Clone)]
 //! # struct User {
@@ -48,6 +49,7 @@
 //! #     async fn authenticate(
 //! #         &self,
 //! #         Credentials { user_id }: Self::Credentials,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(&user_id).cloned())
 //! #     }
@@ -55,6 +57,7 @@
 //! #     async fn get_user(
 //! #         &self,
 //! #         user_id: &UserId<Self>,
+//! #         _: &Session,
 //! #     ) -> Result<Option<Self::User>, Self::Error> {
 //! #         Ok(self.users.get(user_id).cloned())
 //! #     }
@@ -107,6 +110,7 @@
 //!     require::{PermissionsPredicate, RedirectHandler, Require},
 //!     AuthUser, AuthnBackend, AuthzBackend, UserId,
 //! };
+//! use tower_sessions::Session;
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -137,11 +141,12 @@
 //!     async fn authenticate(
 //!         &self,
 //!         _: Self::Credentials,
+//!         _: &Session,
 //!     ) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -168,6 +173,7 @@
 //!     require::{Decision, Require},
 //!     AuthSession, AuthUser, AuthnBackend, UserId,
 //! };
+//! use tower_sessions::Session;
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -195,11 +201,12 @@
 //!     async fn authenticate(
 //!         &self,
 //!         _: Self::Credentials,
+//!         _: &Session,
 //!     ) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -405,7 +412,7 @@ mod tests {
     };
     use tower::ServiceExt;
     use tower_cookies::cookie;
-    use tower_sessions::SessionManagerLayer;
+    use tower_sessions::{Session, SessionManagerLayer};
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
     use crate::{
@@ -443,7 +450,11 @@ mod tests {
         let Some(user) = auth_session.user().await else {
             return Decision::Unauthenticated;
         };
-        let Ok(u_perms) = auth_session.backend().get_user_permissions(&user).await else {
+        let Ok(u_perms) = auth_session
+            .backend()
+            .get_user_permissions(&user, &auth_session.session().await)
+            .await
+        else {
             return Decision::Unauthorized;
         };
 
@@ -492,6 +503,7 @@ mod tests {
         async fn authenticate(
             &self,
             _: Self::Credentials,
+            _session: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(User))
         }
@@ -499,6 +511,7 @@ mod tests {
         async fn get_user(
             &self,
             _: &<<TestBackend as AuthnBackend>::User as AuthUser>::Id,
+            _session: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(User))
         }
@@ -523,6 +536,7 @@ mod tests {
         async fn get_user_permissions(
             &self,
             _user: &Self::User,
+            _session: &Session,
         ) -> Result<HashSet<Self::Permission>, Self::Error> {
             let perms: HashSet<Self::Permission> =
                 HashSet::from_iter(["test.read".into(), "test.write".into()]);

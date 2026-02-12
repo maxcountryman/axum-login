@@ -138,7 +138,7 @@ mod tests {
     };
     use tower::ServiceExt;
     use tower_cookies::cookie;
-    use tower_sessions::SessionManagerLayer;
+    use tower_sessions::{Session, SessionManagerLayer};
     use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
 
     use crate::{AuthManagerLayerBuilder, AuthSession, AuthUser, AuthnBackend, AuthzBackend};
@@ -181,6 +181,7 @@ mod tests {
         async fn authenticate(
             &self,
             _: Self::Credentials,
+            _: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(User))
         }
@@ -188,6 +189,7 @@ mod tests {
         async fn get_user(
             &self,
             _: &<<Backend as AuthnBackend>::User as AuthUser>::Id,
+            _: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(User))
         }
@@ -212,6 +214,7 @@ mod tests {
         async fn get_user_permissions(
             &self,
             _user: &Self::User,
+            _: &Session,
         ) -> Result<HashSet<Self::Permission>, Self::Error> {
             let perms: HashSet<Self::Permission> =
                 HashSet::from_iter(["test.read".into(), "test.write".into()]);
