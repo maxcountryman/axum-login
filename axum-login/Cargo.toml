@@ -42,7 +42,7 @@ pin-project = { version = "1.1.10", optional = true }
 axum = "0.8.1"
 criterion = { version = "0.5", features = ["async_tokio"] }
 mockall = "0.13"
-reqwest = { version = "0.12", features = ["cookies"] }
+reqwest = { version = "0.13", features = ["cookies"] }
 serial_test = "3.0.0"
 time = "0.3.36"
 tokio = { version = "1.32.0", features = ["full"] }
