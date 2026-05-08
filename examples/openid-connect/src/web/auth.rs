@@ -1,0 +1,93 @@
+use askama::Template;
+use axum::{
+    extract::Query,
+    http::StatusCode,
+    response::{Html, IntoResponse, Redirect},
+    routing::{get, post},
+    Form, Router,
+};
+use axum_login::tower_sessions::Session;
+use serde::Deserialize;
+
+use crate::{users::AuthSession, web::oauth::CSRF_STATE_KEY};
+
+pub const NEXT_URL_KEY: &str = "auth.next-url";
+
+#[derive(Template)]
+#[template(path = "login.html")]
+pub struct LoginTemplate {
+    pub message: Option<String>,
+    pub next: Option<String>,
+}
+
+// This allows us to extract the "next" field from the query string. We use this
+// to redirect after log in.
+#[derive(Debug, Deserialize)]
+pub struct NextUrl {
+    next: Option<String>,
+}
+
+pub fn router() -> Router<()> {
+    Router::new()
+        .route("/login", post(self::post::login))
+        .route("/login", get(self::get::login))
+        .route("/logout", get(self::get::logout))
+}
+
+mod post {
+    use super::*;
+    use crate::web::oauth::{CODE_VERIFIER_KEY, NONCE_KEY};
+
+    pub async fn login(
+        auth_session: AuthSession,
+        session: Session,
+        Form(NextUrl { next }): Form<NextUrl>,
+    ) -> impl IntoResponse {
+        let (auth_url, csrf_state, nonce, pkce_verifier) =
+            auth_session.backend().authorize_url().await;
+
+        session
+            .insert(CSRF_STATE_KEY, csrf_state.secret())
+            .await
+            .expect("Serialization should not fail.");
+
+        session
+            .insert(NEXT_URL_KEY, next)
+            .await
+            .expect("Serialization should not fail.");
+
+        session
+            .insert(CODE_VERIFIER_KEY, pkce_verifier)
+            .await
+            .expect("Serialization should not fail.");
+
+        session
+            .insert(NONCE_KEY, nonce)
+            .await
+            .expect("Serialization should not fail.");
+
+        Redirect::to(auth_url.as_str()).into_response()
+    }
+}
+
+mod get {
+    use super::*;
+
+    pub async fn login(Query(NextUrl { next }): Query<NextUrl>) -> Html<String> {
+        Html(
+            LoginTemplate {
+                message: None,
+                next,
+            }
+            .render()
+            .unwrap(),
+        )
+    }
+
+    pub async fn logout(auth_session: AuthSession) -> impl IntoResponse {
+        match auth_session.logout().await {
+            Ok(_) => Redirect::to("/login").into_response(),
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
+}
