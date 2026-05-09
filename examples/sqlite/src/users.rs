@@ -3,6 +3,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 use tokio::task;
+use tower_sessions::Session;
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -75,6 +76,7 @@ impl AuthnBackend for Backend {
     async fn authenticate(
         &self,
         creds: Self::Credentials,
+        _: &Session,
     ) -> Result<Option<Self::User>, Self::Error> {
         let user: Option<Self::User> = sqlx::query_as("select * from users where username = ? ")
             .bind(creds.username)
@@ -91,7 +93,11 @@ impl AuthnBackend for Backend {
         .await?
     }
 
-    async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+    async fn get_user(
+        &self,
+        user_id: &UserId<Self>,
+        _: &Session,
+    ) -> Result<Option<Self::User>, Self::Error> {
         let user = sqlx::query_as("select * from users where id = ?")
             .bind(user_id)
             .fetch_optional(&self.db)
