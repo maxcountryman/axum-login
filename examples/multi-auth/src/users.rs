@@ -139,11 +139,12 @@ impl AuthnBackend for Backend {
                 .await
                 .map_err(Self::Error::Sqlx)?;
 
-                // Verifying the password is blocking and potentially slow, so we'll do so via
-                // `spawn_blocking`.
+                // Verifying the password is blocking and potentially slow, so
+                // we'll do so via `spawn_blocking`.
                 task::spawn_blocking(|| {
-                    // We're using password-based authentication: this works by comparing our form
-                    // input with an argon2 password hash.
+                    // We're using password-based authentication: this works by
+                    // comparing our form input with an
+                    // argon2 password hash.
                     Ok(user.filter(|user| {
                         let Some(ref password) = user.password else {
                             return false;

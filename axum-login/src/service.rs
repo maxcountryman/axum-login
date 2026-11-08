@@ -59,8 +59,8 @@ where
         let backend = self.backend.clone();
         let data_key = self.data_key;
 
-        // Because the inner service can panic until ready, we need to ensure we only
-        // use the ready service.
+        // Because the inner service can panic until ready, we need to ensure we
+        // only use the ready service.
         //
         // See: https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
         let clone = self.inner.clone();

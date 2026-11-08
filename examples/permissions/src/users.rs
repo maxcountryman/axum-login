@@ -81,11 +81,12 @@ impl AuthnBackend for Backend {
             .fetch_optional(&self.db)
             .await?;
 
-        // Verifying the password is blocking and potentially slow, so we'll do so via
-        // `spawn_blocking`.
+        // Verifying the password is blocking and potentially slow, so we'll do
+        // so via `spawn_blocking`.
         task::spawn_blocking(|| {
-            // We're using password-based authentication: this works by comparing our form
-            // input with an argon2 password hash.
+            // We're using password-based authentication: this works by
+            // comparing our form input with an argon2 password
+            // hash.
             Ok(user.filter(|user| verify_password(creds.password, &user.password).is_ok()))
         })
         .await?

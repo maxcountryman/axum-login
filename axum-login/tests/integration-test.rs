@@ -75,7 +75,8 @@ async fn permissions_example() {
         .build()
         .unwrap();
 
-    // A logged out user is redirected to the login URL with a next query string.
+    // A logged out user is redirected to the login URL with a next query
+    // string.
     let res = client.get(url("/")).send().await.unwrap();
 
     assert_eq!(*res.url(), url("/login?next=%2F"));
