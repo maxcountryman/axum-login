@@ -255,7 +255,7 @@ mod tests {
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc,
         },
-        task::{Wake, Waker},
+        task::Waker,
     };
 
     use axum::body::Body;
@@ -407,13 +407,7 @@ mod tests {
     }
 
     fn noop_waker() -> Waker {
-        struct NoopWake;
-
-        impl Wake for NoopWake {
-            fn wake(self: Arc<Self>) {}
-        }
-
-        Waker::from(Arc::new(NoopWake))
+        Waker::noop().clone()
     }
 
     #[tokio::test]
