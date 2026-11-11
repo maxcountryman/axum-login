@@ -8,7 +8,6 @@ publish = false
 askama = { version = "0.12.1" }
 axum = "0.8.1"
 axum-login = { path = "../../axum-login" }
-axum-messages = "0.8.0"
 http = "1.0.0"
 hyper = "1.0.1"
 password-auth = "1.0.0"

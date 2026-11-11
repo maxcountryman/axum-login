@@ -3,7 +3,6 @@ use axum_login::{
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
-use axum_messages::MessagesManagerLayer;
 use sqlx::SqlitePool;
 use time::Duration;
 use tokio::{signal, task::AbortHandle};
@@ -64,7 +63,6 @@ impl App {
         let app = protected::router()
             .route_layer(require_login)
             .merge(auth::router())
-            .layer(MessagesManagerLayer)
             .layer(auth_layer);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

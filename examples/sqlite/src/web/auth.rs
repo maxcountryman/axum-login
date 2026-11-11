@@ -6,7 +6,6 @@ use axum::{
     routing::{get, post},
     Form, Router,
 };
-use axum_messages::{Message, Messages};
 use serde::Deserialize;
 
 use crate::users::{AuthSession, Credentials};
@@ -14,7 +13,6 @@ use crate::users::{AuthSession, Credentials};
 #[derive(Template)]
 #[template(path = "login.html")]
 pub struct LoginTemplate {
-    messages: Vec<Message>,
     next: Option<String>,
 }
 
@@ -37,14 +35,11 @@ mod post {
 
     pub async fn login(
         auth_session: AuthSession,
-        messages: Messages,
         Form(creds): Form<Credentials>,
     ) -> impl IntoResponse {
         let user = match auth_session.authenticate(creds.clone()).await {
             Ok(Some(user)) => user,
             Ok(None) => {
-                messages.error("Invalid credentials");
-
                 let mut login_url = "/login".to_string();
                 if let Some(next) = creds.next {
                     login_url = format!("{login_url}?next={next}");
@@ -59,8 +54,6 @@ mod post {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
 
-        messages.success(format!("Successfully logged in as {}", user.username));
-
         if let Some(ref next) = creds.next {
             Redirect::to(next)
         } else {
@@ -73,18 +66,8 @@ mod post {
 mod get {
     use super::*;
 
-    pub async fn login(
-        messages: Messages,
-        Query(NextUrl { next }): Query<NextUrl>,
-    ) -> Html<String> {
-        Html(
-            LoginTemplate {
-                messages: messages.into_iter().collect(),
-                next,
-            }
-            .render()
-            .unwrap(),
-        )
+    pub async fn login(Query(NextUrl { next }): Query<NextUrl>) -> Html<String> {
+        Html(LoginTemplate { next }.render().unwrap())
     }
 
     pub async fn logout(auth_session: AuthSession) -> impl IntoResponse {
