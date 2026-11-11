@@ -1,5 +1,9 @@
 # Unreleased
 
+- The `sqlite` example drops the `axum-messages` dependency, which is
+  incompatible with `tower-sessions` 0.15 (it pulls in `tower-sessions-core`
+  0.14). The now-unused flash-message UI in the example and its integration
+  test are removed accordingly.
 - Remove `mut` in AuthSession::{logout, login}. #300
 - Align macro middleware with the `Require` core and make `macros-middleware`
   depend on `require-builder`.

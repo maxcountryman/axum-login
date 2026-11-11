@@ -27,7 +27,7 @@ async fn sqlite_example() {
         .unwrap();
 
     // A logged out user is redirected to the login URL with a next query
-    //string.
+    // string.
     let res = client.get(url("/")).send().await.unwrap();
     assert_eq!(*res.url(), url("/login?next=%2F"));
     assert_eq!(res.status(), StatusCode::OK);
@@ -36,10 +36,6 @@ async fn sqlite_example() {
     let res = login(&client, "ferris", "bogus").await;
     assert_eq!(*res.url(), url("/login"));
     assert_eq!(res.status(), StatusCode::OK);
-    assert!(
-        cookie_jar.cookies(&url("/")).is_some(),
-        "Expected cookies (i.e. for flash messages)"
-    );
 
     // Log in with valid credentials.
     let res = login(&client, "ferris", "hunter42").await;
@@ -75,7 +71,8 @@ async fn permissions_example() {
         .build()
         .unwrap();
 
-    // A logged out user is redirected to the login URL with a next query string.
+    // A logged out user is redirected to the login URL with a next query
+    // string.
     let res = client.get(url("/")).send().await.unwrap();
 
     assert_eq!(*res.url(), url("/login?next=%2F"));
