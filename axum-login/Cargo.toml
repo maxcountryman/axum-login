@@ -40,7 +40,7 @@ pin-project = { version = "1.1.10", optional = true }
 
 [dev-dependencies]
 axum = "0.8.1"
-criterion = { version = "0.5", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 mockall = "0.13"
 reqwest = { version = "0.12", features = ["cookies"] }
 serial_test = "3.0.0"
