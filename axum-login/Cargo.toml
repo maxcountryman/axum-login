@@ -1,6 +1,6 @@
 [package]
 name = "axum-login"
-version = "0.18.0"
+version = "0.19.0"
 description = "🪪 User identification, authentication, and authorization for Axum."
 edition = "2021"
 homepage = "https://github.com/maxcountryman/axum-login"
@@ -45,11 +45,11 @@ mockall = "0.15"
 reqwest = { version = "0.12", features = ["cookies"] }
 serial_test = "3.0.0"
 time = "0.3.36"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 tokio-test = "0.4.3"
 tower = "0.5.2"
 tower-sessions = { version = "0.15.0", features = ["memory-store"] }
-tower-sessions-sqlx-store = { version = "0.15.0", features = ["sqlite"] }
+tower-sessions-sqlx-store = { version = "0.16.0", features = ["sqlite"] }
 
 [[bench]]
 name = "middleware_comparison"

@@ -1,5 +1,7 @@
 # Unreleased
 
+# 0.19.0
+
 - The `sqlite` example drops the `axum-messages` dependency, which is
   incompatible with `tower-sessions` 0.15 (it pulls in `tower-sessions-core`
   0.14). The now-unused flash-message UI in the example and its integration
