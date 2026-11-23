@@ -132,7 +132,7 @@ Example (builder only, no macros):
 
 ```toml
 [dependencies]
-axum-login = { version = "0.18.0", default-features = false, features = ["require-builder"] }
+axum-login = { version = "0.18.0", default-features = false, features = ["require-builder"], git = "https://github.com/maxcountryman/axum-login.git" }
 ```
 
 ## 🦺 Safety
