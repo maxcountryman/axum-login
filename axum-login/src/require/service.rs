@@ -295,11 +295,12 @@ mod tests {
         async fn authenticate(
             &self,
             _: Self::Credentials,
+            _: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(TestUser))
         }
 
-        async fn get_user(&self, _: &i64) -> Result<Option<Self::User>, Self::Error> {
+        async fn get_user(&self, _: &i64, _: &Session) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(TestUser))
         }
     }

@@ -45,6 +45,7 @@
 //!     require::{RedirectHandler, Require},
 //!     AuthUser, AuthnBackend, UserId,
 //! };
+//! use tower_sessions::Session;
 //!
 //! #[derive(Clone, Debug)]
 //! struct User;
@@ -72,11 +73,12 @@
 //!     async fn authenticate(
 //!         &self,
 //!         _: Self::Credentials,
+//!         _: &Session,
 //!     ) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //!
-//!     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+//!     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 //!         Ok(Some(User))
 //!     }
 //! }
@@ -120,6 +122,7 @@ use crate::{
 ///     require::{RedirectHandler, Require, RequireBuilder},
 ///     AuthUser, AuthnBackend, UserId,
 /// };
+/// use tower_sessions::Session;
 ///
 /// #[derive(Clone, Debug)]
 /// struct User;
@@ -147,11 +150,12 @@ use crate::{
 ///     async fn authenticate(
 ///         &self,
 ///         _: Self::Credentials,
+///         _: &Session,
 ///     ) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 ///
-///     async fn get_user(&self, _: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+///     async fn get_user(&self, _: &UserId<Self>, _: &Session) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(Some(User))
 ///     }
 /// }
@@ -302,6 +306,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use tower_sessions::Session;
+
     use super::*;
     use crate::{require::Decision, AuthSession, AuthUser};
 
@@ -331,11 +337,16 @@ mod tests {
         async fn authenticate(
             &self,
             _: Self::Credentials,
+            _session: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(TestUser))
         }
 
-        async fn get_user(&self, _: &i64) -> Result<Option<Self::User>, Self::Error> {
+        async fn get_user(
+            &self,
+            _: &i64,
+            _session: &Session,
+        ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(TestUser))
         }
     }

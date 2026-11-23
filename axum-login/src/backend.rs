@@ -5,6 +5,7 @@ use std::{
     hash::Hash,
 };
 
+use crate::tower_sessions::Session;
 use serde::{Deserialize, Serialize};
 
 /// Type alias for the backend user's ID.
@@ -68,6 +69,7 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 /// use std::collections::HashMap;
 ///
 /// use axum_login::{AuthUser, AuthnBackend, UserId};
+/// use tower_sessions::Session;
 ///
 /// #[derive(Debug, Clone)]
 /// struct User {
@@ -105,6 +107,7 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 ///     async fn authenticate(
 ///         &self,
 ///         Credentials { user_id }: Self::Credentials,
+///         _: &Session,
 ///     ) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(self.users.get(&user_id).cloned())
 ///     }
@@ -112,6 +115,7 @@ pub trait AuthUser: Debug + Clone + Send + Sync {
 ///     async fn get_user(
 ///         &self,
 ///         user_id: &UserId<Self>,
+///         _: &Session,
 ///     ) -> Result<Option<Self::User>, Self::Error> {
 ///         Ok(self.users.get(user_id).cloned())
 ///     }
@@ -131,12 +135,14 @@ pub trait AuthnBackend: Clone + Send + Sync {
     fn authenticate(
         &self,
         creds: Self::Credentials,
+        session: &Session,
     ) -> impl Future<Output = Result<Option<Self::User>, Self::Error>> + Send;
 
     /// Gets the user by provided ID from the backend.
     fn get_user(
         &self,
         user_id: &UserId<Self>,
+        session: &Session,
     ) -> impl Future<Output = Result<Option<Self::User>, Self::Error>> + Send;
 }
 
@@ -154,6 +160,7 @@ where
     fn get_user_permissions(
         &self,
         _user: &Self::User,
+        _session: &Session,
     ) -> impl Future<Output = Result<HashSet<Self::Permission>, Self::Error>> + Send {
         async { Ok(HashSet::new()) }
     }
@@ -162,6 +169,7 @@ where
     fn get_group_permissions(
         &self,
         _user: &Self::User,
+        _session: &Session,
     ) -> impl Future<Output = Result<HashSet<Self::Permission>, Self::Error>> + Send {
         async { Ok(HashSet::new()) }
     }
@@ -170,11 +178,12 @@ where
     fn get_all_permissions(
         &self,
         user: &Self::User,
+        session: &Session,
     ) -> impl Future<Output = Result<HashSet<Self::Permission>, Self::Error>> + Send {
         async {
             let mut all_perms = HashSet::new();
-            all_perms.extend(self.get_user_permissions(user).await?);
-            all_perms.extend(self.get_group_permissions(user).await?);
+            all_perms.extend(self.get_user_permissions(user, session).await?);
+            all_perms.extend(self.get_group_permissions(user, session).await?);
             Ok(all_perms)
         }
     }
@@ -185,14 +194,22 @@ where
         &self,
         user: &Self::User,
         perm: Self::Permission,
+        session: &Session,
     ) -> impl Future<Output = Result<bool, Self::Error>> + Send {
-        async move { Ok(self.get_all_permissions(user).await?.contains(&perm)) }
+        async move {
+            Ok(self
+                .get_all_permissions(user, session)
+                .await?
+                .contains(&perm))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, sync::Arc};
+
+    use tower_sessions::MemoryStore;
 
     use super::*;
 
@@ -261,6 +278,7 @@ mod tests {
         async fn authenticate(
             &self,
             user_id: Self::Credentials,
+            _session: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(self.users.get(&user_id).cloned())
         }
@@ -268,6 +286,7 @@ mod tests {
         async fn get_user(
             &self,
             user_id: &UserId<Self>,
+            _session: &Session,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(self.users.get(user_id).cloned())
         }
@@ -279,6 +298,7 @@ mod tests {
         async fn get_user_permissions(
             &self,
             user: &Self::User,
+            _session: &Session,
         ) -> Result<HashSet<Self::Permission>, Self::Error> {
             Ok(self
                 .user_permissions
@@ -290,6 +310,7 @@ mod tests {
         async fn get_group_permissions(
             &self,
             user: &Self::User,
+            _session: &Session,
         ) -> Result<HashSet<Self::Permission>, Self::Error> {
             let belongs_to = self
                 .groups
@@ -330,15 +351,21 @@ mod tests {
         let mut backend = TestBackend::new();
         backend.add_user(user.clone(), vec![]);
 
-        let authenticated_user = backend.authenticate(1).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+        let authenticated_user = backend.authenticate(1, &dummy_session).await.unwrap();
         assert_eq!(authenticated_user, Some(user));
     }
 
     #[tokio::test]
     async fn test_authenticate_failure() {
         let backend = TestBackend::new();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
 
-        assert!(backend.authenticate(1).await.unwrap().is_none());
+        assert!(backend
+            .authenticate(1, &dummy_session)
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]
@@ -350,7 +377,9 @@ mod tests {
         let mut backend = TestBackend::new();
         backend.add_user(user.clone(), vec![]);
 
-        let retrieved_user = backend.get_user(&1).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
+        let retrieved_user = backend.get_user(&1, &dummy_session).await.unwrap();
         assert_eq!(retrieved_user, Some(user));
     }
 
@@ -363,7 +392,12 @@ mod tests {
         let mut backend = TestBackend::new();
         backend.add_user(user.clone(), vec!["read".to_string(), "write".to_string()]);
 
-        let permissions = backend.get_user_permissions(&user).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
+        let permissions = backend
+            .get_user_permissions(&user, &dummy_session)
+            .await
+            .unwrap();
         assert_eq!(
             permissions,
             ["read".to_string(), "write".to_string()]
@@ -399,8 +433,13 @@ mod tests {
         backend.add_user_to_group(admin.clone(), "users".to_string());
         backend.add_user_to_group(admin.clone(), "admins".to_string());
 
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
         // User permissions.
-        let user_perms = backend.get_group_permissions(&user).await.unwrap();
+        let user_perms = backend
+            .get_group_permissions(&user, &dummy_session)
+            .await
+            .unwrap();
         assert_eq!(
             user_perms,
             ["read".to_string(), "write".to_string()]
@@ -409,7 +448,10 @@ mod tests {
                 .collect()
         );
 
-        let admin_perms = backend.get_group_permissions(&admin).await.unwrap();
+        let admin_perms = backend
+            .get_group_permissions(&admin, &dummy_session)
+            .await
+            .unwrap();
         assert_eq!(
             admin_perms,
             [
@@ -437,7 +479,12 @@ mod tests {
         );
         backend.add_user_to_group(user.clone(), "users".to_string());
 
-        let permissions = backend.get_all_permissions(&user).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
+        let permissions = backend
+            .get_all_permissions(&user, &dummy_session)
+            .await
+            .unwrap();
         assert_eq!(
             permissions,
             ["read".to_string(), "write".to_string(), "other".to_string()]
@@ -456,10 +503,18 @@ mod tests {
         let mut backend = TestBackend::new();
         backend.add_user(user.clone(), vec!["read".to_string()]);
 
-        let has_read_perm = backend.has_perm(&user, "read".to_string()).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
+        let has_read_perm = backend
+            .has_perm(&user, "read".to_string(), &dummy_session)
+            .await
+            .unwrap();
         assert!(has_read_perm);
 
-        let has_delete_perm = backend.has_perm(&user, "delete".to_string()).await.unwrap();
+        let has_delete_perm = backend
+            .has_perm(&user, "delete".to_string(), &dummy_session)
+            .await
+            .unwrap();
         assert!(!has_delete_perm);
     }
 
@@ -472,12 +527,23 @@ mod tests {
         let mut backend = TestBackend::new();
         backend.add_user(user.clone(), vec!["write".to_string(), "read".to_string()]);
 
-        let has_read_and_write_perms = backend.has_perm(&user, "read".to_string()).await.unwrap()
-            && backend.has_perm(&user, "write".to_string()).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
+        let has_read_and_write_perms = backend
+            .has_perm(&user, "read".to_string(), &dummy_session)
+            .await
+            .unwrap()
+            && backend.has_perm(&user, "write".to_string(), &dummy_session).await.unwrap();
         assert!(has_read_and_write_perms);
 
-        let has_read_and_delete_perms = backend.has_perm(&user, "read".to_string()).await.unwrap()
-            && backend.has_perm(&user, "delete".to_string()).await.unwrap();
+        let has_read_and_delete_perms = backend
+            .has_perm(&user, "read".to_string(), &dummy_session)
+            .await
+            .unwrap()
+            && backend
+                .has_perm(&user, "delete".to_string(), &dummy_session)
+                .await
+                .unwrap();
         assert!(!has_read_and_delete_perms);
     }
 
@@ -490,13 +556,24 @@ mod tests {
         let mut backend = TestBackend::new();
         backend.add_user(user.clone(), vec![]);
 
-        let permissions = backend.get_user_permissions(&user).await.unwrap();
+        let dummy_session = Session::new(None, Arc::new(MemoryStore::default()), None);
+
+        let permissions = backend
+            .get_user_permissions(&user, &dummy_session)
+            .await
+            .unwrap();
         assert!(permissions.is_empty());
 
-        let permissions = backend.get_group_permissions(&user).await.unwrap();
+        let permissions = backend
+            .get_group_permissions(&user, &dummy_session)
+            .await
+            .unwrap();
         assert!(permissions.is_empty());
 
-        let permissions = backend.get_all_permissions(&user).await.unwrap();
+        let permissions = backend
+            .get_all_permissions(&user, &dummy_session)
+            .await
+            .unwrap();
         assert!(permissions.is_empty());
     }
 }
